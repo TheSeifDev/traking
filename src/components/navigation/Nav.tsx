@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Sun } from "lucide-react";
 
 const navItems = [
   { label: "Features", href: "features" },
@@ -61,19 +60,6 @@ const Nav = () => {
 
         {/* Right side: theme + CTA */}
         <div className="ml-auto flex items-center gap-4 lg:gap-5">
-          {/* Theme Toggle */}
-          <button
-            type="button"
-            aria-label="Toggle theme"
-            className="
-              flex h-10 w-10 shrink-0 items-center justify-center rounded-full border 
-              border-white/8 bg-white/2.5 text-white/80 
-              shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-200 
-              hover:border-white/15 hover:bg-white/6 hover:text-white lg:h-11 lg:w-11
-            "
-          >
-            <Sun size={19} strokeWidth={1.8} />
-          </button>
 
           {/* ClickUp CTA */}
           <Link
