@@ -136,3 +136,33 @@ html {
     @apply font-sans;
   }
 }
+
+/* ===== Custom Scrollbar Design ===== */
+
+/* for webkit browsers (Chrome, Safari, Edge, Brave) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #5d4cff, #8b3dff);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #8065ff, #b83cff);
+  background-clip: content-box;
+}
+
+/* for Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5d4cff transparent;
+}
