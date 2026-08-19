@@ -1,30 +1,32 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Sun } from "lucide-react";
-import { useScrolled } from "./useScrolled";
 
 const navItems = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Integrations", href: "#integrations" },
-  { label: "Use Cases", href: "#use-cases" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Features", href: "features" },
+  { label: "How It Works", href: "how-it-works" },
+  { label: "Integrations", href: "integrations" },
+  { label: "Use Cases", href: "use-cases" },
+  { label: "FAQ", href: "faq" },
 ];
 
 const Nav = () => {
-  const scrolled = useScrolled();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <header
       className={`
-        sticky top-0 z-50 hidden w-full transition-all duration-300 md:block
-        ${
-          scrolled
-            ? "border-b border-white/8 bg-[#0b0b28]/80 shadow-[0_4px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl"
-            : "border-b border-transparent bg-transparent"
-        }
+        fixed top-0 left-0 right-0 z-50 hidden w-full transition-all duration-300 md:block
+        ${scrolled ? "border-transparent bg-transparent" : "border-transparent bg-transparent"}
       `}
     >
       <nav className="mx-auto flex h-18 w-full max-w-360 items-center px-6 lg:px-12">

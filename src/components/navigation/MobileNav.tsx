@@ -4,21 +4,25 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, Sun, X } from "lucide-react";
-import { useScrolled } from "./useScrolled";
 
 const navItems = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Integrations", href: "#integrations" },
-  { label: "Use Cases", href: "#use-cases" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Features", href: "features" },
+  { label: "How It Works", href: "how-it-works" },
+  { label: "Integrations", href: "integrations" },
+  { label: "Use Cases", href: "use-cases" },
+  { label: "FAQ", href: "faq" },
 ];
 
 const MobileNav = () => {
   const [open, setOpen] = useState(false);
-  const scrolled = useScrolled();
+  const [scrolled, setScrolled] = useState(false);
 
-  // Lock body scroll + allow closing with Escape while the menu is open
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
@@ -39,12 +43,8 @@ const MobileNav = () => {
   return (
     <header
       className={`
-        sticky top-0 z-50 transition-colors duration-300 md:hidden
-        ${
-          open || scrolled
-            ? "border-b border-transparent bg-transparent"
-            : "border-b border-transparent bg-transparent"
-        }
+        fixed top-0 left-0 right-0 z-50 transition-colors duration-300 md:hidden
+        ${open || scrolled ? "border-transparent bg-transparent" : "border-transparent bg-transparent"}
       `}
     >
       <nav className="relative z-50 flex h-16 items-center justify-between px-5">
@@ -112,7 +112,7 @@ const MobileNav = () => {
         role="dialog"
         aria-modal="true"
         className={`
-          absolute inset-x-4 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl 
+          fixed inset-x-4 top-20 z-40 overflow-hidden rounded-2xl 
           border border-white/8 bg-[#0b0b28]/95 
           shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl 
           transition-all duration-300
