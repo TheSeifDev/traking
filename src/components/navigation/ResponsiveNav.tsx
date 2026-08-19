@@ -1,14 +1,13 @@
-import React from 'react'
-import Nav from './Nav'
-import MobileNav from './MobileNav'
+import MobileNav from "./MobileNav";
+import Nav from "./Nav";
 
 const ResponsiveNav = () => {
   return (
-  <>
-    <Nav/>
-    <MobileNav />
-  </>
-  )
-}
+    <>
+      <Nav />
+      <MobileNav />
+    </>
+  );
+};
 
-export default ResponsiveNav
+export default ResponsiveNav;

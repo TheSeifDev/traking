@@ -1,9 +1,160 @@
-import React from 'react'
+"use client";
+
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Menu, Sun, X } from "lucide-react";
+import { useScrolled } from "./useScrolled";
+
+const navItems = [
+  { label: "Features", href: "#features" },
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Integrations", href: "#integrations" },
+  { label: "Use Cases", href: "#use-cases" },
+  { label: "FAQ", href: "#faq" },
+];
 
 const MobileNav = () => {
-  return (
-    <div>MobileNav</div>
-  )
-}
+  const [open, setOpen] = useState(false);
+  const scrolled = useScrolled();
 
-export default MobileNav
+  // Lock body scroll + allow closing with Escape while the menu is open
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <header
+      className={`
+        sticky top-0 z-50 transition-colors duration-300 md:hidden
+        ${
+          open || scrolled
+            ? "border-b border-transparent bg-transparent"
+            : "border-b border-transparent bg-transparent"
+        }
+      `}
+    >
+      <nav className="relative z-50 flex h-16 items-center justify-between px-5">
+        {/* Logo */}
+        <Link href="/" onClick={() => setOpen(false)} className="flex items-center">
+          <Image
+            src="/logo.webp"
+            alt="TrackUp"
+            width={180}
+            height={50}
+            priority
+            className="h-7 w-auto"
+          />
+        </Link>
+
+        {/* Right side */}
+        <div className="flex items-center gap-2">
+          {/* Theme */}
+          <button
+            type="button"
+            aria-label="Toggle theme"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/2.5 text-white/80 transition-colors hover:bg-white/6 hover:text-white"
+          >
+            <Sun size={18} />
+          </button>
+
+          {/* Menu */}
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            onClick={() => setOpen((prev) => !prev)}
+            className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/2.5 text-white transition-colors hover:bg-white/6"
+          >
+            <Menu
+              size={21}
+              className={`absolute transition-all duration-200 ${
+                open ? "rotate-90 opacity-0" : "rotate-0 opacity-100"
+              }`}
+            />
+            <X
+              size={21}
+              className={`absolute transition-all duration-200 ${
+                open ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"
+              }`}
+            />
+          </button>
+        </div>
+      </nav>
+
+      {/* Backdrop */}
+      <div
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+        className={`
+          fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300
+          ${open ? "opacity-100" : "pointer-events-none opacity-0"}
+        `}
+      />
+
+      {/* Mobile menu */}
+      <div
+        id="mobile-menu"
+        role="dialog"
+        aria-modal="true"
+        className={`
+          absolute inset-x-4 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl 
+          border border-white/8 bg-[#0b0b28]/95 
+          shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl 
+          transition-all duration-300
+          ${open ? "visible translate-y-0 opacity-100" : "invisible -translate-y-3 opacity-0"}
+        `}
+      >
+        <div className="flex flex-col p-3">
+          {navItems.map((item, i) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              style={{ transitionDelay: open ? `${i * 40}ms` : "0ms" }}
+              className={`
+                rounded-xl px-4 py-3.5 text-sm font-medium text-white/80 
+                transition-all duration-300 hover:bg-white/5 hover:text-white
+                ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}
+              `}
+            >
+              {item.label}
+            </Link>
+          ))}
+
+          <Link
+            href="/login"
+            onClick={() => setOpen(false)}
+            style={{ transitionDelay: open ? `${navItems.length * 40}ms` : "0ms" }}
+            className={`
+              mt-2 flex h-11 items-center justify-center rounded-xl 
+              bg-linear-to-r from-[#8b3dff] to-[#5d4cff] 
+              text-sm font-semibold text-white 
+              shadow-[0_8px_25px_rgba(105,65,255,0.25)]
+              transition-all duration-300
+              ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}
+            `}
+          >
+            Continue with ClickUp
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default MobileNav;

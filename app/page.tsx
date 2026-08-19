@@ -1,9 +1,9 @@
-import React from 'react'
+import { ResponsiveNav } from "@/src/components/navigation";
 
-const page = () => {
+export default function Home() {
   return (
-    <div>page</div>
-  )
+    <>
+      <ResponsiveNav />
+    </>
+  );
 }
-
-export default page
