@@ -1,9 +1,14 @@
-import React from 'react'
+import { ResponsiveNav } from "@/src/components/navigation";
+import LoginHero from "@/src/components/login/LoginHero";
 
-const page = () => {
+const LoginPage = () => {
   return (
-    <div>page</div>
-  )
-}
+    <>
+      <ResponsiveNav />
 
-export default page
+      <LoginHero />
+    </>
+  );
+};
+
+export default LoginPage;
