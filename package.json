@@ -6,12 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/verify-provisioning.ts && tsx scripts/verify-rbac.ts && tsx scripts/verify-role-management.ts && tsx scripts/verify-routes.ts && tsx scripts/verify-security-hardening.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.2",
+    "@supabase/supabase-js": "^2.112.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.30.0",
@@ -31,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
