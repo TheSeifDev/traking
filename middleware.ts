@@ -106,11 +106,27 @@ async function readSessionCookieFast(request: NextRequest): Promise<CookieSessio
 // Middleware
 // ---------------------------------------------------------------------------
 
+function getSupabaseResponse(request: NextRequest): NextResponse {
+  // TrackUp authentication is based on the signed trackup_user cookie and
+  // server-side profile validation. Supabase SSR token refresh is optional.
+  // Do not crash public/OAuth routes when a deployment is missing the public
+  // Supabase variables; protected pages still perform their own server guard.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    return NextResponse.next();
+  }
+
+  try {
+    return createSupabaseMiddlewareClient(request);
+  } catch {
+    return NextResponse.next();
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Let Supabase SSR helper refresh any Auth tokens on the response
-  const supabaseResponse = createSupabaseMiddlewareClient(request);
+  // 1. Let Supabase SSR helper refresh any Auth tokens on the response when configured.
+  const supabaseResponse = getSupabaseResponse(request);
 
   // 2. Public paths – pass through immediately
   if (isPublicPath(pathname)) {

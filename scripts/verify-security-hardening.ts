@@ -138,6 +138,7 @@ async function runTests(): Promise<void> {
   const logoutRoute = readFileSync("app/api/auth/logout/route.ts", "utf8");
   const videoServiceForUrls = readFileSync("src/lib/videos/service.ts", "utf8");
   const adminClient = readFileSync("utils/supabase/admin.ts", "utf8");
+  const middleware = readFileSync("middleware.ts", "utf8");
 
 assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
 assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
@@ -154,6 +155,7 @@ assert(oauthCallback.includes("https://api.clickup.com/api/v2/team"), "OAuth cal
 assert(oauthCallback.includes("Authorization: `Bearer ${accessToken}`"), "OAuth API requests use Bearer token header");
 assert(oauthCallback.includes("createSignedSessionCookie"), "OAuth callback writes signed session cookie");
 assert(!adminClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;"), "admin client does not fall back to public key");
+assert(middleware.includes("getSupabaseResponse") && middleware.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), "middleware does not crash when optional public Supabase env is missing");
 
   const total = passed + failed;
   console.log(`\n${"=".repeat(56)}`);
