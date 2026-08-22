@@ -75,7 +75,7 @@ export default async function AnalyticsPage() {
                     <p className="text-sm font-medium text-white truncate">{v.title}</p>
                     <div className="mt-1.5 h-1.5 rounded-full bg-white/8 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all"
+                        className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500 transition-all"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
