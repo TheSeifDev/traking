@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { provisionClickUpUser } from "@/src/lib/auth/provisioning";
 import { createSignedSessionCookie, SESSION_MAX_AGE_SECONDS } from "@/src/lib/auth/session-cookie";
+import { upsertClickUpConnection } from "@/src/lib/clickup/workspace";
 
 type ClickUpTokenResponse = {
   access_token?: unknown;
@@ -10,12 +11,38 @@ type ClickUpTeamsResponse = {
   teams?: unknown;
 };
 
+type ClickUpTeamIdentity = {
+  id: string;
+  name: string;
+};
+
 function getCookieFromHeader(header: string | null, name: string): string | null {
   if (!header) return null;
   const cookies = header.split(";").map((part) => part.trim());
   const prefix = `${name}=`;
   const match = cookies.find((cookie) => cookie.startsWith(prefix));
   return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+}
+
+function getPrimaryAuthorizedTeam(teams: unknown): ClickUpTeamIdentity | null {
+  if (!Array.isArray(teams) || teams.length === 0) return null;
+
+  const primaryTeam = teams[0];
+  if (!primaryTeam || typeof primaryTeam !== "object") return null;
+
+  const team = primaryTeam as Record<string, unknown>;
+  const rawId = team.id;
+  const rawName = team.name;
+
+  if ((typeof rawId !== "string" && typeof rawId !== "number") || typeof rawName !== "string") {
+    return null;
+  }
+
+  const id = String(rawId).trim();
+  const name = rawName.trim();
+
+  if (!id || !name) return null;
+  return { id, name };
 }
 
 export async function GET(request: Request) {
@@ -94,6 +121,8 @@ export async function GET(request: Request) {
       console.error("No access token present in ClickUp token response");
       return NextResponse.redirect(new URL("/login?error=auth_failed", request.url));
     }
+
+    const accessToken = tokens.access_token;
 
     // 2. Verify at least one ClickUp Workspace was authorized.
     const teamsResponse = await fetch("https://api.clickup.com/api/v2/team", {
@@ -182,33 +211,34 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/login?error=server_error", request.url));
     }
 
-    // 5. Create authenticated session cookies
+    // 5. Persist ClickUp token + workspace to DB (server-side only — never in a cookie).
+    //    Use the first authorized workspace for the MVP.
+    const primaryTeam = getPrimaryAuthorizedTeam(teamsData.teams);
+    if (primaryTeam) {
+      const persisted = await upsertClickUpConnection(provisioning.user.id, primaryTeam, accessToken);
+      if (!persisted) {
+        console.error("Failed to persist ClickUp connection — continuing without token cookie");
+      }
+    } else {
+      console.error("ClickUp authorized Workspace shape was invalid — continuing without token cookie");
+    }
+
+    // 6. Create authenticated session cookie (user identity only — NO ClickUp token).
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
     const signedSession = await createSignedSessionCookie(provisioning.user);
     response.cookies.delete("trackup_oauth_state");
+    // Remove legacy token cookie if it exists from an older deployment.
+    response.cookies.delete("trackup_token");
 
-    // Store ClickUp OAuth token
-    response.cookies.set("trackup_token", tokens.access_token, {
+    // Store signed authenticated user metadata. The role is still reloaded
+    // from the database on protected server paths before authorization.
+    response.cookies.set("trackup_user", signedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
-
-    // Store signed authenticated user metadata. The role is still reloaded
-    // from the database on protected server paths before authorization.
-    response.cookies.set(
-      "trackup_user",
-      signedSession,
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: SESSION_MAX_AGE_SECONDS,
-      }
-    );
 
     return response;
   } catch {
