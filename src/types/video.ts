@@ -114,6 +114,36 @@ export interface UpdateVideoInput {
 // Analytics types
 export type PlaybackMetricsScope = "direct_url_native_html5" | "session_only";
 
+export interface WatchEventSummary {
+  id: string;
+  event_type: WatchEventType;
+  position: number;
+  from_position: number | null;
+  created_at: string;
+}
+
+/**
+ * A truthful per-session record. viewer_identifier is already a one-way hash
+ * for anonymous viewers; it is never a raw email or name.
+ */
+export interface ViewerSessionAnalytics {
+  session_id: string;
+  viewer_identifier: string | null;
+  video_id: string;
+  video_title: string;
+  source_type: VideoSourceType;
+  session_number: number;
+  session_count_for_viewer: number;
+  started_at: string;
+  first_play_at: string | null;
+  last_activity_at: string;
+  ended_at: string | null;
+  watch_time_seconds: number | null;
+  completion_percentage: number | null;
+  playback_events: WatchEventSummary[];
+  playback_metrics_scope: PlaybackMetricsScope;
+}
+
 export interface VideoAnalytics {
   video_id: string;
   total_views: number;
@@ -124,6 +154,7 @@ export interface VideoAnalytics {
   completion_rate: number | null; // % of measured sessions that reached 90%+
   drop_off_point: number | null; // position in seconds where most measured viewers leave
   recent_sessions: WatchSessionSummary[];
+  viewer_sessions: ViewerSessionAnalytics[];
 }
 
 export interface WatchSessionSummary {
@@ -142,4 +173,5 @@ export interface WorkspaceAnalytics {
   avg_completion_percentage: number | null;
   completion_rate: number | null;
   playback_metrics_available: boolean;
+  viewer_sessions: ViewerSessionAnalytics[];
 }

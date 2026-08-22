@@ -6,9 +6,107 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { Video, CreateVideoInput, UpdateVideoInput, VideoAnalytics, WorkspaceAnalytics, WatchSessionSummary } from "@/src/types/video";
+import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
+
+interface AnalyticsSessionRow {
+  id: string;
+  watch_link_id: string;
+  viewer_identifier: string | null;
+  started_at: string;
+  last_seen_at: string;
+  ended_at: string | null;
+  watch_time_seconds: number;
+  completion_percentage: number;
+  watch_links?: unknown;
+}
+
+interface AnalyticsEventRow {
+  id: string;
+  session_id: string;
+  event_type: VideoAnalytics["viewer_sessions"][number]["playback_events"][number]["event_type"];
+  position: number;
+  from_position: number | null;
+  created_at: string;
+}
+
+function firstRelation(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first && typeof first === "object" ? first as Record<string, unknown> : null;
+  }
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+type AnalyticsVideoInfo = { id: string; title: string; source_type: Video["source_type"] };
+
+function buildViewerSessionAnalytics(
+  sessions: AnalyticsSessionRow[],
+  events: AnalyticsEventRow[],
+  videosBySession: Map<string, AnalyticsVideoInfo>,
+): VideoAnalytics["viewer_sessions"] {
+  const sessionsByViewer = new Map<string, AnalyticsSessionRow[]>();
+  for (const session of sessions) {
+    const key = session.viewer_identifier ?? `anonymous:${session.id}`;
+    const group = sessionsByViewer.get(key) ?? [];
+    group.push(session);
+    sessionsByViewer.set(key, group);
+  }
+
+  const eventsBySession = new Map<string, AnalyticsEventRow[]>();
+  for (const event of events) {
+    const group = eventsBySession.get(event.session_id) ?? [];
+    group.push(event);
+    eventsBySession.set(event.session_id, group);
+  }
+
+  return sessions
+    .slice()
+    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+    .flatMap((session) => {
+      const video = videosBySession.get(session.id);
+      if (!video) return [];
+      const scope = video.source_type === "direct_url" ? "direct_url_native_html5" as const : "session_only" as const;
+      const viewerKey = session.viewer_identifier ?? `anonymous:${session.id}`;
+      const viewerSessions = (sessionsByViewer.get(viewerKey) ?? [])
+        .slice()
+        .sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
+      const sessionNumber = viewerSessions.findIndex((item) => item.id === session.id) + 1;
+      const sessionEvents = (eventsBySession.get(session.id) ?? [])
+        .slice()
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const firstPlay = sessionEvents.find((event) => event.event_type === "play");
+      const latestEvent = sessionEvents[sessionEvents.length - 1];
+      const lastActivityAt = latestEvent && new Date(latestEvent.created_at).getTime() > new Date(session.last_seen_at).getTime()
+        ? latestEvent.created_at
+        : session.last_seen_at;
+
+      return {
+        session_id: session.id,
+        viewer_identifier: session.viewer_identifier,
+        video_id: video.id,
+        video_title: video.title,
+        source_type: video.source_type,
+        session_number: sessionNumber,
+        session_count_for_viewer: viewerSessions.length,
+        started_at: session.started_at,
+        first_play_at: video.source_type === "direct_url" ? firstPlay?.created_at ?? null : null,
+        last_activity_at: lastActivityAt,
+        ended_at: session.ended_at,
+        watch_time_seconds: video.source_type === "direct_url" ? session.watch_time_seconds : null,
+        completion_percentage: video.source_type === "direct_url" ? Number(session.completion_percentage ?? 0) : null,
+        playback_events: video.source_type === "direct_url" ? sessionEvents.map((event) => ({
+          id: event.id,
+          event_type: event.event_type,
+          position: Number(event.position ?? 0),
+          from_position: event.from_position === null ? null : Number(event.from_position),
+          created_at: event.created_at,
+        })) : [],
+        playback_metrics_scope: scope,
+      };
+    });
+}
 
 /**
  * Lists all videos for a workspace, with view counts.
@@ -27,13 +125,18 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
           created_by,
           expires_at,
           revoked_at,
+          created_at,
           watch_sessions(id, completion_percentage)
         )
       `)
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
 
-    if (error || !data) return [];
+    if (error) {
+      console.error("Failed to list videos", error);
+      throw new Error("video_list_failed");
+    }
+    if (!data) return [];
 
     return data.map((v) => {
       const sessions = (v.watch_links as Array<{
@@ -70,8 +173,9 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
       }),
       };
     });
-  } catch {
-    return [];
+  } catch (error) {
+    console.error("Failed to list videos", error);
+    throw new Error("video_list_failed");
   }
 }
 
@@ -299,23 +403,23 @@ export async function getVideoAnalytics(
   try {
     const supabase = createAdminClient();
 
-    // Verify ownership
     const { data: video } = await supabase
       .from("videos")
-      .select("id, duration, source_type")
+      .select("id, title, duration, source_type")
       .eq("id", videoId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
 
     if (!video) return null;
 
-    // Fetch all sessions for this video's watch links
-    const { data: sessions } = await supabase
+    const { data: rawSessions, error: sessionsError } = await supabase
       .from("watch_sessions")
       .select(`
         id,
+        watch_link_id,
         viewer_identifier,
         started_at,
+        last_seen_at,
         ended_at,
         watch_time_seconds,
         completion_percentage,
@@ -325,59 +429,62 @@ export async function getVideoAnalytics(
       .order("started_at", { ascending: false })
       .limit(500);
 
-    const totalViews = sessions?.length ?? 0;
-    const uniqueViewers = new Set((sessions ?? []).map((s) => s.viewer_identifier ?? s.id)).size;
-    const playbackMetricsScope = video.source_type === "direct_url" ? "direct_url_native_html5" as const : "session_only" as const;
-    const measuredSessions = video.source_type === "direct_url" ? (sessions ?? []) : [];
-    const measuredCount = measuredSessions.length;
+    if (sessionsError) return null;
 
-    if (totalViews === 0) {
-      return {
-        video_id: videoId,
-        total_views: 0,
-        unique_viewers: 0,
-        playback_metrics_scope: playbackMetricsScope,
-        avg_watch_time_seconds: null,
-        avg_completion_percentage: null,
-        completion_rate: null,
-        drop_off_point: null,
-        recent_sessions: [],
-      };
+    const sessions = (rawSessions ?? []) as unknown as AnalyticsSessionRow[];
+    const sessionIds = sessions.map((session) => session.id);
+    let events: AnalyticsEventRow[] = [];
+    if (sessionIds.length > 0) {
+      const { data: rawEvents, error: eventsError } = await supabase
+        .from("watch_events")
+        .select("id, session_id, event_type, position, from_position, created_at")
+        .in("session_id", sessionIds)
+        .order("created_at", { ascending: true })
+        .limit(5000);
+      if (eventsError) return null;
+      events = (rawEvents ?? []) as unknown as AnalyticsEventRow[];
     }
+
+    const totalViews = sessions.length;
+    const uniqueViewers = new Set(sessions.map((session) => session.viewer_identifier ?? session.id)).size;
+    const playbackMetricsScope = video.source_type === "direct_url" ? "direct_url_native_html5" as const : "session_only" as const;
+    const measuredSessions = video.source_type === "direct_url" ? sessions : [];
+    const measuredCount = measuredSessions.length;
+    const videoInfo: AnalyticsVideoInfo = {
+      id: video.id,
+      title: video.title,
+      source_type: video.source_type as Video["source_type"],
+    };
+    const viewerSessions = buildViewerSessionAnalytics(
+      sessions,
+      events,
+      new Map(sessions.map((session) => [session.id, videoInfo])),
+    );
 
     const avgWatchTime = measuredCount > 0
-      ? Math.round(
-          measuredSessions.reduce((sum, s) => sum + (s.watch_time_seconds ?? 0), 0) / measuredCount
-        )
+      ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0) / measuredCount)
       : null;
     const avgCompletion = measuredCount > 0
-      ? Math.round(
-          measuredSessions.reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) / measuredCount
-        )
+      ? Math.round(measuredSessions.reduce((sum, session) => sum + Number(session.completion_percentage ?? 0), 0) / measuredCount)
       : null;
     const completionRate = measuredCount > 0
-      ? Math.round(
-          (measuredSessions.filter((s) => Number(s.completion_percentage) >= 90).length / measuredCount) * 100
-        )
+      ? Math.round((measuredSessions.filter((session) => Number(session.completion_percentage) >= 90).length / measuredCount) * 100)
       : null;
 
-    // Drop-off: average final position for measured sessions that didn't complete
-    const incompleteSessions = measuredSessions.filter((s) => Number(s.completion_percentage) < 90);
+    const incompleteSessions = measuredSessions.filter((session) => Number(session.completion_percentage) < 90);
     let dropOffPoint: number | null = null;
     if (incompleteSessions.length > 0 && video.duration) {
-      const avgDropPct =
-        incompleteSessions.reduce((sum, s) => sum + Number(s.completion_percentage), 0) /
-        incompleteSessions.length;
-      dropOffPoint = Math.round((avgDropPct / 100) * (video.duration ?? 0));
+      const avgDropPct = incompleteSessions.reduce((sum, session) => sum + Number(session.completion_percentage), 0) / incompleteSessions.length;
+      dropOffPoint = Math.round((avgDropPct / 100) * video.duration);
     }
 
-    const recentSessions: WatchSessionSummary[] = (sessions ?? []).slice(0, 10).map((s) => ({
-      id: s.id,
-      viewer_identifier: s.viewer_identifier,
-      started_at: s.started_at,
-      ended_at: s.ended_at,
-      watch_time_seconds: video.source_type === "direct_url" ? s.watch_time_seconds ?? 0 : null,
-      completion_percentage: video.source_type === "direct_url" ? Number(s.completion_percentage ?? 0) : null,
+    const recentSessions: WatchSessionSummary[] = sessions.slice(0, 10).map((session) => ({
+      id: session.id,
+      viewer_identifier: session.viewer_identifier,
+      started_at: session.started_at,
+      ended_at: session.ended_at,
+      watch_time_seconds: video.source_type === "direct_url" ? session.watch_time_seconds ?? 0 : null,
+      completion_percentage: video.source_type === "direct_url" ? Number(session.completion_percentage ?? 0) : null,
     }));
 
     return {
@@ -390,6 +497,7 @@ export async function getVideoAnalytics(
       completion_rate: completionRate,
       drop_off_point: dropOffPoint,
       recent_sessions: recentSessions,
+      viewer_sessions: viewerSessions,
     };
   } catch {
     return null;
@@ -435,73 +543,100 @@ export async function associateClickUpTask(
  * Workspace-level analytics summary.
  */
 export async function getWorkspaceAnalytics(workspaceId: string): Promise<WorkspaceAnalytics> {
+  const empty: WorkspaceAnalytics = {
+    total_videos: 0,
+    total_views: 0,
+    unique_viewers: 0,
+    avg_completion_percentage: null,
+    completion_rate: null,
+    playback_metrics_available: false,
+    viewer_sessions: [],
+  };
+
   try {
     const supabase = createAdminClient();
 
-    const { count: videoCount } = await supabase
+    const { count: videoCount, error: videoCountError } = await supabase
       .from("videos")
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId);
+    if (videoCountError) return empty;
 
-    // Get all sessions for this workspace
-    const { data: sessions } = await supabase
+    const { data: rawSessions, error: sessionsError } = await supabase
       .from("watch_sessions")
       .select(`
         id,
+        watch_link_id,
         viewer_identifier,
+        started_at,
+        last_seen_at,
+        ended_at,
+        watch_time_seconds,
         completion_percentage,
-        watch_links!inner(video_id, videos!inner(workspace_id, source_type))
+        watch_links!inner(
+          video_id,
+          videos!inner(id, title, workspace_id, source_type)
+        )
       `)
       .eq("watch_links.videos.workspace_id", workspaceId)
+      .order("started_at", { ascending: false })
       .limit(2000);
+    if (sessionsError) return empty;
 
-    const total_views = sessions?.length ?? 0;
-    const unique_viewers = sessions
-      ? new Set(sessions.map((s) => s.viewer_identifier ?? s.id)).size
-      : 0;
-    const measuredSessions = (sessions ?? []).filter((session) => {
-      const rawLink = (session as { watch_links?: unknown }).watch_links;
-      const link = Array.isArray(rawLink) ? rawLink[0] : rawLink;
-      const rawVideo = link && typeof link === "object"
-        ? (link as { videos?: unknown }).videos
-        : null;
-      const video = Array.isArray(rawVideo) ? rawVideo[0] : rawVideo;
-      return video && typeof video === "object" &&
-        (video as { source_type?: unknown }).source_type === "direct_url";
-    });
-    const measuredCount = measuredSessions.length;
-    const avg_completion_percentage =
-      measuredCount > 0
-        ? Math.round(
-            measuredSessions.reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) /
-              measuredCount
-          )
-        : null;
-    const completion_rate =
-      measuredCount > 0
-        ? Math.round(
-            (measuredSessions.filter((s) => Number(s.completion_percentage) >= 90).length /
-              measuredCount) *
-              100
-          )
-        : null;
+    const workspaceSessions: AnalyticsSessionRow[] = [];
+    const sessionVideos = new Map<string, { id: string; title: string; source_type: Video["source_type"] }>();
+    for (const raw of (rawSessions ?? []) as unknown[]) {
+      if (!raw || typeof raw !== "object") continue;
+      const row = raw as AnalyticsSessionRow;
+      const link = firstRelation(row.watch_links);
+      const relatedVideo = firstRelation(link?.videos);
+      if (
+        typeof relatedVideo?.id !== "string" ||
+        typeof relatedVideo.title !== "string" ||
+        !isValidSourceType(relatedVideo.source_type)
+      ) continue;
+      workspaceSessions.push(row);
+      sessionVideos.set(row.id, {
+        id: relatedVideo.id,
+        title: relatedVideo.title,
+        source_type: relatedVideo.source_type,
+      });
+    }
+
+    const sessionIds = workspaceSessions.map((session) => session.id);
+    let events: AnalyticsEventRow[] = [];
+    if (sessionIds.length > 0) {
+      const { data: rawEvents, error: eventsError } = await supabase
+        .from("watch_events")
+        .select("id, session_id, event_type, position, from_position, created_at")
+        .in("session_id", sessionIds)
+        .order("created_at", { ascending: true })
+        .limit(10000);
+      if (eventsError) return empty;
+      events = (rawEvents ?? []) as unknown as AnalyticsEventRow[];
+    }
+
+    const viewerSessions = buildViewerSessionAnalytics(workspaceSessions, events, sessionVideos);
+    const totalViews = workspaceSessions.length;
+    const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_identifier ?? session.id)).size;
+    const measuredSessions = workspaceSessions.filter((session) => sessionVideos.get(session.id)?.source_type === "direct_url");
+    const avgCompletion = measuredSessions.length > 0
+      ? Math.round(measuredSessions.reduce((sum, session) => sum + Number(session.completion_percentage ?? 0), 0) / measuredSessions.length)
+      : null;
+    const completionRate = measuredSessions.length > 0
+      ? Math.round((measuredSessions.filter((session) => Number(session.completion_percentage) >= 90).length / measuredSessions.length) * 100)
+      : null;
 
     return {
       total_videos: videoCount ?? 0,
-      total_views,
-      unique_viewers,
-      avg_completion_percentage,
-      completion_rate,
-      playback_metrics_available: measuredCount > 0,
+      total_views: totalViews,
+      unique_viewers: uniqueViewers,
+      avg_completion_percentage: avgCompletion,
+      completion_rate: completionRate,
+      playback_metrics_available: measuredSessions.length > 0,
+      viewer_sessions: viewerSessions,
     };
   } catch {
-    return {
-      total_videos: 0,
-      total_views: 0,
-      unique_viewers: 0,
-      avg_completion_percentage: null,
-      completion_rate: null,
-      playback_metrics_available: false,
-    };
+    return empty;
   }
 }

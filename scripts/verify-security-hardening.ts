@@ -95,6 +95,8 @@ async function runTests(): Promise<void> {
   const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
   const teamManager = readFileSync("src/components/dashboard/TeamMemberManager.tsx", "utf8");
   const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
+  const adminUsersRoute = readFileSync("app/api/admin/users/route.ts", "utf8");
+  const roleManagement = readFileSync("src/lib/auth/role-management.ts", "utf8");
   const watchLinksPage = readFileSync("app/(dashboard)/watch-links/page.tsx", "utf8");
   const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
@@ -111,24 +113,32 @@ async function runTests(): Promise<void> {
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
   assert(videoList.includes('video.avg_completion === null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
   assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("statusLabel"), "video library derives YouTube thumbnails and link status from real fields");
+  assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksPage.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
   assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
   assert(watchPlayer.includes("https://www.youtube.com/embed/") && watchPlayer.includes("referrerPolicy"), "YouTube is rendered through the internal embed player");
-  assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes("not_implemented"), "team UI uses real owner endpoints and documents invite gap");
-  assert(adminUsersPage.includes("501 not_implemented") && !adminUsersPage.includes("Create invite"), "admin UI does not offer a fake invite flow");
+  assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes('fetch("/api/admin/users"'), "team UI uses real owner management and invite endpoints");
+  assert(teamManager.includes("must sign in through ClickUp") && teamManager.includes("Create profile"), "invite UI explains ClickUp pre-provisioning without fake email delivery");
+  assert(adminUsersPage.includes("owner-level users-manage permission") && !adminUsersPage.includes("501 not_implemented"), "admin UI reflects the implemented owner-only invite capability");
+  assert(adminUsersRoute.includes("createClickUpInvite") && adminUsersRoute.includes("invalid_json"), "admin invite route validates input and calls the real service");
+  assert(roleManagement.includes("export async function createClickUpInvite") && roleManagement.includes("isConfiguredOwnerEmail") && roleManagement.includes("is_active: true"), "invite service pre-provisions a protected ClickUp profile");
 
   section("Provider-aware analytics honesty");
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
   const analyticsPage = readFileSync("app/(dashboard)/analytics/page.tsx", "utf8");
   const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
   const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
+  const viewerAnalyticsPanel = readFileSync("src/components/dashboard/ViewerAnalyticsPanel.tsx", "utf8");
   assert(analyticsService.includes("playback_metrics_scope") && analyticsService.includes('video.source_type === "direct_url"'), "analytics scope playback metrics to native direct URLs");
   assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
   assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
   assert(analyticsPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "analytics page does not display unsupported completion as zero");
   assert(dashboardPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "dashboard does not display unsupported completion as zero");
-  assert(videoDetailPage.includes('analytics.playback_metrics_scope === "direct_url_native_html5"') && videoDetailPage.includes("Playback telemetry unavailable"), "video detail explains provider telemetry limits");
+  assert(videoDetailPage.includes('analytics.playback_metrics_scope === "direct_url_native_html5"') && viewerAnalyticsPanel.includes("Session-only measurement"), "video detail and viewer panel explain provider telemetry limits");
+  assert(analyticsService.includes("viewer_sessions") && analyticsService.includes("first_play_at") && analyticsService.includes("last_activity_at") && analyticsService.includes("latestEvent"), "analytics service exposes per-session timestamps and viewer breakdown");
+  assert(analyticsService.includes("from_position") && analyticsService.includes("eventsBySession"), "analytics service exposes supported playback event timelines");
+  assert(analyticsPage.includes("analytics.viewer_sessions") && viewerAnalyticsPanel.includes("Session-only measurement"), "analytics UI renders per-viewer sessions with honest provider scope");
 
   section("OAuth state and service-role checks");
 

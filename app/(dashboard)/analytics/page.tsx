@@ -5,6 +5,7 @@ import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import { Eye, Users, TrendingUp, Clock, BarChart3, Video } from "lucide-react";
+import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 
 export default async function AnalyticsPage() {
   const user = await guardAuth();
@@ -90,6 +91,12 @@ export default async function AnalyticsPage() {
           </div>
         )}
       </div>
+
+      <ViewerAnalyticsPanel
+        sessions={analytics.viewer_sessions}
+        title="Viewer and session activity"
+        description="Workspace-wide session records. Anonymous viewer IDs are one-way hashes; playback metrics are shown only for direct URL native playback."
+      />
     </div>
   );
 }

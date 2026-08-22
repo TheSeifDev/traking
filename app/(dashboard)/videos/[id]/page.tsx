@@ -8,6 +8,7 @@ import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
 import { ArrowLeft, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
+import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -100,28 +101,12 @@ export default async function VideoDetailPage({ params }: Props) {
       {/* Watch Link */}
       <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} />
 
-      {/* Recent sessions */}
-      {analytics && analytics.recent_sessions.length > 0 && (
-        <div>
-          <h2 className="text-base font-semibold text-white mb-3">Recent Viewers</h2>
-          <div className="space-y-2">
-            {analytics.recent_sessions.map((s) => (
-              <div key={s.id} className="flex items-center gap-4 p-3 rounded-xl bg-white/4 border border-white/8">
-                <div className="h-8 w-8 rounded-full bg-white/8 flex items-center justify-center shrink-0">
-                  <Eye size={13} className="text-white/40" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white/70">{s.viewer_identifier ? `Viewer ${s.viewer_identifier.slice(0, 8)}` : "Anonymous"}</p>
-                  <p className="text-xs text-white/40">{new Date(s.started_at).toLocaleDateString()}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-medium text-white">{s.completion_percentage === null ? "Not measured" : `${s.completion_percentage}%`}</p>
-                  <p className="text-xs text-white/40">{s.watch_time_seconds === null ? "Playback telemetry unavailable" : `${Math.floor(s.watch_time_seconds / 60)}m ${s.watch_time_seconds % 60}s`}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {analytics && (
+        <ViewerAnalyticsPanel
+          sessions={analytics.viewer_sessions}
+          title="Viewer and session activity"
+          description="Per-session records for this video. Anonymous viewer IDs are one-way hashes, not raw personal data."
+        />
       )}
 
       {!analytics || analytics.total_views === 0 ? (

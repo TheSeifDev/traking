@@ -35,6 +35,7 @@ import {
   type ManagedRole,
   type Profile,
 } from "@/src/types/auth";
+import { isConfiguredOwnerEmail } from "./rbac";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -305,5 +306,103 @@ export async function listAllUsers(): Promise<Profile[] | null> {
     return data as Profile[];
   } catch {
     return null;
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// ClickUp identity pre-provisioning (invite)
+// ---------------------------------------------------------------------------
+
+export type ClickUpInviteResult =
+  | { success: true; created: boolean; user: Profile }
+  | {
+      success: false;
+      error:
+        | "unauthenticated"
+        | "inactive_account"
+        | "forbidden"
+        | "invalid_email"
+        | "invalid_role"
+        | "owner_email_protected"
+        | "user_exists"
+        | "database_error";
+    };
+
+/**
+ * Pre-provisions a TrackUp profile for a future ClickUp OAuth login.
+ * This is intentionally not an email-sending operation: the existing auth
+ * architecture has no mail/invite provider. The user must later authorize
+ * ClickUp with the same email address, after which provisioning links the
+ * ClickUp identity to this profile and preserves the assigned role.
+ */
+export async function createClickUpInvite(
+  email: string,
+  name: string | null,
+  requestedRole: unknown,
+): Promise<ClickUpInviteResult> {
+  let requester;
+  try {
+    requester = await requireAuth();
+  } catch (err) {
+    if (err instanceof AuthError && err.code === "inactive_account") {
+      return { success: false, error: "inactive_account" };
+    }
+    return { success: false, error: "unauthenticated" };
+  }
+
+  if (requester.role !== USER_ROLES.OWNER) return { success: false, error: "forbidden" };
+  if (!isValidManagedRole(requestedRole)) return { success: false, error: "invalid_role" };
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return { success: false, error: "invalid_email" };
+  }
+  if (isConfiguredOwnerEmail(normalizedEmail)) {
+    return { success: false, error: "owner_email_protected" };
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const { data: existing, error: lookupError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (lookupError) return { success: false, error: "database_error" };
+    if (existing?.clickup_user_id) return { success: false, error: "user_exists" };
+
+    const displayName = name?.trim() || null;
+    if (existing) {
+      const { data: updated, error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          name: displayName || existing.name,
+          role: requestedRole,
+          is_active: true,
+        })
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+      if (updateError || !updated) return { success: false, error: "database_error" };
+      return { success: true, created: false, user: updated as Profile };
+    }
+
+    const { data: created, error: insertError } = await supabase
+      .from("profiles")
+      .insert({
+        email: normalizedEmail,
+        name: displayName,
+        role: requestedRole,
+        is_active: true,
+      })
+      .select("*")
+      .single();
+
+    if (insertError || !created) return { success: false, error: "database_error" };
+    return { success: true, created: true, user: created as Profile };
+  } catch {
+    return { success: false, error: "database_error" };
   }
 }
