@@ -65,7 +65,7 @@ assert(oauthStart.includes("https://app.clickup.com/api?"), "OAuth start uses Cl
 assert(oauthCallback.includes("state !== expectedState"), "OAuth callback validates returned state");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/oauth/token"), "OAuth callback uses ClickUp token URL");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/team"), "OAuth callback verifies authorized Workspaces");
-assert(oauthCallback.includes("Authorization: `Bearer ${tokens.access_token}`"), "OAuth API requests use Bearer token header");
+assert(oauthCallback.includes("Authorization: `Bearer ${accessToken}`"), "OAuth API requests use Bearer token header");
 assert(oauthCallback.includes("createSignedSessionCookie"), "OAuth callback writes signed session cookie");
 assert(!adminClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;"), "admin client does not fall back to public key");
 
