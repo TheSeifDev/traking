@@ -1,16 +1,4 @@
 /*
- * Uses admin client (anon cannot read session to verify, so we skip verify for MVP).
- * Rate limiting / spam prevention is a post-MVP concern.
- */
-export async function recordTrackingEvent(
-  payload: TrackingEventPayload
-): Promise<boolean> {
-  if (!payload.session_id || !payload.session_token || !payload.event_type) return false;
-  if (!(await isAuthorizedWatchSession(payload.session_id, payload.session_token))) return false;
-
-
-
-
   try {
     const supabase = createAdminClient();
     const { error } = await supabase.from("watch_events").insert({
@@ -19,6 +7,10 @@ export async function recordTrackingEvent(
       position: payload.position ?? 0,
       duration: payload.from_position ?? null,
     });
+
+
+
+
 
 
 
@@ -34,6 +26,10 @@ export async function recordTrackingEvent(
 
 
 
+
+
+
+
     // Always update last_seen_at on heartbeat/play
     if (!error && (payload.event_type === "heartbeat" || payload.event_type === "play")) {
       void supabase
@@ -45,11 +41,19 @@ export async function recordTrackingEvent(
 
 
 
+
+
+
+
     return !error;
   } catch {
     return false;
   }
 }
+
+
+
+
 
 
 
@@ -77,6 +81,8 @@ export async function endWatchSession(
       .eq("session_token", sessionToken)
       .select("id")
       .maybeSingle();
-
-
-
+    return !error && !!data;
+  } catch {
+    return false;
+  }
+}
