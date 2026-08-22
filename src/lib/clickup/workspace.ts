@@ -1,7 +1,4 @@
 import { createAdminClient } from "@/utils/supabase/admin";
-
-
-
 export type ClickUpWorkspaceIdentity = {
   
   id: string;
@@ -9,11 +6,7 @@ export type ClickUpWorkspaceIdentity = {
   name: string;
   
 };
-
-
-
 /**
-
  * Persists the ClickUp workspace selected during OAuth and stores the access
  
  * token server-side. The token must never be returned to client code or stored
@@ -21,7 +14,6 @@ export type ClickUpWorkspaceIdentity = {
  * in a browser-readable cookie.
  
  */
-
 export async function upsertClickUpConnection(
   
   profileId: string,
@@ -38,13 +30,11 @@ export async function upsertClickUpConnection(
     
   }
   
-
   
   try {
     
     const supabase = createAdminClient();
     
-
     
     const { data: workspaceRow, error: workspaceError } = await supabase
     
@@ -68,7 +58,6 @@ export async function upsertClickUpConnection(
     
       .single();
     
-
     
     if (workspaceError || !workspaceRow) {
       
@@ -84,7 +73,6 @@ export async function upsertClickUpConnection(
       
     }
     
-
     
     const { error: connectionError } = await supabase
     
@@ -106,7 +94,6 @@ export async function upsertClickUpConnection(
         
       );
     
-
     
     if (connectionError) {
       
@@ -122,7 +109,6 @@ export async function upsertClickUpConnection(
       
     }
     
-
     
     return true;
     
@@ -135,20 +121,14 @@ export async function upsertClickUpConnection(
   }
   
 }
-
-
-
 /**
-
  * Returns the first workspace ID for a profile (for MVP single-workspace flow).
  
  */
-
 export async function getPrimaryWorkspaceId(profileId: string): Promise<string | null> {
   
   if (!profileId) return null;
   
-
   
   try {
     
@@ -166,7 +146,6 @@ export async function getPrimaryWorkspaceId(profileId: string): Promise<string |
     
       .maybeSingle();
     
-
     
     if (error) return null;
     
@@ -179,15 +158,10 @@ export async function getPrimaryWorkspaceId(profileId: string): Promise<string |
   }
   
 }
-
-
-
 /**
-
  * Returns basic workspace info for a profile.
  
  */
-
 export async function getPrimaryWorkspace(profileId: string): Promise<{
   
   id: string;
@@ -200,7 +174,6 @@ export async function getPrimaryWorkspace(profileId: string): Promise<{
   
   if (!profileId) return null;
   
-
   
   try {
     
@@ -218,7 +191,6 @@ export async function getPrimaryWorkspace(profileId: string): Promise<{
     
       .maybeSingle();
     
-
     
     if (error || !data?.workspaces) return null;
     
@@ -226,7 +198,6 @@ export async function getPrimaryWorkspace(profileId: string): Promise<{
     
     if (!workspace) return null;
     
-
     
     return {
       
@@ -245,113 +216,3 @@ export async function getPrimaryWorkspace(profileId: string): Promise<{
   }
   
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
