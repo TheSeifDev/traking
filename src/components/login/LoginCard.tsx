@@ -7,7 +7,7 @@ type LoginCardProps = {
   authHref?: string;
 };
 
-const LoginCard = ({ authHref = "/auth/clickup" }: LoginCardProps) => (
+const LoginCard = ({ authHref = "/api/auth/clickup" }: LoginCardProps) => (
   <div className="relative isolate w-full max-w-md overflow-hidden rounded-[24px] border border-violet-500/65 px-5 py-6 shadow-[0_0_0_4px_rgba(124,58,237,0.06),0_0_56px_rgba(88,28,255,0.3)] ring-1 ring-violet-300/15 backdrop-blur-2xl sm:px-7 sm:py-8 xl:px-8 xl:py-9">
     {/* Card depth and ambient glow */}
     <div className="pointer-events-none absolute inset-1 rounded-[20px] border border-white/5" />
