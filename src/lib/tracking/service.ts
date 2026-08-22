@@ -28,28 +28,49 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
 
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    const { data: link, error: linkError } = await supabase
       .from("watch_links")
-      .select("id, expires_at, revoked_at, video_id, videos(id, title, source_type, source_url, duration)")
+      .select("id, expires_at, revoked_at, video_id")
       .eq("token", token)
       .maybeSingle();
 
-    if (error || !data || !data.videos) return null;
-    if (data.revoked_at) return null;
-    if (data.expires_at && new Date(data.expires_at) <= new Date()) return null;
+    if (linkError) {
+      console.error("watch_link_lookup_failed", { code: linkError.code, message: linkError.message });
+      return null;
+    }
+    if (!link) {
+      console.info("watch_link_not_found");
+      return null;
+    }
+    if (link.revoked_at) return null;
+    if (link.expires_at && new Date(link.expires_at) <= new Date()) return null;
 
-    const video = Array.isArray(data.videos) ? data.videos[0] : data.videos;
-    if (!video) return null;
+    const { data: video, error: videoError } = await supabase
+      .from("videos")
+      .select("id, title, source_type, source_url, duration")
+      .eq("id", link.video_id)
+      .maybeSingle();
+    if (videoError) {
+      console.error("watch_link_video_lookup_failed", { code: videoError.code, message: videoError.message });
+      return null;
+    }
+    if (!video) {
+      console.warn("watch_link_video_missing", { watchLinkId: link.id });
+      return null;
+    }
 
     return {
-      watch_link_id: data.id,
+      watch_link_id: link.id,
       video_id: video.id,
       title: video.title,
       source_type: video.source_type,
       source_url: video.source_url,
       duration: video.duration ?? null,
     };
-  } catch {
+  } catch (error) {
+    console.error("watch_link_lookup_exception", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
     return null;
   }
 }
