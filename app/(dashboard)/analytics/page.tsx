@@ -4,7 +4,7 @@
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
-import { Eye, Users, TrendingUp, Clock, BarChart3, Video } from "lucide-react";
+import { Eye, Users, TrendingUp, Clock, BarChart3, Video, Layers3 } from "lucide-react";
 import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 
 export default async function AnalyticsPage() {
@@ -26,9 +26,10 @@ export default async function AnalyticsPage() {
 
   const stats = [
     { label: "Total Views", value: analytics.total_views, icon: Eye, desc: "Across all videos" },
-    { label: "Unique Viewers", value: analytics.unique_viewers, icon: Users, desc: "Distinct sessions" },
-    { label: "Avg Completion", value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`, icon: Clock, desc: "Direct URL playback only"},
-    { label: "Completion Rate", value: analytics.completion_rate === null ? "Unavailable" : `${analytics.completion_rate}%`, icon: TrendingUp, desc: "Measured direct URL sessions" },
+    { label: "Total Sessions", value: analytics.total_sessions, icon: Layers3, desc: "One session per visit" },
+    { label: "Unique Viewers", value: analytics.unique_viewers, icon: Users, desc: "Stable hashed identities" },
+    { label: "Avg Completion", value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`, icon: Clock, desc: "Direct URL + YouTube API"},
+    { label: "Completion Rate", value: analytics.completion_rate === null ? "Unavailable" : `${analytics.completion_rate}%`, icon: TrendingUp, desc: "Measured sessions only" },
   ];
 
   const topVideos = videos
@@ -45,7 +46,7 @@ export default async function AnalyticsPage() {
         <p className="text-white/40 text-sm mt-1">Workspace-wide video performance</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {stats.map(({ label, value, icon: Icon, desc }) => (
           <div key={label} className="rounded-2xl bg-white/4 border border-white/8 p-5">
             <Icon size={16} className="text-violet-400 mb-3" />
@@ -95,7 +96,7 @@ export default async function AnalyticsPage() {
       <ViewerAnalyticsPanel
         sessions={analytics.viewer_sessions}
         title="Viewer and session activity"
-        description="Workspace-wide session records. Anonymous viewer IDs are one-way hashes; playback metrics are shown only for direct URL native playback."
+        description="Workspace-wide session records. Viewer IDs are one-way hashes; playback metrics are shown only for direct URL HTML5 or YouTube IFrame API playback."
       />
     </div>
   );

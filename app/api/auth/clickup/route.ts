@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppUrl, getClickUpRedirectUri } from "@/src/lib/app-url";
+import { AUTH_RETURN_COOKIE, getSafeAuthReturnPath } from "@/src/lib/auth/redirect";
 
 const CLICKUP_AUTHORIZE_URL = "https://app.clickup.com/api?";
 
@@ -33,7 +34,9 @@ function redactOauthState(authorizeUrl: URL): string {
   return safeUrl.toString();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url);
+  const returnTo = getSafeAuthReturnPath(requestUrl.searchParams.get("redirect"));
   const { value: clientId, source: clientIdSource } = getClickUpClientId();
   const redirectUri = getClickUpRedirectUri();
 
@@ -59,6 +62,13 @@ export async function GET() {
   });
 
   const response = NextResponse.redirect(authorizeUrl);
+  response.cookies.set(AUTH_RETURN_COOKIE, returnTo, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 10,
+  });
   response.cookies.set("trackup_oauth_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
