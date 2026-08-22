@@ -112,13 +112,14 @@ export interface UpdateVideoInput {
 }
 
 // Analytics types
-export type PlaybackMetricsScope = "direct_url_native_html5" | "session_only";
+export type PlaybackMetricsScope = "direct_url_native_html5" | "youtube_iframe_api" | "session_only";
 
 export interface WatchEventSummary {
   id: string;
   event_type: WatchEventType;
   position: number;
   from_position: number | null;
+  duration: number | null;
   created_at: string;
 }
 
@@ -141,12 +142,15 @@ export interface ViewerSessionAnalytics {
   watch_time_seconds: number | null;
   completion_percentage: number | null;
   playback_events: WatchEventSummary[];
+  last_position: number | null;
+  last_duration: number | null;
   playback_metrics_scope: PlaybackMetricsScope;
 }
 
 export interface VideoAnalytics {
   video_id: string;
   total_views: number;
+  total_sessions: number;
   unique_viewers: number;
   playback_metrics_scope: PlaybackMetricsScope;
   avg_watch_time_seconds: number | null;
@@ -169,6 +173,7 @@ export interface WatchSessionSummary {
 export interface WorkspaceAnalytics {
   total_videos: number;
   total_views: number;
+  total_sessions: number;
   unique_viewers: number;
   avg_completion_percentage: number | null;
   completion_rate: number | null;

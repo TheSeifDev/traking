@@ -8,9 +8,10 @@ interface WatchLinkPanelProps {
   videoId: string;
   existingLinks: WatchLink[];
   canManage: boolean;
+  appOrigin: string;
 }
 
-export default function WatchLinkPanel({ videoId, existingLinks: initial, canManage }: WatchLinkPanelProps) {
+export default function WatchLinkPanel({ videoId, existingLinks: initial, canManage, appOrigin }: WatchLinkPanelProps) {
   const [links, setLinks] = useState<WatchLink[]>(initial);
   const [generating, setGenerating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
   const [error, setError] = useState<string | null>(null);
   const [currentTime] = useState(() => new Date().getTime());
 
-  const getUrl = (token: string) => `${window.location.origin}/watch/${token}`;
+  const getUrl = (token: string) => `${appOrigin}/watch/${token}`;
 
   async function handleGenerate() {
     if (!canManage) return;

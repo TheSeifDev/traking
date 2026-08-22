@@ -6,6 +6,7 @@ import Link from "next/link";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
+import { getAppUrl } from "@/src/lib/app-url";
 import { ArrowLeft, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
 import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
@@ -34,6 +35,7 @@ export default async function VideoDetailPage({ params }: Props) {
 
   const stats = analytics ? [
     { label: "Total Views", value: analytics.total_views, icon: Eye },
+    { label: "Total Sessions", value: analytics.total_sessions, icon: TrendingUp },
     { label: "Unique Viewers", value: analytics.unique_viewers, icon: TrendingUp },
     {
       label: "Avg Watch Time",
@@ -81,7 +83,7 @@ export default async function VideoDetailPage({ params }: Props) {
       {/* Stats */}
       {analytics && (
         <>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           {stats.map(({ label, value, icon: Icon }) => (
             <div key={label} className="rounded-xl bg-white/4 border border-white/8 p-4">
               <Icon size={15} className="text-violet-400 mb-2" />
@@ -93,19 +95,21 @@ export default async function VideoDetailPage({ params }: Props) {
         <p className="text-xs text-white/35">
           {analytics.playback_metrics_scope === "direct_url_native_html5"
             ? "Playback time and completion are measured from native HTML5 events."
-            : "This provider exposes session start/end only; playback position, watch time, and completion are not measured."}
+            : analytics.playback_metrics_scope === "youtube_iframe_api"
+              ? "Playback state, duration, progress, and completion are measured from the official YouTube IFrame API."
+              : "This provider exposes no reliable playback API here; position, watch time, and completion are not measured."}
         </p>
         </>
       )}
 
       {/* Watch Link */}
-      <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} />
+      <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} appOrigin={getAppUrl()} />
 
       {analytics && (
         <ViewerAnalyticsPanel
           sessions={analytics.viewer_sessions}
           title="Viewer and session activity"
-          description="Per-session records for this video. Anonymous viewer IDs are one-way hashes, not raw personal data."
+          description="Per-session records for this video. Viewer IDs are one-way hashes, not raw personal data; playback events appear only where the provider exposes reliable telemetry."
         />
       )}
 

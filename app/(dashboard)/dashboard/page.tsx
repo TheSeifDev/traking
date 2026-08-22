@@ -36,7 +36,7 @@ export default async function DashboardPage() {
     { label: "Total Videos", value: analytics.total_videos, icon: Video, color: "from-violet-500 to-blue-500" },
     { label: "Total Views", value: analytics.total_views, icon: Eye, color: "from-blue-500 to-cyan-500" },
     { label: "Unique Viewers", value: analytics.unique_viewers, icon: TrendingUp, color: "from-cyan-500 to-teal-500" },
-    { label: "Avg. Completion (direct URL)", value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`, icon: Clock, color: "from-teal-500 to-green-500" },
+    { label: "Avg. Completion (measured)", value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`, icon: Clock, color: "from-teal-500 to-green-500" },
   ];
 
   return (
