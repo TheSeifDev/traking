@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut } from "lucide-react";
+import Image from "next/image";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -30,10 +31,17 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-white/8 bg-[#0b0b28]">
         {/* Logo */}
-        <div className="flex items-center h-16 px-5 border-b border-white/8 shrink-0">
+        <div className="flex items-center h-16 px-5 border-b border-white/8 shrink-0 ">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">T</span>
+            <div className="h-7 w-7 rounded-lg flex items-center justify-center">
+                        <Image
+                          src="/logo.webp"
+                          alt="TrackUp"
+                          width={205}
+                          height={58}
+                          priority
+                          className="h-8 w-auto lg:h-9"
+                        />
             </div>
             <span className="font-semibold text-white text-sm tracking-wide">TrackUp</span>
           </Link>
@@ -82,7 +90,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
-              className="flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className="flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
             >
               <LogOut size={15} />
               Sign out
@@ -96,7 +104,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
         {/* Mobile top bar */}
         <header className="md:hidden flex items-center justify-between h-14 px-4 border-b border-white/8 bg-[#0b0b28] shrink-0">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
+            <div className="h-6 w-6 rounded-md bg-linear-to-br from-violet-500 to-blue-500 flex items-center justify-center">
               <span className="text-white text-[10px] font-bold">T</span>
             </div>
             <span className="font-semibold text-sm">TrackUp</span>

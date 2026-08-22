@@ -1,7 +1,4 @@
-﻿/**
- * /dashboard - Overview page
- */
-import Link from "next/link";
+﻿import Link from "next/link";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
@@ -49,11 +46,11 @@ export default async function DashboardPage() {
         <p className="text-white/50 text-sm mt-1">Welcome back, {user.name ?? user.email}</p>
       </div>
 
-      {/* Stats grid */}
+      {}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="rounded-2xl bg-white/4 border border-white/8 p-5 flex flex-col gap-3">
-            <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center`}>
+            <div className={`h-9 w-9 rounded-xl bg-linear-to-br ${color} flex items-center justify-center`}>
               <Icon size={16} className="text-white" />
             </div>
             <div>
@@ -64,7 +61,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Recent videos */}
+      {}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-white">Recent Videos</h2>
