@@ -51,3 +51,33 @@ A source audit confirms that video reads and mutations are already scoped by the
 The public tracking endpoints now require an unguessable per-session capability, and watch-link expiry/revocation blocks creation of new sessions. A distributed rate limiter is not present; adding an in-memory limiter would be unsafe for serverless instances, so no fake limiter was added. The remaining transparent `POST /api/admin/users` handler returns 501 because invite/user creation is not implemented; unlike the former owner-admin stub, it does not claim a mutation occurred.
 
 The documentation-only commit `85654a6` also passed GitHub Quality run `32585517054` / job `97061176512`: install, type check, lint, tests, and production build all completed successfully.
+
+## Phase 4 boundary re-audit — workspace and organization isolation
+
+Gate 0 was revalidated on branch `fix/restore-workspace-contract` at commit `9604b16`: the working tree was clean, the comparison diff passed `git diff --check`, and local typecheck, lint, tests, and production build all passed. The latest local suite reported route authorization `56/56` and security hardening `43/43`; the only build warning remains Next.js's middleware-to-proxy deprecation.
+
+Architecture evidence is consistent and explicit. `profiles` stores one global `role` and `is_active` per ClickUp user. `workspaces` stores ClickUp teams. `clickup_connections` is keyed by `(profile_id, workspace_id)` and stores the server-side access token. OAuth provisions or loads one global profile, persists the first authorized ClickUp team as the MVP primary connection, and the dashboard/settings pages derive a single primary workspace from that connection. Video queries and mutations are scoped by that primary workspace id. No table, helper, or authorization function currently represents a per-workspace membership or a workspace-specific role.
+
+Decision: do not add a partial membership model. For the current single-primary-workspace MVP, the global profile role does not block the existing product flow because each authenticated user is routed to one primary workspace and all video operations use that workspace. It would become a confirmed product/security requirement if users can connect or switch between multiple organizations, if the same profile can hold different roles in different workspaces, or if owners/admins must manage members of one workspace without seeing another. Implementing that future model requires a complete design for membership keys, unique constraints, role scope, OAuth provisioning, workspace selection, session context, every protected query, migrations/rollback, and tests; it is intentionally deferred rather than partially introduced.
+
+Confirmed minimal regression: the settings page had a stale reconnect CTA pointing to `/auth/clickup` although the implemented route is `/api/auth/clickup`. It was corrected in the working tree with no architectural change.
+
+## Provider capability evidence — official docs
+
+The current WatchPlayer implementation renders YouTube and Vimeo as iframes but does not load either provider SDK. The official YouTube IFrame Player API documents `getCurrentTime()` and `getDuration()` plus `onStateChange` states for ended, playing, paused, and buffering; this means granular telemetry is technically available only after integrating the SDK/protocol, not from the current iframe alone. The official Vimeo Player SDK reference documents playback-position and duration methods and playback events including bufferstart/bufferend, ended, pause, play, progress, seeked, and timeupdate; the current iframe-only implementation does not consume them.
+
+Sources inspected: https://developers.google.com/youtube/iframe_api_reference and https://developer.vimeo.com/player/sdk/reference.
+
+The official Telegram Bot API page describes an HTTP bot interface and media/message fields, but it does not expose a browser embedded-player control/event contract comparable to YouTube IFrame API or Vimeo Player SDK. The official Google Drive API reference describes the Drive REST resource service and file/resource access; it does not provide an embedded preview player event API or a current playback-position contract. Therefore the current direct iframe treatment for Drive and Telegram cannot prove current position, play/pause/seek/buffer/end, watched ranges, or a real heatmap.
+
+Sources inspected: https://core.telegram.org/bots/api and https://developers.google.com/workspace/drive/api/reference/rest/v3.
+
+## RBAC audit — read routes and reconnect flow
+
+Confirmed problem: three read-oriented routes relied on `withAuth` even though their contracts are permissioned reads, and ClickUp task search exposed a token-backed workspace query to every authenticated role. The latter is part of the task-association workflow and is not used by the viewer experience.
+
+Root cause: authentication and authorization wrappers were mixed at the route layer. The current role map already grants `videos.read` to owner/admin/viewer and reserves video mutation/task association for owner/admin, so changing wrappers does not remove an intended current capability; it makes the route contract enforce the central permission map.
+
+Minimal safe fix: `/api/videos` GET and `/api/videos/[id]` GET now use `withPermission(PERMISSIONS.VIDEOS_READ)`. `/api/clickup/tasks` GET now uses `withPermission(PERMISSIONS.VIDEOS_UPDATE)`, matching the association mutation it supports. The settings reconnect CTA was also corrected to `/api/auth/clickup`.
+
+Evidence and regression: local typecheck, lint, tests, and build passed after the changes. `verify-routes.ts` now checks the three permission wrappers and the settings CTA; route authorization increased to `60/60`, while security hardening remained `43/43`.

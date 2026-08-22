@@ -3,11 +3,14 @@
  * GET ?q=query - Search ClickUp tasks for the user's workspace (server-side only)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withPermission } from "@/src/lib/auth/api-handler";
+import { PERMISSIONS } from "@/src/types/permissions";
 import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
 import { searchClickUpTasks } from "@/src/lib/clickup/client";
 
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withPermission(
+  PERMISSIONS.VIDEOS_UPDATE,
+  async (request: NextRequest, user) => {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
 
@@ -21,5 +24,6 @@ export const GET = withAuth(async (request: NextRequest, user) => {
   }
 
   const tasks = await searchClickUpTasks(user.id, workspace.clickup_team_id, q);
-  return NextResponse.json({ tasks });
-});
+    return NextResponse.json({ tasks });
+  },
+);

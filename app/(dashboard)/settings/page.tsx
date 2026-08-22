@@ -89,7 +89,7 @@ export default async function SettingsPage() {
             <div className="p-6 text-center">
               <p className="text-sm text-white/40 mb-3">No workspace connected.</p>
               <a
-                href="/auth/clickup"
+                href="/api/auth/clickup"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
               >
                 Connect ClickUp
