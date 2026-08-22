@@ -5,22 +5,25 @@
  * POST – Create a new video (admin + owner only)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth, withPermission } from "@/src/lib/auth/api-handler";
+import { withPermission } from "@/src/lib/auth/api-handler";
 import { PERMISSIONS } from "@/src/types/permissions";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType } from "@/src/types/video";
 
 // GET /api/videos — requires videos.read
-export const GET = withAuth(async (_request: NextRequest, user) => {
+export const GET = withPermission(
+  PERMISSIONS.VIDEOS_READ,
+  async (_request: NextRequest, user) => {
   const workspaceId = await getPrimaryWorkspaceId(user.id);
   if (!workspaceId) {
     return NextResponse.json({ error: "no_workspace", videos: [] }, { status: 200 });
   }
 
   const videos = await listVideos(workspaceId);
-  return NextResponse.json({ videos });
-});
+    return NextResponse.json({ videos });
+  },
+);
 
 // POST /api/videos — requires videos.create (admin + owner only)
 export const POST = withPermission(

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 /**
  * Video List — client component for the /videos page
  * Handles create, delete, search, and share within the browser.
@@ -25,7 +25,6 @@ export default function VideoList() {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchVideos = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch("/api/videos");
       if (res.ok) {

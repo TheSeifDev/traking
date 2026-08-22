@@ -67,3 +67,58 @@ export async function upsertClickUpConnection(
     return false;
   }
 }
+
+/**
+ * Returns the first workspace ID for a profile (for MVP single-workspace flow).
+ */
+export async function getPrimaryWorkspaceId(profileId: string): Promise<string | null> {
+  if (!profileId) return null;
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("clickup_connections")
+      .select("workspace_id")
+      .eq("profile_id", profileId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return null;
+    return data?.workspace_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns basic workspace info for a profile.
+ */
+export async function getPrimaryWorkspace(profileId: string): Promise<{
+  id: string;
+  name: string;
+  clickup_team_id: string;
+} | null> {
+  if (!profileId) return null;
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("clickup_connections")
+      .select("workspace_id, workspaces(id, name, clickup_team_id)")
+      .eq("profile_id", profileId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.workspaces) return null;
+    const workspace = Array.isArray(data.workspaces) ? data.workspaces[0] : data.workspaces;
+    if (!workspace) return null;
+
+    return {
+      id: workspace.id,
+      name: workspace.name,
+      clickup_team_id: workspace.clickup_team_id,
+    };
+  } catch {
+    return null;
+  }
+}

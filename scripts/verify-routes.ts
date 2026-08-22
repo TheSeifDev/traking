@@ -17,6 +17,8 @@
  * Plus: API handler permission enforcement for each role.
  */
 
+import { readFileSync } from "node:fs";
+
 import { AuthError } from "../src/lib/auth/session";
 import {
   roleHasPermission,
@@ -350,6 +352,49 @@ for (const code of codes) {
   const e = new AuthError(code as import("../src/lib/auth/session").AuthErrorCode, "msg");
   assert(e.code === code && e instanceof AuthError, `AuthError code '${code}' is valid`);
 }
+
+// ---------------------------------------------------------------------------
+// Login OAuth route wiring
+// ---------------------------------------------------------------------------
+
+section("Login OAuth route wiring");
+
+const loginHero = readFileSync("src/components/login/LoginHero.tsx", "utf8");
+const loginCard = readFileSync("src/components/login/LoginCard.tsx", "utf8");
+const clickupAuthRoute = readFileSync("app/api/auth/clickup/route.ts", "utf8");
+const settingsPage = readFileSync("app/(dashboard)/settings/page.tsx", "utf8");
+const videoListRoute = readFileSync("app/api/videos/route.ts", "utf8");
+const videoDetailRoute = readFileSync("app/api/videos/[id]/route.ts", "utf8");
+const clickupTaskSearchRoute = readFileSync("app/api/clickup/tasks/route.ts", "utf8");
+
+assert(
+  loginHero.includes('authHref = "/api/auth/clickup"'),
+  "LoginHero default href points to the implemented ClickUp OAuth route"
+);
+assert(
+  loginCard.includes('authHref = "/api/auth/clickup"'),
+  "LoginCard default href points to the implemented ClickUp OAuth route"
+);
+assert(
+  clickupAuthRoute.includes("export async function GET"),
+  "ClickUp OAuth route exposes a GET handler"
+);
+assert(
+  settingsPage.includes('href="/api/auth/clickup"'),
+  "settings reconnect CTA points to the implemented ClickUp OAuth route"
+);
+assert(
+  videoListRoute.includes("withPermission") && videoListRoute.includes("PERMISSIONS.VIDEOS_READ"),
+  "video list route enforces the videos.read permission"
+);
+assert(
+  videoDetailRoute.includes("withPermission") && videoDetailRoute.includes("PERMISSIONS.VIDEOS_READ"),
+  "video detail route enforces the videos.read permission"
+);
+assert(
+  clickupTaskSearchRoute.includes("withPermission") && clickupTaskSearchRoute.includes("PERMISSIONS.VIDEOS_UPDATE"),
+  "ClickUp task search route enforces the video-management permission"
+);
 
 // ---------------------------------------------------------------------------
 // Results

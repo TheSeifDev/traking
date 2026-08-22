@@ -54,6 +54,68 @@ async function runTests(): Promise<void> {
   assert(!migration.includes('CREATE POLICY "Only owners can delete profiles"'), "owner profile deletion policy is absent");
   assert(migration.includes("REVOKE ALL ON FUNCTION public.is_owner() FROM PUBLIC"), "SECURITY DEFINER helper execute is revoked from PUBLIC");
 
+  section("Anonymous watch-session capability checks");
+  const capabilityMigration = readFileSync("supabase/migrations/20260822000004_harden_watch_session_capabilities.sql", "utf8");
+  const sessionRoute = readFileSync("app/api/tracking/session/route.ts", "utf8");
+  const eventRoute = readFileSync("app/api/tracking/event/route.ts", "utf8");
+  const endRoute = readFileSync("app/api/tracking/session/[sessionId]/end/route.ts", "utf8");
+  const trackingService = readFileSync("src/lib/tracking/service.ts", "utf8");
+  const watchPlayer = readFileSync("src/components/watch/WatchPlayer.tsx", "utf8");
+
+  assert(capabilityMigration.includes("ADD COLUMN IF NOT EXISTS session_token TEXT"), "watch sessions add a private session token");
+  assert(capabilityMigration.includes("gen_random_bytes(32)"), "existing watch sessions receive random backfill tokens");
+  assert(capabilityMigration.includes("ALTER COLUMN session_token SET NOT NULL"), "session token is mandatory after backfill");
+  assert(capabilityMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token"), "session token has a unique index");
+  assert(sessionRoute.includes("session_token: session.sessionToken"), "session creation route returns the private capability");
+  assert(eventRoute.includes("missing_session_token") && eventRoute.includes("session_token,"), "event route requires and forwards the capability");
+  assert(eventRoute.includes("status: 404") && eventRoute.includes("session_not_found"), "event route uses a non-leaking capability failure");
+  assert(endRoute.includes("missing_session_token") && endRoute.includes("sessionToken"), "end route requires and forwards the capability");
+  assert(endRoute.includes("status: 404") && endRoute.includes("session_not_found"), "end route uses a non-leaking capability failure");
+  assert(trackingService.includes('randomBytes(32).toString("hex")'), "tracking service creates an opaque random capability");
+  assert(trackingService.includes('.select("id, session_token")'), "tracking service reads the created capability");
+  assert(trackingService.includes('.eq("session_token", payload.session_token)'), "event writes scope last-seen updates by capability");
+  assert(trackingService.includes('.eq("session_token", sessionToken)'), "session end updates scope by capability");
+  assert(trackingService.includes("from_position: payload.from_position ?? null"), "seek origin is stored in the dedicated from_position field");
+  assert(watchPlayer.includes("const accumulateWatchTime = useCallback((resume = false)"), "watch player accumulates elapsed play segments explicitly");
+  assert(watchPlayer.includes("startTimeRef.current = null;"), "watch time does not start before playback begins");
+  assert(watchPlayer.includes("accumulateWatchTime(true)"), "heartbeat flushes and resumes the active play segment");
+  assert(watchPlayer.includes("accumulateWatchTime();\n    void sendEvent(\"pause\""), "pause flushes the active play segment");
+  assert(watchPlayer.includes("from_position"), "watch player sends seek origin data");
+  assert(watchPlayer.includes("session_token: sessionToken"), "watch player forwards the capability to tracking APIs");
+  assert(watchPlayer.includes('typeof data.session_token === "string"'), "watch player requires the capability before readiness");
+
+  section("Watch-link lifecycle and owner mutation checks");
+  const revocationMigration = readFileSync("supabase/migrations/20260822000005_add_watch_link_revocation.sql", "utf8");
+  const eventPositionMigration = readFileSync("supabase/migrations/20260822000006_add_watch_event_from_position.sql", "utf8");
+  const watchLinkService = readFileSync("src/lib/videos/service.ts", "utf8");
+  const watchLinkRoute = readFileSync("app/api/videos/[id]/watch-link/route.ts", "utf8");
+  const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
+  const watchLinkPanel = readFileSync("src/components/dashboard/WatchLinkPanel.tsx", "utf8");
+  assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
+  assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
+  assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
+  assert(trackingService.includes("if (data.revoked_at) return null"), "revoked links cannot create new sessions");
+  assert(trackingService.includes('.select("id, expires_at, revoked_at")') && trackingService.includes("const { data: activeLink"), "session creation re-checks link lifecycle before insert");
+  assert(trackingService.includes("new Date(activeLink.expires_at) <= new Date()"), "session creation rejects expiry at the current instant");
+  assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
+  assert(watchLinkService.includes('.eq("workspace_id", workspaceId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video workspace ownership");
+  assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");
+  assert(watchLinkRoute.includes("export const DELETE") && watchLinkRoute.includes("revokeWatchLink"), "watch-link route exposes protected DELETE revocation");
+  assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
+  assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
+
+  section("Provider-aware analytics honesty");
+  const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
+  const analyticsPage = readFileSync("app/(dashboard)/analytics/page.tsx", "utf8");
+  const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
+  const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
+  assert(analyticsService.includes("playback_metrics_scope") && analyticsService.includes('video.source_type === "direct_url"'), "analytics scope playback metrics to native direct URLs");
+  assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
+  assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
+  assert(analyticsPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "analytics page does not display unsupported completion as zero");
+  assert(dashboardPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "dashboard does not display unsupported completion as zero");
+  assert(videoDetailPage.includes('analytics.playback_metrics_scope === "direct_url_native_html5"') && videoDetailPage.includes("Playback telemetry unavailable"), "video detail explains provider telemetry limits");
+
   section("OAuth state and service-role checks");
 
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");
@@ -65,7 +127,7 @@ assert(oauthStart.includes("https://app.clickup.com/api?"), "OAuth start uses Cl
 assert(oauthCallback.includes("state !== expectedState"), "OAuth callback validates returned state");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/oauth/token"), "OAuth callback uses ClickUp token URL");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/team"), "OAuth callback verifies authorized Workspaces");
-assert(oauthCallback.includes("Authorization: `Bearer ${tokens.access_token}`"), "OAuth API requests use Bearer token header");
+assert(oauthCallback.includes("Authorization: `Bearer ${accessToken}`"), "OAuth API requests use Bearer token header");
 assert(oauthCallback.includes("createSignedSessionCookie"), "OAuth callback writes signed session cookie");
 assert(!adminClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;"), "admin client does not fall back to public key");
 

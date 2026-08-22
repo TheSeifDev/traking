@@ -228,6 +228,7 @@ export interface Database {
           token: string;
           created_by: string | null;
           expires_at: string | null;
+          revoked_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -236,6 +237,7 @@ export interface Database {
           token?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -244,6 +246,7 @@ export interface Database {
           token?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -265,6 +268,7 @@ export interface Database {
         Row: {
           id: string;
           watch_link_id: string;
+          session_token: string;
           viewer_identifier: string | null;
           started_at: string;
           last_seen_at: string;
@@ -275,6 +279,7 @@ export interface Database {
         Insert: {
           id?: string;
           watch_link_id: string;
+          session_token: string;
           viewer_identifier?: string | null;
           started_at?: string;
           last_seen_at?: string;
@@ -285,6 +290,7 @@ export interface Database {
         Update: {
           id?: string;
           watch_link_id?: string;
+          session_token?: string;
           viewer_identifier?: string | null;
           started_at?: string;
           last_seen_at?: string;
@@ -308,6 +314,7 @@ export interface Database {
           event_type: WatchEventType;
           position: number;
           duration: number | null;
+          from_position: number | null;
           created_at: string;
         };
         Insert: {
@@ -316,6 +323,7 @@ export interface Database {
           event_type: WatchEventType;
           position?: number;
           duration?: number | null;
+          from_position?: number | null;
           created_at?: string;
         };
         Update: {
@@ -324,6 +332,7 @@ export interface Database {
           event_type?: WatchEventType;
           position?: number;
           duration?: number | null;
+          from_position?: number | null;
           created_at?: string;
         };
         Relationships: [

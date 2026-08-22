@@ -6,7 +6,7 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { Video, CreateVideoInput, UpdateVideoInput, VideoAnalytics, WatchSessionSummary } from "@/src/types/video";
+import type { Video, CreateVideoInput, UpdateVideoInput, VideoAnalytics, WorkspaceAnalytics, WatchSessionSummary } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 
 /**
@@ -22,6 +22,10 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         video_clickup_tasks(*),
         watch_links(
           id,
+          token,
+          created_by,
+          expires_at,
+          revoked_at,
           watch_sessions(id, completion_percentage)
         )
       `)
@@ -41,21 +45,25 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         source_type: v.source_type as Video["source_type"],
         view_count: sessions.length,
         avg_completion:
-          sessions.length > 0
+          v.source_type === "direct_url" && sessions.length > 0
             ? Math.round(
                 sessions.reduce((sum: number, s) => sum + Number(s.completion_percentage), 0) /
                   sessions.length
               )
-            : 0,
+            : null,
         clickup_tasks: v.video_clickup_tasks,
-        watch_links: (v.watch_links as Array<{ id: string; watch_sessions: unknown[] }>)?.map(({ id }) => ({
-          id,
-          video_id: v.id,
-          token: "",
-          created_by: v.created_by,
-          expires_at: null,
-          created_at: v.created_at,
-        })),
+        watch_links: (v.watch_links as Array<{
+        id: string;
+        token: string;
+        created_by: string | null;
+        expires_at: string | null;
+        revoked_at: string | null;
+        created_at: string;
+        watch_sessions: unknown[];
+      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => ({
+        ...link,
+        video_id: v.id,
+      })),
       };
     });
   } catch {
@@ -75,7 +83,7 @@ export async function getVideo(videoId: string, workspaceId: string): Promise<Vi
       .select(`
         *,
         video_clickup_tasks(*),
-        watch_links(id, token, created_by, expires_at, created_at)
+        watch_links(id, token, created_by, expires_at, revoked_at, created_at)
       `)
       .eq("id", videoId)
       .eq("workspace_id", workspaceId)
@@ -87,7 +95,7 @@ export async function getVideo(videoId: string, workspaceId: string): Promise<Vi
       ...data,
       source_type: data.source_type as Video["source_type"],
       clickup_tasks: data.video_clickup_tasks,
-      watch_links: data.watch_links?.map((wl: { id: string; token: string; created_by: string | null; expires_at: string | null; created_at: string }) => ({
+      watch_links: data.watch_links?.map((wl: { id: string; token: string; created_by: string | null; expires_at: string | null; revoked_at: string | null; created_at: string }) => ({
         ...wl,
         video_id: data.id,
       })),
@@ -192,7 +200,15 @@ export async function generateWatchLink(
   videoId: string,
   workspaceId: string,
   createdBy: string
-): Promise<{ id: string; token: string; url: string } | null> {
+): Promise<{
+  id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  url: string;
+} | null> {
   try {
     const supabase = createAdminClient();
 
@@ -209,7 +225,7 @@ export async function generateWatchLink(
     const { data, error } = await supabase
       .from("watch_links")
       .insert({ video_id: videoId, created_by: createdBy })
-      .select("id, token")
+      .select("id, token, created_by, expires_at, revoked_at, created_at")
       .single();
 
     if (error || !data) {
@@ -221,10 +237,50 @@ export async function generateWatchLink(
     return {
       id: data.id,
       token: data.token,
+      created_by: data.created_by,
+      expires_at: data.expires_at,
+      revoked_at: data.revoked_at,
+      created_at: data.created_at,
       url: `${appUrl}/watch/${data.token}`,
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Revokes a watch link after verifying that its video belongs to the workspace.
+ * Existing analytics remain available; only future public sessions are blocked.
+ */
+export async function revokeWatchLink(
+  linkId: string,
+  videoId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  if (!linkId || !videoId || !workspaceId) return false;
+
+  try {
+    const supabase = createAdminClient();
+    const { data: video } = await supabase
+      .from("videos")
+      .select("id")
+      .eq("id", videoId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (!video) return false;
+
+    const { data, error } = await supabase
+      .from("watch_links")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", linkId)
+      .eq("video_id", videoId)
+      .is("revoked_at", null)
+      .select("id")
+      .maybeSingle();
+
+    return !error && !!data;
+  } catch {
+    return false;
   }
 }
 
@@ -242,7 +298,7 @@ export async function getVideoAnalytics(
     // Verify ownership
     const { data: video } = await supabase
       .from("videos")
-      .select("id, duration")
+      .select("id, duration, source_type")
       .eq("id", videoId)
       .eq("workspace_id", workspaceId)
       .maybeSingle();
@@ -265,33 +321,44 @@ export async function getVideoAnalytics(
       .order("started_at", { ascending: false })
       .limit(500);
 
-    if (!sessions || sessions.length === 0) {
+    const totalViews = sessions?.length ?? 0;
+    const uniqueViewers = new Set((sessions ?? []).map((s) => s.viewer_identifier ?? s.id)).size;
+    const playbackMetricsScope = video.source_type === "direct_url" ? "direct_url_native_html5" as const : "session_only" as const;
+    const measuredSessions = video.source_type === "direct_url" ? (sessions ?? []) : [];
+    const measuredCount = measuredSessions.length;
+
+    if (totalViews === 0) {
       return {
         video_id: videoId,
         total_views: 0,
         unique_viewers: 0,
-        avg_watch_time_seconds: 0,
-        avg_completion_percentage: 0,
-        completion_rate: 0,
+        playback_metrics_scope: playbackMetricsScope,
+        avg_watch_time_seconds: null,
+        avg_completion_percentage: null,
+        completion_rate: null,
         drop_off_point: null,
         recent_sessions: [],
       };
     }
 
-    const totalViews = sessions.length;
-    const uniqueViewers = new Set(sessions.map((s) => s.viewer_identifier ?? s.id)).size;
-    const avgWatchTime = Math.round(
-      sessions.reduce((sum, s) => sum + (s.watch_time_seconds ?? 0), 0) / totalViews
-    );
-    const avgCompletion = Math.round(
-      sessions.reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) / totalViews
-    );
-    const completionRate = Math.round(
-      (sessions.filter((s) => Number(s.completion_percentage) >= 90).length / totalViews) * 100
-    );
+    const avgWatchTime = measuredCount > 0
+      ? Math.round(
+          measuredSessions.reduce((sum, s) => sum + (s.watch_time_seconds ?? 0), 0) / measuredCount
+        )
+      : null;
+    const avgCompletion = measuredCount > 0
+      ? Math.round(
+          measuredSessions.reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) / measuredCount
+        )
+      : null;
+    const completionRate = measuredCount > 0
+      ? Math.round(
+          (measuredSessions.filter((s) => Number(s.completion_percentage) >= 90).length / measuredCount) * 100
+        )
+      : null;
 
-    // Drop-off: average final position for sessions that didn't complete
-    const incompleteSessions = sessions.filter((s) => Number(s.completion_percentage) < 90);
+    // Drop-off: average final position for measured sessions that didn't complete
+    const incompleteSessions = measuredSessions.filter((s) => Number(s.completion_percentage) < 90);
     let dropOffPoint: number | null = null;
     if (incompleteSessions.length > 0 && video.duration) {
       const avgDropPct =
@@ -300,19 +367,20 @@ export async function getVideoAnalytics(
       dropOffPoint = Math.round((avgDropPct / 100) * (video.duration ?? 0));
     }
 
-    const recentSessions: WatchSessionSummary[] = sessions.slice(0, 10).map((s) => ({
+    const recentSessions: WatchSessionSummary[] = (sessions ?? []).slice(0, 10).map((s) => ({
       id: s.id,
       viewer_identifier: s.viewer_identifier,
       started_at: s.started_at,
       ended_at: s.ended_at,
-      watch_time_seconds: s.watch_time_seconds ?? 0,
-      completion_percentage: Number(s.completion_percentage ?? 0),
+      watch_time_seconds: video.source_type === "direct_url" ? s.watch_time_seconds ?? 0 : null,
+      completion_percentage: video.source_type === "direct_url" ? Number(s.completion_percentage ?? 0) : null,
     }));
 
     return {
       video_id: videoId,
       total_views: totalViews,
       unique_viewers: uniqueViewers,
+      playback_metrics_scope: playbackMetricsScope,
       avg_watch_time_seconds: avgWatchTime,
       avg_completion_percentage: avgCompletion,
       completion_rate: completionRate,
@@ -362,13 +430,7 @@ export async function associateClickUpTask(
 /**
  * Workspace-level analytics summary.
  */
-export async function getWorkspaceAnalytics(workspaceId: string): Promise<{
-  total_videos: number;
-  total_views: number;
-  unique_viewers: number;
-  avg_completion_percentage: number;
-  completion_rate: number;
-}> {
+export async function getWorkspaceAnalytics(workspaceId: string): Promise<WorkspaceAnalytics> {
   try {
     const supabase = createAdminClient();
 
@@ -384,7 +446,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<{
         id,
         viewer_identifier,
         completion_percentage,
-        watch_links!inner(video_id, videos!inner(workspace_id))
+        watch_links!inner(video_id, videos!inner(workspace_id, source_type))
       `)
       .eq("watch_links.videos.workspace_id", workspaceId)
       .limit(2000);
@@ -393,21 +455,32 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<{
     const unique_viewers = sessions
       ? new Set(sessions.map((s) => s.viewer_identifier ?? s.id)).size
       : 0;
+    const measuredSessions = (sessions ?? []).filter((session) => {
+      const rawLink = (session as { watch_links?: unknown }).watch_links;
+      const link = Array.isArray(rawLink) ? rawLink[0] : rawLink;
+      const rawVideo = link && typeof link === "object"
+        ? (link as { videos?: unknown }).videos
+        : null;
+      const video = Array.isArray(rawVideo) ? rawVideo[0] : rawVideo;
+      return video && typeof video === "object" &&
+        (video as { source_type?: unknown }).source_type === "direct_url";
+    });
+    const measuredCount = measuredSessions.length;
     const avg_completion_percentage =
-      total_views > 0
+      measuredCount > 0
         ? Math.round(
-            (sessions ?? []).reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) /
-              total_views
+            measuredSessions.reduce((sum, s) => sum + Number(s.completion_percentage ?? 0), 0) /
+              measuredCount
           )
-        : 0;
+        : null;
     const completion_rate =
-      total_views > 0
+      measuredCount > 0
         ? Math.round(
-            ((sessions ?? []).filter((s) => Number(s.completion_percentage) >= 90).length /
-              total_views) *
+            (measuredSessions.filter((s) => Number(s.completion_percentage) >= 90).length /
+              measuredCount) *
               100
           )
-        : 0;
+        : null;
 
     return {
       total_videos: videoCount ?? 0,
@@ -415,14 +488,16 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<{
       unique_viewers,
       avg_completion_percentage,
       completion_rate,
+      playback_metrics_available: measuredCount > 0,
     };
   } catch {
     return {
       total_videos: 0,
       total_views: 0,
       unique_viewers: 0,
-      avg_completion_percentage: 0,
-      completion_rate: 0,
+      avg_completion_percentage: null,
+      completion_rate: null,
+      playback_metrics_available: false,
     };
   }
 }

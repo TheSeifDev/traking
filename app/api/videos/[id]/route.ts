@@ -6,7 +6,7 @@
  * DELETE - Delete video (admin + owner only)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth, withPermission } from "@/src/lib/auth/api-handler";
+import { withPermission } from "@/src/lib/auth/api-handler";
 import { PERMISSIONS } from "@/src/types/permissions";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getVideo, updateVideo, deleteVideo } from "@/src/lib/videos/service";
@@ -14,15 +14,18 @@ import { isValidSourceType } from "@/src/types/video";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export const GET = withAuth(async (_request: NextRequest, user, context) => {
+export const GET = withPermission(
+  PERMISSIONS.VIDEOS_READ,
+  async (_request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   const workspaceId = await getPrimaryWorkspaceId(user.id);
   if (!workspaceId) return NextResponse.json({ error: "no_workspace" }, { status: 404 });
   const video = await getVideo(id, workspaceId);
   if (!video) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.json({ video });
-});
+    return NextResponse.json({ video });
+  },
+);
 
 export const PUT = withPermission(
   PERMISSIONS.VIDEOS_UPDATE,

@@ -6,7 +6,7 @@ type LoginHeroProps = {
   authHref?: string;
 };
 
-const LoginHero = ({ authHref = "/auth/clickup" }: LoginHeroProps) => (
+const LoginHero = ({ authHref = "/api/auth/clickup" }: LoginHeroProps) => (
   <main className="relative isolate min-h-[calc(100svh-6rem)] overflow-hidden">
     {/* Page atmosphere */}
     <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">

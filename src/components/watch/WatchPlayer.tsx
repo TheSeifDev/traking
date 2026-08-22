@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /**
  * WatchPlayer — Client-side video player with tracking integration.
@@ -73,7 +73,8 @@ export default function WatchPlayer({
 }: WatchPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const sessionTokenRef = useRef<string | null>(null);
+  const startTimeRef = useRef<number | null>(null);
   const watchTimeRef = useRef<number>(0);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const completionSentRef = useRef<boolean>(false);
@@ -92,13 +93,15 @@ export default function WatchPlayer({
       fromPosition?: number
     ) => {
       const sessionId = sessionIdRef.current;
-      if (!sessionId) return;
+      const sessionToken = sessionTokenRef.current;
+      if (!sessionId || !sessionToken) return;
       try {
         await fetch("/api/tracking/event", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
+            session_token: sessionToken,
             event_type: eventType,
             position,
             from_position: fromPosition ?? null,
@@ -111,9 +114,20 @@ export default function WatchPlayer({
     []
   );
 
+  const accumulateWatchTime = useCallback((resume = false) => {
+    const playStartedAt = startTimeRef.current;
+    if (playStartedAt === null) return;
+
+    const now = Date.now();
+    watchTimeRef.current += Math.max(0, (now - playStartedAt) / 1000);
+    startTimeRef.current = resume ? now : null;
+  }, []);
+
   const endSession = useCallback(async () => {
+    accumulateWatchTime();
     const sessionId = sessionIdRef.current;
-    if (!sessionId) return;
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionId || !sessionToken) return;
     const watchTime = watchTimeRef.current;
     const completion =
       duration && duration > 0
@@ -122,6 +136,8 @@ export default function WatchPlayer({
     try {
       // Use sendBeacon for reliability on page unload
       const body = JSON.stringify({
+        session_id: sessionId,
+        session_token: sessionToken,
         watch_time_seconds: watchTime,
         completion_percentage: completion,
       });
@@ -141,7 +157,7 @@ export default function WatchPlayer({
     } catch {
       // Best-effort
     }
-  }, [duration]);
+  }, [accumulateWatchTime, duration]);
 
   // --- Session creation ---
 
@@ -163,9 +179,14 @@ export default function WatchPlayer({
           return;
         }
         const data = await res.json();
-        if (!cancelled && data.session_id) {
+        if (
+          !cancelled &&
+          typeof data.session_id === "string" &&
+          typeof data.session_token === "string"
+        ) {
           sessionIdRef.current = data.session_id;
-          startTimeRef.current = Date.now();
+          sessionTokenRef.current = data.session_token;
+          startTimeRef.current = null;
           setSessionReady(true);
         }
       } catch {
@@ -197,25 +218,25 @@ export default function WatchPlayer({
 
     // Start heartbeat
     if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-    const playStart = Date.now();
+    startTimeRef.current = Date.now();
     heartbeatIntervalRef.current = setInterval(() => {
       const v = videoRef.current;
       if (!v || v.paused) return;
+      accumulateWatchTime(true);
       void sendEvent("heartbeat", v.currentTime);
-      // Accumulate watch time
-      watchTimeRef.current += (Date.now() - playStart) / 1000;
     }, 5000);
-  }, [sendEvent]);
+  }, [accumulateWatchTime, sendEvent]);
 
   const handlePause = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    accumulateWatchTime();
     void sendEvent("pause", video.currentTime);
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
     }
-  }, [sendEvent]);
+  }, [accumulateWatchTime, sendEvent]);
 
   const prevTimeRef = useRef<number>(0);
   const handleSeeked = useCallback(() => {
@@ -242,13 +263,14 @@ export default function WatchPlayer({
   const handleEnded = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    accumulateWatchTime();
     void sendEvent("ended", video.currentTime);
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
     }
     void endSession();
-  }, [sendEvent, endSession]);
+  }, [accumulateWatchTime, sendEvent, endSession]);
 
   if (error) {
     return (

@@ -18,8 +18,11 @@ export async function POST(request: NextRequest) {
   if (!resolved) return NextResponse.json({ error: "invalid_token" }, { status: 404 });
 
   const viewerHint = typeof b.viewer_hint === "string" ? b.viewer_hint : null;
-  const sessionId = await createWatchSession(resolved.watch_link_id, viewerHint);
-  if (!sessionId) return NextResponse.json({ error: "session_creation_failed" }, { status: 500 });
+  const session = await createWatchSession(resolved.watch_link_id, viewerHint);
+  if (!session) return NextResponse.json({ error: "session_creation_failed" }, { status: 500 });
 
-  return NextResponse.json({ session_id: sessionId }, { status: 201 });
+  return NextResponse.json(
+    { session_id: session.id, session_token: session.sessionToken },
+    { status: 201 },
+  );
 }
