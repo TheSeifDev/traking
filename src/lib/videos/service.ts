@@ -61,10 +61,13 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         revoked_at: string | null;
         created_at: string;
         watch_sessions: unknown[];
-      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => ({
-        ...link,
-        video_id: v.id,
-      })),
+      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => {
+        void _watchSessions;
+        return {
+          ...link,
+          video_id: v.id,
+        };
+      }),
       };
     });
   } catch {

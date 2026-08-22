@@ -6,7 +6,7 @@ import Link from "next/link";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
-import { ArrowLeft, Video, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
 
 type Props = { params: Promise<{ id: string }> };
