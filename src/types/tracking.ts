@@ -1,4 +1,4 @@
-﻿/**
+/**
  * TrackUp Tracking Event Types
  *
  * These are the events the client sends to /api/tracking/event.
@@ -35,6 +35,8 @@ export function isValidEventType(v: unknown): v is TrackingEventType {
  */
 export interface TrackingEventPayload {
   session_id: string;
+  /** Private capability returned only to the viewer session. */
+  session_token: string;
   event_type: TrackingEventType;
   /** Current playhead position in seconds */
   position: number;
@@ -56,6 +58,8 @@ export interface CreateSessionPayload {
  */
 export interface EndSessionPayload {
   session_id: string;
+  /** Private capability returned only to the viewer session. */
+  session_token: string;
   watch_time_seconds: number;
   completion_percentage: number;
 }
@@ -65,6 +69,8 @@ export interface EndSessionPayload {
  */
 export interface CreateSessionResponse {
   session_id: string;
+  /** Private capability required for subsequent anonymous tracking writes. */
+  session_token: string;
 }
 
 /**
