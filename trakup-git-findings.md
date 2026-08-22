@@ -111,3 +111,11 @@ Root cause: analytics was provider-agnostic and had no confidence/scope in its r
 Minimal safe fix: analytics contracts now expose `playback_metrics_scope`; native playback metrics are computed only for `direct_url`, while iframe-provider metrics are returned as `null`. Session/view counts remain available and are explicitly labeled as sessions; UI shows `Unavailable`, `Not measured`, or a provider-limitation explanation rather than fabricated zeros. No heatmap was added because watched ranges are not yet proven for any provider.
 
 Evidence: local typecheck, lint, tests, and production build passed after the contract correction and regression assertions. Security hardening passed `58/58`; route authorization remained `60/60`. The provider facts are backed by official references recorded above.
+
+## Security hardening and E2E gate
+
+The PR remains open and isolated; it has not been merged. At commit `cd6b164`, `gh pr view 2` reported `mergeStateStatus: CLEAN`, the working tree was clean, Vercel reported a Ready preview, and GitHub Quality run `32587523462` / job `97066067672` passed install, type check, lint, tests, and production build. Local verification after the final analytics changes also passed security hardening `58/58` and route authorization `60/60`.
+
+A real browser navigation to the exact Vercel preview URL redirected to Vercel login before the application loaded. This is an external deployment access gate, not an application route failure. Consequently, ClickUp authorization → callback → provisioning → signed cookie → dashboard was not browser-verified in this environment. The earlier production URL remains unavailable as previously recorded. A valid deployment accessible without Vercel protection and the required ClickUp/Supabase environment variables are still required for live E2E.
+
+No distributed or in-memory rate limiter was added. A production-safe design still requires a shared counter/TTL primitive with a defined key policy, quotas, response behavior, and observability. The additive migrations for `session_token`, `revoked_at`, and `from_position` are not marked applied; they require a database backup/checkpoint, ordered application, post-migration smoke tests, and a rollback procedure in the actual Supabase environment.
