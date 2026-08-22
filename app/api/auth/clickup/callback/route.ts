@@ -11,12 +11,38 @@ type ClickUpTeamsResponse = {
   teams?: unknown;
 };
 
+type ClickUpTeamIdentity = {
+  id: string;
+  name: string;
+};
+
 function getCookieFromHeader(header: string | null, name: string): string | null {
   if (!header) return null;
   const cookies = header.split(";").map((part) => part.trim());
   const prefix = `${name}=`;
   const match = cookies.find((cookie) => cookie.startsWith(prefix));
   return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+}
+
+function getPrimaryAuthorizedTeam(teams: unknown): ClickUpTeamIdentity | null {
+  if (!Array.isArray(teams) || teams.length === 0) return null;
+
+  const primaryTeam = teams[0];
+  if (!primaryTeam || typeof primaryTeam !== "object") return null;
+
+  const team = primaryTeam as Record<string, unknown>;
+  const rawId = team.id;
+  const rawName = team.name;
+
+  if ((typeof rawId !== "string" && typeof rawId !== "number") || typeof rawName !== "string") {
+    return null;
+  }
+
+  const id = String(rawId).trim();
+  const name = rawName.trim();
+
+  if (!id || !name) return null;
+  return { id, name };
 }
 
 export async function GET(request: Request) {
@@ -181,28 +207,27 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/login?error=server_error", request.url));
     }
 
-    // 5. Persist ClickUp token + workspace to DB (server-side only — never in a cookie)
-    //    Use the first authorized workspace for MVP.
-    const primaryTeam = (teamsData.teams as Array<Record<string, unknown>>)[0];
-    if (primaryTeam && typeof primaryTeam.id === "string" && typeof primaryTeam.name === "string") {
-      const result = await upsertClickUpConnection(
-        provisioning.user.id,
-        { id: primaryTeam.id, name: primaryTeam.name },
-        accessToken
-      );
-      if (!result) {
-        console.error("Failed to persist ClickUp connection — continuing anyway");
+    // 5. Persist ClickUp token + workspace to DB (server-side only — never in a cookie).
+    //    Use the first authorized workspace for the MVP.
+    const primaryTeam = getPrimaryAuthorizedTeam(teamsData.teams);
+    if (primaryTeam) {
+      const persisted = await upsertClickUpConnection(provisioning.user.id, primaryTeam, accessToken);
+      if (!persisted) {
+        console.error("Failed to persist ClickUp connection — continuing without token cookie");
       }
+    } else {
+      console.error("ClickUp authorized Workspace shape was invalid — continuing without token cookie");
     }
 
-    // 6. Create authenticated session cookie (user identity only — NO ClickUp token)
+    // 6. Create authenticated session cookie (user identity only — NO ClickUp token).
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
     const signedSession = await createSignedSessionCookie(provisioning.user);
     response.cookies.delete("trackup_oauth_state");
+    // Remove legacy token cookie if it exists from an older deployment.
+    response.cookies.delete("trackup_token");
 
-    // Store signed authenticated user metadata.
-    // Role is still reloaded from DB on every protected server path.
-    // The ClickUp access token is stored in clickup_connections, NOT in any cookie.
+    // Store signed authenticated user metadata. The role is still reloaded
+    // from the database on protected server paths before authorization.
     response.cookies.set("trackup_user", signedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

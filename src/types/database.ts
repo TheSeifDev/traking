@@ -1,5 +1,4 @@
-﻿import type { UserRole } from "./auth";
-import type { VideoSourceType, WatchEventType } from "./video";
+import type { UserRole } from "./auth";
 
 export type Json =
   | string
@@ -8,6 +7,9 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[];
+
+export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" | "direct_url";
+export type WatchEventType = "play" | "pause" | "seek" | "heartbeat" | "complete" | "ended";
 
 export interface Database {
   public: {
@@ -122,8 +124,18 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [
-          { foreignKeyName: "clickup_connections_profile_id_fkey"; columns: ["profile_id"]; referencedRelation: "profiles"; referencedColumns: ["id"] },
-          { foreignKeyName: "clickup_connections_workspace_id_fkey"; columns: ["workspace_id"]; referencedRelation: "workspaces"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "clickup_connections_profile_id_fkey";
+            columns: ["profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clickup_connections_workspace_id_fkey";
+            columns: ["workspace_id"];
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
         ];
       };
       videos: {
@@ -164,8 +176,18 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [
-          { foreignKeyName: "videos_workspace_id_fkey"; columns: ["workspace_id"]; referencedRelation: "workspaces"; referencedColumns: ["id"] },
-          { foreignKeyName: "videos_created_by_fkey"; columns: ["created_by"]; referencedRelation: "profiles"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "videos_workspace_id_fkey";
+            columns: ["workspace_id"];
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "videos_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
         ];
       };
       video_clickup_tasks: {
@@ -191,7 +213,12 @@ export interface Database {
           created_at?: string;
         };
         Relationships: [
-          { foreignKeyName: "video_clickup_tasks_video_id_fkey"; columns: ["video_id"]; referencedRelation: "videos"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "video_clickup_tasks_video_id_fkey";
+            columns: ["video_id"];
+            referencedRelation: "videos";
+            referencedColumns: ["id"];
+          },
         ];
       };
       watch_links: {
@@ -220,8 +247,18 @@ export interface Database {
           created_at?: string;
         };
         Relationships: [
-          { foreignKeyName: "watch_links_video_id_fkey"; columns: ["video_id"]; referencedRelation: "videos"; referencedColumns: ["id"] },
-          { foreignKeyName: "watch_links_created_by_fkey"; columns: ["created_by"]; referencedRelation: "profiles"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "watch_links_video_id_fkey";
+            columns: ["video_id"];
+            referencedRelation: "videos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "watch_links_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
         ];
       };
       watch_sessions: {
@@ -256,7 +293,12 @@ export interface Database {
           completion_percentage?: number;
         };
         Relationships: [
-          { foreignKeyName: "watch_sessions_watch_link_id_fkey"; columns: ["watch_link_id"]; referencedRelation: "watch_links"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "watch_sessions_watch_link_id_fkey";
+            columns: ["watch_link_id"];
+            referencedRelation: "watch_links";
+            referencedColumns: ["id"];
+          },
         ];
       };
       watch_events: {
@@ -272,7 +314,7 @@ export interface Database {
           id?: string;
           session_id: string;
           event_type: WatchEventType;
-          position: number;
+          position?: number;
           duration?: number | null;
           created_at?: string;
         };
@@ -285,7 +327,12 @@ export interface Database {
           created_at?: string;
         };
         Relationships: [
-          { foreignKeyName: "watch_events_session_id_fkey"; columns: ["session_id"]; referencedRelation: "watch_sessions"; referencedColumns: ["id"] }
+          {
+            foreignKeyName: "watch_events_session_id_fkey";
+            columns: ["session_id"];
+            referencedRelation: "watch_sessions";
+            referencedColumns: ["id"];
+          },
         ];
       };
     };
