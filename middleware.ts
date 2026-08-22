@@ -33,7 +33,6 @@ const PROTECTED_PREFIXES = [
 ];
 
 const ADMIN_PREFIXES = ["/admin"];
-
 const OWNER_PREFIXES = ["/owner"];
 
 function isPublicPath(pathname: string): boolean {
@@ -70,10 +69,25 @@ async function readSessionCookieFast(request: NextRequest): Promise<CookieSessio
   return verified ? { id: verified.id, role: verified.role } : null;
 }
 
+function getSupabaseResponse(request: NextRequest): NextResponse {
+  // TrackUp authentication is based on the signed trackup_user cookie and
+  // server-side profile validation. Supabase SSR token refresh is optional.
+  // Public/OAuth routes must not crash when a deployment omits public Supabase
+  // variables; protected pages still perform their own server guard.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    return NextResponse.next();
+  }
+
+  try {
+    return createSupabaseMiddlewareClient(request);
+  } catch {
+    return NextResponse.next();
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  const supabaseResponse = createSupabaseMiddlewareClient(request);
+  const supabaseResponse = getSupabaseResponse(request);
 
   if (isPublicPath(pathname)) {
     return supabaseResponse;
@@ -114,7 +128,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-
     "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
   ],
 };

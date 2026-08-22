@@ -22,6 +22,7 @@
  *     are limited. This is a known limitation documented here.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
+import { AlertCircle, Info, RotateCcw } from "lucide-react";
 
 interface WatchPlayerProps {
   watchLinkToken: string;
@@ -80,6 +81,7 @@ export default function WatchPlayer({
   const completionSentRef = useRef<boolean>(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const isDirectUrl = sourceType === "direct_url";
   const embedUrl = isDirectUrl ? null : buildEmbedUrl(sourceType, sourceUrl);
@@ -196,7 +198,7 @@ export default function WatchPlayer({
 
     void initSession();
     return () => { cancelled = true; };
-  }, [watchLinkToken]);
+  }, [watchLinkToken, retryNonce]);
 
   // --- Session cleanup ---
 
@@ -272,17 +274,24 @@ export default function WatchPlayer({
     void endSession();
   }, [accumulateWatchTime, sendEvent, endSession]);
 
+  const capabilityMessage = isDirectUrl
+    ? "Native HTML5 playback is available. TrackUp records play, pause, seek, heartbeat, completion, and end events for this source."
+    : "This provider is embedded inside TrackUp. In the current MVP, the viewer session is recorded, but granular playback and completion metrics are unavailable.";
+
   if (error) {
     return (
-      <div className="flex items-center justify-center rounded-xl bg-white/5 aspect-video text-red-400 text-sm">
-        {error}
+      <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-xl border border-red-400/20 bg-red-500/5 px-6 text-center">
+        <AlertCircle size={25} className="text-red-300" />
+        <p className="text-sm text-red-100">{error}</p>
+        <button onClick={() => { setError(null); setSessionReady(false); setRetryNonce((value) => value + 1); }} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/8 hover:text-white"><RotateCcw size={13} />Try again</button>
       </div>
     );
   }
 
   if (isDirectUrl) {
     return (
-      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
+      <div>
+        <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
         <video
           ref={videoRef}
           src={sourceUrl}
@@ -296,10 +305,12 @@ export default function WatchPlayer({
           title={title}
         />
         {!sessionReady && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <span className="text-white/60 text-sm">Loading...</span>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <span className="text-sm text-white/60">Preparing TrackUp watch session...</span>
           </div>
         )}
+        </div>
+        <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-white/40"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p>
       </div>
     );
   }
@@ -308,21 +319,27 @@ export default function WatchPlayer({
   // Note: For YouTube/Vimeo, the postMessage API can be used for events
   // in a future iteration. For MVP, we record session start/end only.
   return (
-    <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-      {embedUrl && (
-        <iframe
-          src={embedUrl}
-          title={title}
-          className="w-full h-full"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      )}
-      {!sessionReady && (
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
-          <span className="text-white/60 text-sm">Loading session...</span>
-        </div>
-      )}
+    <div>
+      <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+        {embedUrl ? (
+          <iframe
+            src={embedUrl}
+            title={title}
+            className="h-full w-full"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/50">This video source cannot be embedded by TrackUp.</div>
+        )}
+        {!sessionReady && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60">
+            <span className="text-sm text-white/60">Preparing TrackUp watch session...</span>
+          </div>
+        )}
+      </div>
+      <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-white/40"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p>
     </div>
   );
 }

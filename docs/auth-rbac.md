@@ -71,10 +71,10 @@ RLS is enabled on `profiles` and `role_change_audit`. Authenticated clients may 
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CLICKUP_CLIENT_ID`
 - `CLICKUP_CLIENT_SECRET`
-- `CLICKUP_REDIRECT_URI`
+- `CLICKUP_REDIRECT_URI`: set to `https://trakeup.vercel.app/api/auth/clickup/callback` in production and register the exact URI in the ClickUp OAuth app.
 - `TRACKUP_OWNER_EMAIL`
 - `TRACKUP_SESSION_SECRET`: at least 32 random characters
-- `NEXT_PUBLIC_APP_URL`: optional fallback URL for auth configuration redirects
+- `NEXT_PUBLIC_APP_URL`: public application origin; set to `https://trakeup.vercel.app` in production. The server rejects loopback values in production and uses that canonical origin as a safe fallback.
 
 Never prefix service-role, ClickUp secret, owner email, or session secret variables with `NEXT_PUBLIC_`.
 

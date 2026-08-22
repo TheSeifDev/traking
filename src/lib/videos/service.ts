@@ -8,6 +8,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { Video, CreateVideoInput, UpdateVideoInput, VideoAnalytics, WorkspaceAnalytics, WatchSessionSummary } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
+import { getAppUrl } from "@/src/lib/app-url";
 
 /**
  * Lists all videos for a workspace, with view counts.
@@ -60,10 +61,13 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         revoked_at: string | null;
         created_at: string;
         watch_sessions: unknown[];
-      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => ({
-        ...link,
-        video_id: v.id,
-      })),
+      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => {
+        void _watchSessions;
+        return {
+          ...link,
+          video_id: v.id,
+        };
+      }),
       };
     });
   } catch {
@@ -233,7 +237,7 @@ export async function generateWatchLink(
       return null;
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = getAppUrl();
     return {
       id: data.id,
       token: data.token,

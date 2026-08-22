@@ -1,13 +1,14 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut } from "lucide-react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2 } from "lucide-react";
+import type { UserRole } from "@/src/types/auth";
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  user: { name: string | null; email: string; role: string };
+  user: { name: string | null; email: string; role: UserRole };
   workspace: { name: string } | null;
 }
 
@@ -15,11 +16,15 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Videos", href: "/videos", icon: Video },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Watch links", href: "/watch-links", icon: Link2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+const ownerNavItem = { label: "Team", href: "/owner/admins", icon: UsersRound };
+
 export default function DashboardShell({ children, user, workspace }: DashboardShellProps) {
   const pathname = usePathname();
+  const visibleNavItems = user.role === "owner" ? [...navItems, ownerNavItem] : navItems;
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -27,50 +32,31 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
   }
 
   return (
-    <div className="flex h-screen bg-[#070720] text-white overflow-hidden">
-      {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-white/8 bg-[#0b0b28]">
-        {/* Logo */}
-        <div className="flex items-center h-16 px-5 border-b border-white/8 shrink-0 ">
+    <div className="flex h-screen overflow-hidden bg-[#070720] text-white">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-white/8 bg-[#0b0b28] md:flex">
+        <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg flex items-center justify-center">
-                        <Image
-                          src="/logo.webp"
-                          alt="TrackUp"
-                          width={205}
-                          height={58}
-                          priority
-                          className="h-8 w-auto lg:h-9"
-                        />
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg">
+              <Image src="/logo.webp" alt="TrackUp" width={205} height={58} priority className="h-8 w-auto lg:h-9" />
             </div>
-            <span className="font-semibold text-white text-sm tracking-wide">TrackUp</span>
+            <span className="text-sm font-semibold tracking-wide text-white">TrackUp</span>
           </Link>
         </div>
 
-        {/* Workspace badge */}
         {workspace && (
           <div className="px-4 pt-4">
-            <div className="rounded-lg bg-white/5 px-3 py-2 border border-white/8">
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-0.5">Workspace</p>
-              <p className="text-sm text-white/80 font-medium truncate">{workspace.name}</p>
+            <div className="rounded-lg border border-white/8 bg-white/5 px-3 py-2">
+              <p className="mb-0.5 text-[10px] uppercase tracking-widest text-white/40">Workspace</p>
+              <p className="truncate text-sm font-medium text-white/80">{workspace.name}</p>
             </div>
           </div>
         )}
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 pt-4 space-y-1">
-          {navItems.map(({ label, href, icon: Icon }) => {
+        <nav className="flex-1 space-y-1 px-3 pt-4">
+          {visibleNavItems.map(({ label, href, icon: Icon }) => {
             const active = isActive(href);
             return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-violet-600/20 text-violet-300 border border-violet-500/20"
-                    : "text-white/50 hover:text-white hover:bg-white/5"
-                }`}
-              >
+              <Link key={href} href={href} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${active ? "border border-violet-500/20 bg-violet-600/20 text-violet-300" : "text-white/50 hover:bg-white/5 hover:text-white"}`}>
                 <Icon size={16} className={active ? "text-violet-400" : "text-white/40"} />
                 {label}
               </Link>
@@ -78,20 +64,14 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
           })}
         </nav>
 
-        {/* User */}
-        <div className="px-3 pb-4 border-t border-white/8 pt-4 space-y-1">
-          <div className="px-3 py-2 rounded-xl bg-white/4">
-            <p className="text-sm text-white/80 font-medium truncate">{user.name ?? user.email}</p>
-            <p className="text-[11px] text-white/40 truncate">{user.email}</p>
-            <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 uppercase tracking-wide">
-              {user.role}
-            </span>
+        <div className="space-y-1 border-t border-white/8 px-3 pb-4 pt-4">
+          <div className="rounded-xl bg-white/4 px-3 py-2">
+            <p className="truncate text-sm font-medium text-white/80">{user.name ?? user.email}</p>
+            <p className="truncate text-[11px] text-white/40">{user.email}</p>
+            <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-300">{user.role}</span>
           </div>
           <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-            >
+            <button type="submit" className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-white/40 transition-all hover:bg-red-500/10 hover:text-red-400">
               <LogOut size={15} />
               Sign out
             </button>
@@ -99,35 +79,22 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile top bar */}
-        <header className="md:hidden flex items-center justify-between h-14 px-4 border-b border-white/8 bg-[#0b0b28] shrink-0">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/8 bg-[#0b0b28] px-4 md:hidden">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-linear-to-br from-violet-500 to-blue-500 flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">T</span>
-            </div>
-            <span className="font-semibold text-sm">TrackUp</span>
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-linear-to-br from-violet-500 to-blue-500"><span className="text-[10px] font-bold text-white">T</span></div>
+            <span className="text-sm font-semibold">TrackUp</span>
           </Link>
           <div className="flex items-center gap-1">
-            {navItems.map(({ href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`p-2 rounded-lg transition-colors ${
-                  isActive(href) ? "text-violet-400 bg-violet-500/10" : "text-white/40 hover:text-white"
-                }`}
-              >
+            {visibleNavItems.map(({ href, icon: Icon }) => (
+              <Link key={href} href={href} className={`rounded-lg p-2 transition-colors ${isActive(href) ? "bg-violet-500/10 text-violet-400" : "text-white/40 hover:text-white"}`} aria-label={href.slice(1)}>
                 <Icon size={18} />
               </Link>
             ))}
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

@@ -75,9 +75,8 @@ export async function GET(request: Request) {
 
   const clientId = process.env.CLICKUP_CLIENT_ID || process.env.CLIENT_ID;
   const clientSecret = process.env.CLICKUP_CLIENT_SECRET || process.env.CLIENT_SECRET;
-  const redirectUri = process.env.CLICKUP_REDIRECT_URI;
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!clientId || !clientSecret) {
     console.error("Missing ClickUp OAuth environment variables");
     return NextResponse.redirect(new URL("/login?error=auth_config_error", request.url));
   }
