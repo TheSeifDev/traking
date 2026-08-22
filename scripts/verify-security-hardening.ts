@@ -54,6 +54,30 @@ async function runTests(): Promise<void> {
   assert(!migration.includes('CREATE POLICY "Only owners can delete profiles"'), "owner profile deletion policy is absent");
   assert(migration.includes("REVOKE ALL ON FUNCTION public.is_owner() FROM PUBLIC"), "SECURITY DEFINER helper execute is revoked from PUBLIC");
 
+  section("Anonymous watch-session capability checks");
+  const capabilityMigration = readFileSync("supabase/migrations/20260822000004_harden_watch_session_capabilities.sql", "utf8");
+  const sessionRoute = readFileSync("app/api/tracking/session/route.ts", "utf8");
+  const eventRoute = readFileSync("app/api/tracking/event/route.ts", "utf8");
+  const endRoute = readFileSync("app/api/tracking/session/[sessionId]/end/route.ts", "utf8");
+  const trackingService = readFileSync("src/lib/tracking/service.ts", "utf8");
+  const watchPlayer = readFileSync("src/components/watch/WatchPlayer.tsx", "utf8");
+
+  assert(capabilityMigration.includes("ADD COLUMN IF NOT EXISTS session_token TEXT"), "watch sessions add a private session token");
+  assert(capabilityMigration.includes("gen_random_bytes(32)"), "existing watch sessions receive random backfill tokens");
+  assert(capabilityMigration.includes("ALTER COLUMN session_token SET NOT NULL"), "session token is mandatory after backfill");
+  assert(capabilityMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token"), "session token has a unique index");
+  assert(sessionRoute.includes("session_token: session.sessionToken"), "session creation route returns the private capability");
+  assert(eventRoute.includes("missing_session_token") && eventRoute.includes("session_token,"), "event route requires and forwards the capability");
+  assert(eventRoute.includes("status: 404") && eventRoute.includes("session_not_found"), "event route uses a non-leaking capability failure");
+  assert(endRoute.includes("missing_session_token") && endRoute.includes("sessionToken"), "end route requires and forwards the capability");
+  assert(endRoute.includes("status: 404") && endRoute.includes("session_not_found"), "end route uses a non-leaking capability failure");
+  assert(trackingService.includes('randomBytes(32).toString("hex")'), "tracking service creates an opaque random capability");
+  assert(trackingService.includes('.select("id, session_token")'), "tracking service reads the created capability");
+  assert(trackingService.includes('.eq("session_token", payload.session_token)'), "event writes scope last-seen updates by capability");
+  assert(trackingService.includes('.eq("session_token", sessionToken)'), "session end updates scope by capability");
+  assert(watchPlayer.includes("session_token: sessionToken"), "watch player forwards the capability to tracking APIs");
+  assert(watchPlayer.includes('typeof data.session_token === "string"'), "watch player requires the capability before readiness");
+
   section("OAuth state and service-role checks");
 
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");

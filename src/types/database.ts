@@ -265,6 +265,7 @@ export interface Database {
         Row: {
           id: string;
           watch_link_id: string;
+          session_token: string;
           viewer_identifier: string | null;
           started_at: string;
           last_seen_at: string;
@@ -275,6 +276,7 @@ export interface Database {
         Insert: {
           id?: string;
           watch_link_id: string;
+          session_token: string;
           viewer_identifier?: string | null;
           started_at?: string;
           last_seen_at?: string;
@@ -285,6 +287,7 @@ export interface Database {
         Update: {
           id?: string;
           watch_link_id?: string;
+          session_token?: string;
           viewer_identifier?: string | null;
           started_at?: string;
           last_seen_at?: string;

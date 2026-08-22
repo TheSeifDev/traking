@@ -169,7 +169,11 @@ export default function WatchPlayer({
           return;
         }
         const data = await res.json();
-        if (!cancelled && data.session_id) {
+        if (
+          !cancelled &&
+          typeof data.session_id === "string" &&
+          typeof data.session_token === "string"
+        ) {
           sessionIdRef.current = data.session_id;
           sessionTokenRef.current = data.session_token;
           startTimeRef.current = Date.now();
