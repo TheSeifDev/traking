@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /**
  * WatchPlayer — Client-side video player with tracking integration.
@@ -73,7 +73,7 @@ export default function WatchPlayer({
 }: WatchPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const startTimeRef = useRef<number | null>(null);
   const watchTimeRef = useRef<number>(0);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const completionSentRef = useRef<boolean>(false);
