@@ -32,6 +32,18 @@ const SOURCE_STYLES: Record<string, string> = {
   direct_url: "bg-emerald-500/10 text-emerald-200 border-emerald-400/15",
 };
 
+function getYouTubeId(sourceUrl: string): string | null {
+  try {
+    const url = new URL(sourceUrl);
+    const candidate = url.hostname.includes("youtu.be")
+      ? url.pathname.split("/").filter(Boolean)[0]
+      : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+    return candidate && /^[A-Za-z0-9_-]{6,}$/.test(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 interface VideoListProps {
   role: UserRole;
 }
@@ -44,6 +56,7 @@ export default function VideoList({ role }: VideoListProps) {
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [currentTime] = useState(() => new Date().getTime());
   const [sharing, setSharing] = useState<string | null>(null);
 
   const fetchVideos = useCallback(async () => {
@@ -186,8 +199,18 @@ export default function VideoList({ role }: VideoListProps) {
           {filtered.map((video) => {
             const sourceLabel = SOURCE_LABELS[video.source_type] ?? video.source_type;
             const sourceStyle = SOURCE_STYLES[video.source_type] ?? "bg-white/5 text-white/60 border-white/10";
+            const youtubeId = video.source_type === "youtube" ? getYouTubeId(video.source_url) : null;
+            const activeLinks = video.watch_links?.filter((link) => {
+              const expired = Boolean(link.expires_at && new Date(link.expires_at).getTime() <= currentTime);
+              return !link.revoked_at && !expired;
+            }).length ?? 0;
+            const statusLabel = activeLinks > 0 ? "Shared" : (video.watch_links?.length ?? 0) > 0 ? "Revoked" : "Ready";
+            const statusStyle = activeLinks > 0 ? "bg-emerald-500/10 text-emerald-200" : statusLabel === "Revoked" ? "bg-red-500/10 text-red-200" : "bg-white/5 text-white/45";
             return (
               <article key={video.id} className="group flex min-h-52 flex-col rounded-2xl border border-white/8 bg-white/[0.035] p-5 transition hover:-translate-y-0.5 hover:border-violet-400/25 hover:bg-white/[0.05]">
+                <div className="mb-4 h-32 overflow-hidden rounded-xl border border-white/8 bg-black/20">
+                  {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="h-full w-full bg-gradient-to-t from-black/60 to-transparent" /></div> : <div className="flex h-full items-center justify-center text-white/15"><VideoIcon size={30} /></div>}
+                </div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300"><VideoIcon size={17} /></div>
@@ -196,7 +219,7 @@ export default function VideoList({ role }: VideoListProps) {
                       <p className="mt-1 text-xs text-white/35">Added {new Date(video.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-medium ${sourceStyle}`}>{sourceLabel}</span>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5"><span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${sourceStyle}`}>{sourceLabel}</span><span className={`rounded-full px-2 py-1 text-[10px] ${statusStyle}`}>{statusLabel}</span></div>
                 </div>
 
                 <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-white/45">{video.description || "No description added."}</p>

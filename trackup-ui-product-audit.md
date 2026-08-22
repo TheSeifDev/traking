@@ -16,13 +16,13 @@
 
 ## Implemented MVP UI
 
-The `/videos` route now provides a searchable responsive video library with cards, source badges, view/link/completion summaries, empty and no-match states, retryable loading errors, create/share/delete actions for owner/admin, and read-only browse behavior for viewers. Unsupported `avg_completion` values render as an em dash rather than a misleading zero.
+The `/videos` route now provides a searchable responsive video library with cards, YouTube thumbnails derived from the source video ID, provider badges, link-lifecycle status, view/link/completion summaries, empty and no-match states, retryable loading errors, create/share/delete actions for owner/admin, and read-only browse behavior for viewers. Unsupported `avg_completion` values render as an em dash rather than a misleading zero. Non-YouTube sources use an honest placeholder because the current schema has no thumbnail field.
 
 The video detail route now shows source and description context, duration, provider-honest analytics, an internal viewer action when an active link exists, and the upgraded watch-link panel. The panel uses the existing POST/DELETE contracts, copies returned URLs when the endpoint provides one, handles clipboard failures, confirms revocation, and displays active, expired, and revoked states.
 
 The public `/watch/[token]` architecture is unchanged and remains server-resolved and non-indexable. The client player now provides a real retry state for session creation, a preparation overlay, an internal iframe for YouTube/Vimeo/Drive/Telegram, and a clear distinction between native direct-URL telemetry and iframe session-only behavior. No provider SDK, heatmap, watched-range claim, or fake event is introduced.
 
-Owner navigation now exposes `/owner/admins`, which uses the same dashboard shell and a real team manager. The manager calls the existing owner APIs only. `/admin/users` is no longer a blank placeholder: it explains why the current admin list/invite capabilities are unavailable and links owners to the supported owner flow.
+The dashboard navigation now exposes `/watch-links` for workspace-scoped link management and `/owner/admins` for owners. The Watch Links page reuses `listVideos` and `WatchLinkPanel`; it does not introduce a second link service. `/owner/admins` uses the same dashboard shell and a real team manager. The manager calls the existing owner APIs only. `/admin/users` is no longer a blank placeholder: it explains why the current admin list/invite capabilities are unavailable and links owners to the supported owner flow.
 
 ## Known backend boundaries
 

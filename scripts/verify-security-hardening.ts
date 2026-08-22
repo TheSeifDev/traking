@@ -95,6 +95,8 @@ async function runTests(): Promise<void> {
   const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
   const teamManager = readFileSync("src/components/dashboard/TeamMemberManager.tsx", "utf8");
   const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
+  const watchLinksPage = readFileSync("app/(dashboard)/watch-links/page.tsx", "utf8");
+  const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
   assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
   assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
@@ -108,6 +110,9 @@ async function runTests(): Promise<void> {
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
   assert(videoList.includes('video.avg_completion === null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
+  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("statusLabel"), "video library derives YouTube thumbnails and link status from real fields");
+  assert(watchLinksPage.includes("listVideos") && watchLinksPage.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
+  assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
   assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
   assert(watchPlayer.includes("https://www.youtube.com/embed/") && watchPlayer.includes("referrerPolicy"), "YouTube is rendered through the internal embed player");
   assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes("not_implemented"), "team UI uses real owner endpoints and documents invite gap");

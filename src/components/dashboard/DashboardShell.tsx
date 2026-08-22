@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 
 interface DashboardShellProps {
@@ -15,6 +15,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Videos", href: "/videos", icon: Video },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Watch links", href: "/watch-links", icon: Link2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
