@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tracking Domain Service
  *
  * Handles watch session lifecycle and event recording.
@@ -7,7 +7,6 @@
  * The admin client is used for watch_link resolution and session updates.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import { createClient as createAnonClient } from "@/utils/supabase/client";
 import type { TrackingEventPayload } from "@/src/types/tracking";
 
 export interface ResolvedWatchLink {
