@@ -78,6 +78,22 @@ async function runTests(): Promise<void> {
   assert(watchPlayer.includes("session_token: sessionToken"), "watch player forwards the capability to tracking APIs");
   assert(watchPlayer.includes('typeof data.session_token === "string"'), "watch player requires the capability before readiness");
 
+  section("Watch-link lifecycle and owner mutation checks");
+  const revocationMigration = readFileSync("supabase/migrations/20260822000005_add_watch_link_revocation.sql", "utf8");
+  const watchLinkService = readFileSync("src/lib/videos/service.ts", "utf8");
+  const watchLinkRoute = readFileSync("app/api/videos/[id]/watch-link/route.ts", "utf8");
+  const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
+  const watchLinkPanel = readFileSync("src/components/dashboard/WatchLinkPanel.tsx", "utf8");
+  assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
+  assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
+  assert(trackingService.includes("if (data.revoked_at) return null"), "revoked links cannot create new sessions");
+  assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
+  assert(watchLinkService.includes('.eq("workspace_id", workspaceId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video workspace ownership");
+  assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");
+  assert(watchLinkRoute.includes("export const DELETE") && watchLinkRoute.includes("revokeWatchLink"), "watch-link route exposes protected DELETE revocation");
+  assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
+  assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
+
   section("OAuth state and service-role checks");
 
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");

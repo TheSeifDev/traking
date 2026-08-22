@@ -228,6 +228,7 @@ export interface Database {
           token: string;
           created_by: string | null;
           expires_at: string | null;
+          revoked_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -236,6 +237,7 @@ export interface Database {
           token?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -244,6 +246,7 @@ export interface Database {
           token?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
         };
         Relationships: [

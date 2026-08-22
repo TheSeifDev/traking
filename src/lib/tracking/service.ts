@@ -30,11 +30,12 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("watch_links")
-      .select("id, expires_at, video_id, videos(id, title, source_type, source_url, duration)")
+      .select("id, expires_at, revoked_at, video_id, videos(id, title, source_type, source_url, duration)")
       .eq("token", token)
       .maybeSingle();
 
     if (error || !data || !data.videos) return null;
+    if (data.revoked_at) return null;
     if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
 
     const video = Array.isArray(data.videos) ? data.videos[0] : data.videos;

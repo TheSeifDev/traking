@@ -22,6 +22,10 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         video_clickup_tasks(*),
         watch_links(
           id,
+          token,
+          created_by,
+          expires_at,
+          revoked_at,
           watch_sessions(id, completion_percentage)
         )
       `)
@@ -48,14 +52,18 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
               )
             : 0,
         clickup_tasks: v.video_clickup_tasks,
-        watch_links: (v.watch_links as Array<{ id: string; watch_sessions: unknown[] }>)?.map(({ id }) => ({
-          id,
-          video_id: v.id,
-          token: "",
-          created_by: v.created_by,
-          expires_at: null,
-          created_at: v.created_at,
-        })),
+        watch_links: (v.watch_links as Array<{
+        id: string;
+        token: string;
+        created_by: string | null;
+        expires_at: string | null;
+        revoked_at: string | null;
+        created_at: string;
+        watch_sessions: unknown[];
+      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => ({
+        ...link,
+        video_id: v.id,
+      })),
       };
     });
   } catch {
@@ -75,7 +83,7 @@ export async function getVideo(videoId: string, workspaceId: string): Promise<Vi
       .select(`
         *,
         video_clickup_tasks(*),
-        watch_links(id, token, created_by, expires_at, created_at)
+        watch_links(id, token, created_by, expires_at, revoked_at, created_at)
       `)
       .eq("id", videoId)
       .eq("workspace_id", workspaceId)
@@ -87,7 +95,7 @@ export async function getVideo(videoId: string, workspaceId: string): Promise<Vi
       ...data,
       source_type: data.source_type as Video["source_type"],
       clickup_tasks: data.video_clickup_tasks,
-      watch_links: data.watch_links?.map((wl: { id: string; token: string; created_by: string | null; expires_at: string | null; created_at: string }) => ({
+      watch_links: data.watch_links?.map((wl: { id: string; token: string; created_by: string | null; expires_at: string | null; revoked_at: string | null; created_at: string }) => ({
         ...wl,
         video_id: data.id,
       })),
@@ -192,7 +200,15 @@ export async function generateWatchLink(
   videoId: string,
   workspaceId: string,
   createdBy: string
-): Promise<{ id: string; token: string; url: string } | null> {
+): Promise<{
+  id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  url: string;
+} | null> {
   try {
     const supabase = createAdminClient();
 
@@ -209,7 +225,7 @@ export async function generateWatchLink(
     const { data, error } = await supabase
       .from("watch_links")
       .insert({ video_id: videoId, created_by: createdBy })
-      .select("id, token")
+      .select("id, token, created_by, expires_at, revoked_at, created_at")
       .single();
 
     if (error || !data) {
@@ -221,10 +237,50 @@ export async function generateWatchLink(
     return {
       id: data.id,
       token: data.token,
+      created_by: data.created_by,
+      expires_at: data.expires_at,
+      revoked_at: data.revoked_at,
+      created_at: data.created_at,
       url: `${appUrl}/watch/${data.token}`,
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Revokes a watch link after verifying that its video belongs to the workspace.
+ * Existing analytics remain available; only future public sessions are blocked.
+ */
+export async function revokeWatchLink(
+  linkId: string,
+  videoId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  if (!linkId || !videoId || !workspaceId) return false;
+
+  try {
+    const supabase = createAdminClient();
+    const { data: video } = await supabase
+      .from("videos")
+      .select("id")
+      .eq("id", videoId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (!video) return false;
+
+    const { data, error } = await supabase
+      .from("watch_links")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", linkId)
+      .eq("video_id", videoId)
+      .is("revoked_at", null)
+      .select("id")
+      .maybeSingle();
+
+    return !error && !!data;
+  } catch {
+    return false;
   }
 }
 
