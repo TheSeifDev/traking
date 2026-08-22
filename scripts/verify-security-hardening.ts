@@ -108,7 +108,7 @@ async function runTests(): Promise<void> {
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
   assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
   assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
-  assert(trackingService.includes("if (data.revoked_at) return null"), "revoked links cannot create new sessions");
+  assert(trackingService.includes("if (link.revoked_at) return null"), "revoked links cannot create new sessions");
   assert(trackingService.includes('.select("id, expires_at, revoked_at")') && trackingService.includes("const { data: activeLink"), "session creation re-checks link lifecycle before insert");
   assert(trackingService.includes("new Date(activeLink.expires_at) <= new Date()"), "session creation rejects expiry at the current instant");
   assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
