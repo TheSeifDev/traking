@@ -36,7 +36,7 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
 
     if (error || !data || !data.videos) return null;
     if (data.revoked_at) return null;
-    if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+    if (data.expires_at && new Date(data.expires_at) <= new Date()) return null;
 
     const video = Array.isArray(data.videos) ? data.videos[0] : data.videos;
     if (!video) return null;
@@ -64,6 +64,23 @@ export async function createWatchSession(
 ): Promise<{ id: string; sessionToken: string } | null> {
   try {
     const supabase = createAdminClient();
+
+    // Re-check the link immediately before inserting the session to close the
+    // resolve-then-insert race with revoke/expiry changes.
+    const { data: activeLink, error: linkError } = await supabase
+      .from("watch_links")
+      .select("id, expires_at, revoked_at")
+      .eq("id", watchLinkId)
+      .maybeSingle();
+    if (
+      linkError ||
+      !activeLink ||
+      activeLink.revoked_at ||
+      (activeLink.expires_at && new Date(activeLink.expires_at) <= new Date())
+    ) {
+      return null;
+    }
+
     const sessionToken = randomBytes(32).toString("hex");
 
     let viewerIdentifier: string | null = null;
@@ -142,7 +159,7 @@ export async function recordTrackingEvent(
       session_id: payload.session_id,
       event_type: payload.event_type,
       position: payload.position ?? 0,
-      duration: payload.from_position ?? null,
+      from_position: payload.from_position ?? null,
     });
 
     if (!error && (payload.event_type === "heartbeat" || payload.event_type === "play")) {

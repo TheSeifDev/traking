@@ -75,18 +75,28 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes('.select("id, session_token")'), "tracking service reads the created capability");
   assert(trackingService.includes('.eq("session_token", payload.session_token)'), "event writes scope last-seen updates by capability");
   assert(trackingService.includes('.eq("session_token", sessionToken)'), "session end updates scope by capability");
+  assert(trackingService.includes("from_position: payload.from_position ?? null"), "seek origin is stored in the dedicated from_position field");
+  assert(watchPlayer.includes("const accumulateWatchTime = useCallback((resume = false)"), "watch player accumulates elapsed play segments explicitly");
+  assert(watchPlayer.includes("startTimeRef.current = null;"), "watch time does not start before playback begins");
+  assert(watchPlayer.includes("accumulateWatchTime(true)"), "heartbeat flushes and resumes the active play segment");
+  assert(watchPlayer.includes("accumulateWatchTime();\n    void sendEvent(\"pause\""), "pause flushes the active play segment");
+  assert(watchPlayer.includes("from_position"), "watch player sends seek origin data");
   assert(watchPlayer.includes("session_token: sessionToken"), "watch player forwards the capability to tracking APIs");
   assert(watchPlayer.includes('typeof data.session_token === "string"'), "watch player requires the capability before readiness");
 
   section("Watch-link lifecycle and owner mutation checks");
   const revocationMigration = readFileSync("supabase/migrations/20260822000005_add_watch_link_revocation.sql", "utf8");
+  const eventPositionMigration = readFileSync("supabase/migrations/20260822000006_add_watch_event_from_position.sql", "utf8");
   const watchLinkService = readFileSync("src/lib/videos/service.ts", "utf8");
   const watchLinkRoute = readFileSync("app/api/videos/[id]/watch-link/route.ts", "utf8");
   const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
   const watchLinkPanel = readFileSync("src/components/dashboard/WatchLinkPanel.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
+  assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
   assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
   assert(trackingService.includes("if (data.revoked_at) return null"), "revoked links cannot create new sessions");
+  assert(trackingService.includes('.select("id, expires_at, revoked_at")') && trackingService.includes("const { data: activeLink"), "session creation re-checks link lifecycle before insert");
+  assert(trackingService.includes("new Date(activeLink.expires_at) <= new Date()"), "session creation rejects expiry at the current instant");
   assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
   assert(watchLinkService.includes('.eq("workspace_id", workspaceId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video workspace ownership");
   assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");

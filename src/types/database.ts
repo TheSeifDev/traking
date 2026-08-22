@@ -314,6 +314,7 @@ export interface Database {
           event_type: WatchEventType;
           position: number;
           duration: number | null;
+          from_position: number | null;
           created_at: string;
         };
         Insert: {
@@ -322,6 +323,7 @@ export interface Database {
           event_type: WatchEventType;
           position?: number;
           duration?: number | null;
+          from_position?: number | null;
           created_at?: string;
         };
         Update: {
@@ -330,6 +332,7 @@ export interface Database {
           event_type?: WatchEventType;
           position?: number;
           duration?: number | null;
+          from_position?: number | null;
           created_at?: string;
         };
         Relationships: [

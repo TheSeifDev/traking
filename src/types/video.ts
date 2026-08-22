@@ -82,6 +82,7 @@ export interface WatchEvent {
   event_type: WatchEventType;
   position: number;
   duration: number | null;
+  from_position: number | null;
   created_at: string;
 }
 
