@@ -1,3 +1,4 @@
+/*
  * Uses admin client (anon cannot read session to verify, so we skip verify for MVP).
  * Rate limiting / spam prevention is a post-MVP concern.
  */
@@ -6,6 +7,8 @@ export async function recordTrackingEvent(
 ): Promise<boolean> {
   if (!payload.session_id || !payload.session_token || !payload.event_type) return false;
   if (!(await isAuthorizedWatchSession(payload.session_id, payload.session_token))) return false;
+
+
 
 
   try {
@@ -18,6 +21,8 @@ export async function recordTrackingEvent(
     });
 
 
+
+
     if (error) {
       // Update last_seen_at on session (fire-and-forget)
       void supabase
@@ -25,6 +30,8 @@ export async function recordTrackingEvent(
         .update({ last_seen_at: new Date().toISOString() })
         .eq("id", payload.session_id);
     }
+
+
 
 
     // Always update last_seen_at on heartbeat/play
@@ -36,11 +43,15 @@ export async function recordTrackingEvent(
     }
 
 
+
+
     return !error;
   } catch {
     return false;
   }
 }
+
+
 
 
 /**
@@ -68,9 +79,4 @@ export async function endWatchSession(
       .maybeSingle();
 
 
-    return !error && !!data;
-  } catch {
-    return false;
-  }
-}
 
