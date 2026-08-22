@@ -5,8 +5,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
-import { getVideo, getVideoAnalytics, generateWatchLink } from "@/src/lib/videos/service";
-import { ArrowLeft, Video, Eye, Clock, TrendingUp, Link2, CheckCircle } from "lucide-react";
+import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
+import { ArrowLeft, Video, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
 
 type Props = { params: Promise<{ id: string }> };
@@ -23,6 +23,13 @@ export default async function VideoDetailPage({ params }: Props) {
   ]);
 
   if (!video) notFound();
+
+  const canManage = user.role === "owner" || user.role === "admin";
+  const currentTime = new Date().getTime();
+  const activeLink = video.watch_links?.find((link) => {
+    const expired = Boolean(link.expires_at && new Date(link.expires_at).getTime() <= currentTime);
+    return !link.revoked_at && !expired;
+  });
 
   const stats = analytics ? [
     { label: "Total Views", value: analytics.total_views, icon: Eye },
@@ -49,9 +56,26 @@ export default async function VideoDetailPage({ params }: Props) {
         </Link>
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-white truncate">{video.title}</h1>
-          <p className="text-sm text-white/40 capitalize">{video.source_type.replace("_", " ")}</p>
+            <p className="text-sm text-white/40 capitalize">{video.source_type.replace("_", " ")}</p>
+          </div>
+          {activeLink && (
+            <Link href={`/watch/${activeLink.token}`} target="_blank" className="flex items-center gap-2 rounded-xl border border-violet-400/20 bg-violet-600/15 px-3 py-2 text-xs font-medium text-violet-200 transition hover:bg-violet-600/25">
+              <ExternalLink size={14} /> Open viewer
+            </Link>
+          )}
         </div>
-      </div>
+
+        <div className="grid gap-4 rounded-2xl border border-white/8 bg-white/[0.03] p-5 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.18em] text-white/30">Video source</p>
+            <p className="mt-2 break-all text-sm text-white/70">{video.source_url}</p>
+            {video.description && <p className="mt-2 text-sm leading-6 text-white/40">{video.description}</p>}
+          </div>
+          <div className="rounded-xl border border-white/8 bg-black/10 px-4 py-3 text-center">
+            <p className="text-lg font-semibold text-white">{video.duration ? `${Math.floor(video.duration / 60)}m ${video.duration % 60}s` : "—"}</p>
+            <p className="text-[10px] uppercase tracking-wide text-white/35">Duration</p>
+          </div>
+        </div>
 
       {/* Stats */}
       {analytics && (
@@ -74,7 +98,7 @@ export default async function VideoDetailPage({ params }: Props) {
       )}
 
       {/* Watch Link */}
-      <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} />
+      <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} />
 
       {/* Recent sessions */}
       {analytics && analytics.recent_sessions.length > 0 && (

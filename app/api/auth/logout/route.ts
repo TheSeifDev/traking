@@ -3,10 +3,11 @@
  * POST - Clear session cookies and redirect to login
  */
 import { NextResponse } from "next/server";
+import { getAppUrl } from "@/src/lib/app-url";
 
 export async function POST() {
   const response = NextResponse.redirect(
-    new URL("/login", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000")
+    new URL("/login", getAppUrl())
   );
   response.cookies.delete("trackup_user");
   return response;

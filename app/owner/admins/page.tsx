@@ -1,8 +1,19 @@
-/** /owner/admins – owner only (guard inherited from owner layout) */
+/** /owner/admins – owner-only team controls */
+import { guardOwner } from "@/src/lib/auth/guards";
+import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
+import DashboardShell from "@/src/components/dashboard/DashboardShell";
+import TeamMemberManager from "@/src/components/dashboard/TeamMemberManager";
+
 export default async function OwnerAdminsPage() {
+  const user = await guardOwner();
+  const workspace = await getPrimaryWorkspace(user.id);
+
   return (
-    <main>
-      <h1>Owner – Manage Admins</h1>
-    </main>
+    <DashboardShell
+      user={{ name: user.name, email: user.email, role: user.role }}
+      workspace={workspace}
+    >
+      <TeamMemberManager currentUserId={user.id} />
+    </DashboardShell>
   );
 }

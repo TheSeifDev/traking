@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAppUrl, getClickUpRedirectUri } from "@/src/lib/app-url";
 
 const CLICKUP_AUTHORIZE_URL = "https://app.clickup.com/api?";
 
@@ -34,19 +35,16 @@ function redactOauthState(authorizeUrl: URL): string {
 
 export async function GET() {
   const { value: clientId, source: clientIdSource } = getClickUpClientId();
-  const redirectUri = process.env.CLICKUP_REDIRECT_URI;
+  const redirectUri = getClickUpRedirectUri();
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     console.error("Missing ClickUp OAuth configuration", {
       hasClientId: Boolean(clientId),
       clientIdSource: clientId ? clientIdSource : null,
       hasRedirectUri: Boolean(redirectUri),
     });
     return NextResponse.redirect(
-      new URL(
-        "/login?error=auth_config_error",
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      )
+      new URL("/login?error=auth_config_error", getAppUrl())
     );
   }
 

@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound } from "lucide-react";
+import type { UserRole } from "@/src/types/auth";
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  user: { name: string | null; email: string; role: string };
+  user: { name: string | null; email: string; role: UserRole };
   workspace: { name: string } | null;
 }
 
@@ -17,8 +18,11 @@ const navItems = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+const ownerNavItem = { label: "Team", href: "/owner/admins", icon: UsersRound };
+
 export default function DashboardShell({ children, user, workspace }: DashboardShellProps) {
   const pathname = usePathname();
+  const visibleNavItems = user.role === "owner" ? [...navItems, ownerNavItem] : navItems;
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -51,7 +55,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
 
         {/* Nav */}
         <nav className="flex-1 px-3 pt-4 space-y-1">
-          {navItems.map(({ label, href, icon: Icon }) => {
+          {visibleNavItems.map(({ label, href, icon: Icon }) => {
             const active = isActive(href);
             return (
               <Link
@@ -102,7 +106,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
             <span className="font-semibold text-sm">TrackUp</span>
           </Link>
           <div className="flex items-center gap-1">
-            {navItems.map(({ href, icon: Icon }) => (
+            {visibleNavItems.map(({ href, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}

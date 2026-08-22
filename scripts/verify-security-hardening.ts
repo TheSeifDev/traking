@@ -91,6 +91,10 @@ async function runTests(): Promise<void> {
   const watchLinkRoute = readFileSync("app/api/videos/[id]/watch-link/route.ts", "utf8");
   const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
   const watchLinkPanel = readFileSync("src/components/dashboard/WatchLinkPanel.tsx", "utf8");
+  const videoList = readFileSync("src/components/dashboard/VideoList.tsx", "utf8");
+  const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
+  const teamManager = readFileSync("src/components/dashboard/TeamMemberManager.tsx", "utf8");
+  const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
   assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
   assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
@@ -103,6 +107,11 @@ async function runTests(): Promise<void> {
   assert(watchLinkRoute.includes("export const DELETE") && watchLinkRoute.includes("revokeWatchLink"), "watch-link route exposes protected DELETE revocation");
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
+  assert(videoList.includes('video.avg_completion === null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
+  assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
+  assert(watchPlayer.includes("https://www.youtube.com/embed/") && watchPlayer.includes("referrerPolicy"), "YouTube is rendered through the internal embed player");
+  assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes("not_implemented"), "team UI uses real owner endpoints and documents invite gap");
+  assert(adminUsersPage.includes("501 not_implemented") && !adminUsersPage.includes("Create invite"), "admin UI does not offer a fake invite flow");
 
   section("Provider-aware analytics honesty");
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
@@ -118,10 +127,20 @@ async function runTests(): Promise<void> {
 
   section("OAuth state and service-role checks");
 
+  const appUrlHelper = readFileSync("src/lib/app-url.ts", "utf8");
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");
   const oauthCallback = readFileSync("app/api/auth/clickup/callback/route.ts", "utf8");
+  const logoutRoute = readFileSync("app/api/auth/logout/route.ts", "utf8");
+  const videoServiceForUrls = readFileSync("src/lib/videos/service.ts", "utf8");
   const adminClient = readFileSync("utils/supabase/admin.ts", "utf8");
 
+assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
+assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
+assert(appUrlHelper.includes("isLocalAppUrl") && appUrlHelper.includes("return PRODUCTION_APP_URL"), "production rejects loopback app URLs");
+assert(oauthStart.includes("getClickUpRedirectUri") && !oauthStart.includes('"http://localhost:3000"'), "OAuth start uses canonical redirect configuration without localhost fallback");
+assert(!oauthCallback.includes("process.env.CLICKUP_REDIRECT_URI") && !oauthCallback.includes("http://localhost:3000"), "OAuth callback does not use a loopback redirect configuration");
+assert(logoutRoute.includes("getAppUrl") && !logoutRoute.includes('"http://localhost:3000"'), "logout uses canonical production origin");
+assert(videoServiceForUrls.includes("const appUrl = getAppUrl()") && !videoServiceForUrls.includes('process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"'), "watch links use canonical production origin");
 assert(oauthStart.includes("trackup_oauth_state"), "OAuth start stores state cookie");
 assert(oauthStart.includes("https://app.clickup.com/api?"), "OAuth start uses ClickUp authorization URL");
 assert(oauthCallback.includes("state !== expectedState"), "OAuth callback validates returned state");
