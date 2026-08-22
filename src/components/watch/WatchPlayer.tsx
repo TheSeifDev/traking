@@ -73,6 +73,7 @@ export default function WatchPlayer({
 }: WatchPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionTokenRef = useRef<string | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const watchTimeRef = useRef<number>(0);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -92,13 +93,15 @@ export default function WatchPlayer({
       fromPosition?: number
     ) => {
       const sessionId = sessionIdRef.current;
-      if (!sessionId) return;
+      const sessionToken = sessionTokenRef.current;
+      if (!sessionId || !sessionToken) return;
       try {
         await fetch("/api/tracking/event", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
+            session_token: sessionToken,
             event_type: eventType,
             position,
             from_position: fromPosition ?? null,
@@ -113,7 +116,8 @@ export default function WatchPlayer({
 
   const endSession = useCallback(async () => {
     const sessionId = sessionIdRef.current;
-    if (!sessionId) return;
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionId || !sessionToken) return;
     const watchTime = watchTimeRef.current;
     const completion =
       duration && duration > 0
@@ -122,6 +126,8 @@ export default function WatchPlayer({
     try {
       // Use sendBeacon for reliability on page unload
       const body = JSON.stringify({
+        session_id: sessionId,
+        session_token: sessionToken,
         watch_time_seconds: watchTime,
         completion_percentage: completion,
       });
@@ -165,6 +171,7 @@ export default function WatchPlayer({
         const data = await res.json();
         if (!cancelled && data.session_id) {
           sessionIdRef.current = data.session_id;
+          sessionTokenRef.current = data.session_token;
           startTimeRef.current = Date.now();
           setSessionReady(true);
         }
