@@ -1,10 +1,8 @@
-/**
- * /videos – authenticated users only (guard inherited from layout)
+﻿/**
+ * /videos - Video management page
  */
-export default async function VideosPage() {
-  return (
-    <main>
-      <h1>Videos</h1>
-    </main>
-  );
+import VideoList from "@/src/components/dashboard/VideoList";
+
+export default function VideosPage() {
+  return <VideoList />;
 }

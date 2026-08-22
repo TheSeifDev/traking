@@ -37,6 +37,8 @@ const PUBLIC_PREFIXES = [
   "/use-cases",
   "/faq",
   "/api/auth",       // OAuth routes
+  "/api/tracking",   // Public tracking endpoints (watch sessions/events)
+  "/watch",          // Public watch pages
   "/_next",
   "/favicon.ico",
   "/logo",

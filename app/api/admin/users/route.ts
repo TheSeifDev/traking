@@ -1,28 +1,27 @@
-/**
- * /api/admin/users – user management operations
+﻿/**
+ * /api/admin/users
  *
- * GET    users.read    – admin + owner
- * POST   users.manage  – owner only
+ * GET  - List all user profiles (admin + owner)
+ * POST - Role management is done via /api/owner/admins — not here.
+ *        This endpoint returns 501 until user invite/creation is implemented.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { withPermission } from "@/src/lib/auth/api-handler";
 import { PERMISSIONS } from "@/src/types/permissions";
+import { listAllUsers } from "@/src/lib/auth/role-management";
 
-// GET /api/admin/users — requires users.read (admin + owner)
 export const GET = withPermission(
   PERMISSIONS.USERS_READ,
   async () => {
-    // TODO: implement user listing
-    return NextResponse.json({ users: [] });
+    const users = await listAllUsers();
+    if (!users) return NextResponse.json({ error: "forbidden_or_error" }, { status: 403 });
+    return NextResponse.json({ users });
   }
 );
 
-// POST /api/admin/users — requires users.manage (owner only)
 export const POST = withPermission(
   PERMISSIONS.USERS_MANAGE,
-  async (request: NextRequest) => {
-    void request;
-    // TODO: implement user creation / role assignment
-    return NextResponse.json({ created: true }, { status: 201 });
+  async () => {
+    return NextResponse.json({ error: "not_implemented" }, { status: 501 });
   }
 );

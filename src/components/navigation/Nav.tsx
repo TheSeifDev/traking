@@ -5,11 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 
 const navItems = [
-  { label: "Features", href: "features" },
-  { label: "How It Works", href: "how-it-works" },
-  { label: "Integrations", href: "integrations" },
-  { label: "Use Cases", href: "use-cases" },
-  { label: "FAQ", href: "faq" },
+  { label: "Features", href: "/features" },
+  { label: "How It Works", href: "/how-it-works" },
+  { label: "Integrations", href: "/integrations" },
+  { label: "Use Cases", href: "/use-cases" },
+  { label: "FAQ", href: "/faq" },
 ];
 
 const Nav = () => {

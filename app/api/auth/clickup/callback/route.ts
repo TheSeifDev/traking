@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { provisionClickUpUser } from "@/src/lib/auth/provisioning";
 import { createSignedSessionCookie, SESSION_MAX_AGE_SECONDS } from "@/src/lib/auth/session-cookie";
+import { upsertClickUpConnection } from "@/src/lib/clickup/workspace";
 
 type ClickUpTokenResponse = {
   access_token?: unknown;
@@ -30,7 +31,6 @@ export async function GET(request: Request) {
     hasError: Boolean(errorParam),
   });
 
-  // Handle explicit OAuth rejection or error from provider
   if (errorParam) {
     console.error("ClickUp OAuth returned an error parameter");
     return NextResponse.redirect(new URL("/login?error=auth_denied", request.url));
@@ -95,10 +95,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/login?error=auth_failed", request.url));
     }
 
+    const accessToken = tokens.access_token;
+
     // 2. Verify at least one ClickUp Workspace was authorized.
     const teamsResponse = await fetch("https://api.clickup.com/api/v2/team", {
       headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
@@ -132,7 +134,7 @@ export async function GET(request: Request) {
     // 3. Fetch authenticated ClickUp user identity
     const userResponse = await fetch("https://api.clickup.com/api/v2/user", {
       headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
     });
 
@@ -164,11 +166,9 @@ export async function GET(request: Request) {
 
     if (!provisioning.success) {
       if (provisioning.error === "inactive_account") {
-        // Clear any previous session and redirect with inactive message
         const response = NextResponse.redirect(
           new URL("/login?error=account_inactive", request.url)
         );
-        response.cookies.delete("trackup_token");
         response.cookies.delete("trackup_user");
         response.cookies.delete("trackup_oauth_state");
         return response;
@@ -178,37 +178,38 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL("/login?error=invalid_identity", request.url));
       }
 
-      // database_error
       return NextResponse.redirect(new URL("/login?error=server_error", request.url));
     }
 
-    // 5. Create authenticated session cookies
+    // 5. Persist ClickUp token + workspace to DB (server-side only — never in a cookie)
+    //    Use the first authorized workspace for MVP.
+    const primaryTeam = (teamsData.teams as Array<Record<string, unknown>>)[0];
+    if (primaryTeam && typeof primaryTeam.id === "string" && typeof primaryTeam.name === "string") {
+      const result = await upsertClickUpConnection(
+        provisioning.user.id,
+        { id: primaryTeam.id, name: primaryTeam.name },
+        accessToken
+      );
+      if (!result) {
+        console.error("Failed to persist ClickUp connection — continuing anyway");
+      }
+    }
+
+    // 6. Create authenticated session cookie (user identity only — NO ClickUp token)
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
     const signedSession = await createSignedSessionCookie(provisioning.user);
     response.cookies.delete("trackup_oauth_state");
 
-    // Store ClickUp OAuth token
-    response.cookies.set("trackup_token", tokens.access_token, {
+    // Store signed authenticated user metadata.
+    // Role is still reloaded from DB on every protected server path.
+    // The ClickUp access token is stored in clickup_connections, NOT in any cookie.
+    response.cookies.set("trackup_user", signedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
-
-    // Store signed authenticated user metadata. The role is still reloaded
-    // from the database on protected server paths before authorization.
-    response.cookies.set(
-      "trackup_user",
-      signedSession,
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: SESSION_MAX_AGE_SECONDS,
-      }
-    );
 
     return response;
   } catch {
