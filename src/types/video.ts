@@ -44,7 +44,7 @@ export interface Video {
   clickup_tasks?: VideoClickUpTask[];
   watch_links?: WatchLink[];
   view_count?: number;
-  avg_completion?: number;
+  avg_completion?: number | null;
 }
 
 export interface VideoClickUpTask {
@@ -112,14 +112,17 @@ export interface UpdateVideoInput {
 }
 
 // Analytics types
+export type PlaybackMetricsScope = "direct_url_native_html5" | "session_only";
+
 export interface VideoAnalytics {
   video_id: string;
   total_views: number;
   unique_viewers: number;
-  avg_watch_time_seconds: number;
-  avg_completion_percentage: number;
-  completion_rate: number; // % of sessions that reached 90%+
-  drop_off_point: number | null; // position in seconds where most viewers leave
+  playback_metrics_scope: PlaybackMetricsScope;
+  avg_watch_time_seconds: number | null;
+  avg_completion_percentage: number | null;
+  completion_rate: number | null; // % of measured sessions that reached 90%+
+  drop_off_point: number | null; // position in seconds where most measured viewers leave
   recent_sessions: WatchSessionSummary[];
 }
 
@@ -128,14 +131,15 @@ export interface WatchSessionSummary {
   viewer_identifier: string | null;
   started_at: string;
   ended_at: string | null;
-  watch_time_seconds: number;
-  completion_percentage: number;
+  watch_time_seconds: number | null;
+  completion_percentage: number | null;
 }
 
 export interface WorkspaceAnalytics {
   total_videos: number;
   total_views: number;
   unique_viewers: number;
-  avg_completion_percentage: number;
-  completion_rate: number;
+  avg_completion_percentage: number | null;
+  completion_rate: number | null;
+  playback_metrics_available: boolean;
 }

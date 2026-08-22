@@ -26,8 +26,8 @@ export default async function AnalyticsPage() {
   const stats = [
     { label: "Total Views", value: analytics.total_views, icon: Eye, desc: "Across all videos" },
     { label: "Unique Viewers", value: analytics.unique_viewers, icon: Users, desc: "Distinct sessions" },
-    { label: "Avg Completion", value: `${analytics.avg_completion_percentage}%`, icon: Clock, desc: "Average watch %"},
-    { label: "Completion Rate", value: `${analytics.completion_rate}%`, icon: TrendingUp, desc: "Sessions >90%" },
+    { label: "Avg Completion", value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`, icon: Clock, desc: "Direct URL playback only"},
+    { label: "Completion Rate", value: analytics.completion_rate === null ? "Unavailable" : `${analytics.completion_rate}%`, icon: TrendingUp, desc: "Measured direct URL sessions" },
   ];
 
   const topVideos = videos
@@ -82,7 +82,7 @@ export default async function AnalyticsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold text-white">{v.view_count ?? 0}</p>
-                    <p className="text-[11px] text-white/40">{v.avg_completion ?? 0}% avg</p>
+                    <p className="text-[11px] text-white/40">{v.avg_completion === null ? "Not measured" : `${v.avg_completion}% avg`}</p>
                   </div>
                 </div>
               );

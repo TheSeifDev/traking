@@ -101,3 +101,13 @@ Confirmed problem 1: the API payload calls the field `from_position`, but `recor
 Confirmed problem 2: WatchPlayer added `(Date.now() - playStart)` on every heartbeat while `playStart` remained the beginning of the play segment, causing cumulative overcount (for example, 5 seconds plus 10 seconds instead of 10 seconds). It also initialized the timer at session creation, which could count time before playback. Minimal safe fix: explicit elapsed play segments are flushed on heartbeat, pause, end, and cleanup; heartbeat resumes from the flush timestamp, and session creation no longer starts the playback timer. Regression assertions cover these behaviors.
 
 Evidence: local typecheck, lint, test, and build passed. Security hardening passed `52/52`; route authorization remained `60/60`. No mocks, fake success, or type assertions were introduced.
+
+## Analytics honesty audit — confirmed fix
+
+Confirmed problem: `getVideoAnalytics` and `getWorkspaceAnalytics` aggregated `watch_sessions.completion_percentage` and `watch_time_seconds` for every source type, while the current WatchPlayer has native playback telemetry only for `direct_url`; iframe providers currently emit no reliable playback events. The dashboard, analytics page, and video detail page displayed those values as ordinary percentages/minutes, including zero values that looked measured.
+
+Root cause: analytics was provider-agnostic and had no confidence/scope in its return contract. Impact: YouTube/Vimeo/Google Drive/Telegram session summaries could be mistaken for proven playback completion, watched time, drop-off, or heatmap data.
+
+Minimal safe fix: analytics contracts now expose `playback_metrics_scope`; native playback metrics are computed only for `direct_url`, while iframe-provider metrics are returned as `null`. Session/view counts remain available and are explicitly labeled as sessions; UI shows `Unavailable`, `Not measured`, or a provider-limitation explanation rather than fabricated zeros. No heatmap was added because watched ranges are not yet proven for any provider.
+
+Evidence: local typecheck, lint, tests, and production build passed after the contract correction and regression assertions. Security hardening passed `58/58`; route authorization remained `60/60`. The provider facts are backed by official references recorded above.

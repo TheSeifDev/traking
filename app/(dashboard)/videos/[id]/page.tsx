@@ -27,8 +27,18 @@ export default async function VideoDetailPage({ params }: Props) {
   const stats = analytics ? [
     { label: "Total Views", value: analytics.total_views, icon: Eye },
     { label: "Unique Viewers", value: analytics.unique_viewers, icon: TrendingUp },
-    { label: "Avg Watch Time", value: `${Math.floor((analytics.avg_watch_time_seconds ?? 0) / 60)}m ${(analytics.avg_watch_time_seconds ?? 0) % 60}s`, icon: Clock },
-    { label: "Avg Completion", value: `${analytics.avg_completion_percentage ?? 0}%`, icon: CheckCircle },
+    {
+      label: "Avg Watch Time",
+      value: analytics.avg_watch_time_seconds === null
+        ? "Unavailable"
+        : `${Math.floor(analytics.avg_watch_time_seconds / 60)}m ${analytics.avg_watch_time_seconds % 60}s`,
+      icon: Clock,
+    },
+    {
+      label: "Avg Completion",
+      value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`,
+      icon: CheckCircle,
+    },
   ] : [];
 
   return (
@@ -45,6 +55,7 @@ export default async function VideoDetailPage({ params }: Props) {
 
       {/* Stats */}
       {analytics && (
+        <>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map(({ label, value, icon: Icon }) => (
             <div key={label} className="rounded-xl bg-white/4 border border-white/8 p-4">
@@ -54,6 +65,12 @@ export default async function VideoDetailPage({ params }: Props) {
             </div>
           ))}
         </div>
+        <p className="text-xs text-white/35">
+          {analytics.playback_metrics_scope === "direct_url_native_html5"
+            ? "Playback time and completion are measured from native HTML5 events."
+            : "This provider exposes session start/end only; playback position, watch time, and completion are not measured."}
+        </p>
+        </>
       )}
 
       {/* Watch Link */}
@@ -74,8 +91,8 @@ export default async function VideoDetailPage({ params }: Props) {
                   <p className="text-xs text-white/40">{new Date(s.started_at).toLocaleDateString()}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-medium text-white">{s.completion_percentage}%</p>
-                  <p className="text-xs text-white/40">{Math.floor(s.watch_time_seconds / 60)}m {s.watch_time_seconds % 60}s</p>
+                  <p className="text-sm font-medium text-white">{s.completion_percentage === null ? "Not measured" : `${s.completion_percentage}%`}</p>
+                  <p className="text-xs text-white/40">{s.watch_time_seconds === null ? "Playback telemetry unavailable" : `${Math.floor(s.watch_time_seconds / 60)}m ${s.watch_time_seconds % 60}s`}</p>
                 </div>
               </div>
             ))}

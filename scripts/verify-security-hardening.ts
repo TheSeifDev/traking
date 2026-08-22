@@ -104,6 +104,18 @@ async function runTests(): Promise<void> {
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
 
+  section("Provider-aware analytics honesty");
+  const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
+  const analyticsPage = readFileSync("app/(dashboard)/analytics/page.tsx", "utf8");
+  const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
+  const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
+  assert(analyticsService.includes("playback_metrics_scope") && analyticsService.includes('video.source_type === "direct_url"'), "analytics scope playback metrics to native direct URLs");
+  assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
+  assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
+  assert(analyticsPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "analytics page does not display unsupported completion as zero");
+  assert(dashboardPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "dashboard does not display unsupported completion as zero");
+  assert(videoDetailPage.includes('analytics.playback_metrics_scope === "direct_url_native_html5"') && videoDetailPage.includes("Playback telemetry unavailable"), "video detail explains provider telemetry limits");
+
   section("OAuth state and service-role checks");
 
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");
