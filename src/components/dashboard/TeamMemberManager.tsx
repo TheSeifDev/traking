@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle, RefreshCw, Shield, UserCheck, UserX } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AlertCircle, CheckCircle, RefreshCw, Shield, UserCheck, UserPlus, UserX } from "lucide-react";
 import type { Profile, UserRole } from "@/src/types/auth";
 
 interface TeamMemberManagerProps {
@@ -10,12 +10,16 @@ interface TeamMemberManagerProps {
 
 function errorMessage(error: unknown): string {
   const messages: Record<string, string> = {
-    forbidden: "Only the owner can change team roles or status.",
+    forbidden: "Only the owner can invite users or change team roles/status.",
     self_modification: "You cannot change your own account.",
     target_is_owner: "The owner account is protected.",
     target_not_found: "That team member no longer exists.",
     database_error: "The database rejected the change. Try again.",
-    not_implemented: "Invites are not implemented by the current backend.",
+    invalid_email: "Enter a valid email address.",
+    invalid_name: "The name must be 255 characters or fewer.",
+    invalid_role: "Choose either admin or viewer.",
+    owner_email_protected: "The configured owner email is reserved for owner provisioning.",
+    user_exists: "That ClickUp email is already connected to TrackUp.",
   };
   return typeof error === "string" && messages[error] ? messages[error] : "The team operation failed. Try again.";
 }
@@ -32,6 +36,10 @@ export default function TeamMemberManager({ currentUserId }: TeamMemberManagerPr
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [mutating, setMutating] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<"admin" | "viewer">("viewer");
+  const [inviting, setInviting] = useState(false);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -55,6 +63,41 @@ export default function TeamMemberManager({ currentUserId }: TeamMemberManagerPr
     const timer = window.setTimeout(() => { void loadMembers(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadMembers]);
+
+  async function createInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setInviting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name: name || undefined, role }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(errorMessage(data.error));
+        return;
+      }
+      if (!data.user) {
+        setError("The server did not return the created profile.");
+        return;
+      }
+      setMembers((current) => {
+        const withoutDuplicate = current.filter((member) => member.id !== data.user.id);
+        return [...withoutDuplicate, data.user as Profile].sort((a, b) => a.created_at.localeCompare(b.created_at));
+      });
+      setEmail("");
+      setName("");
+      setRole("viewer");
+      setNotice(`${data.user.email} is pre-provisioned as ${data.user.role}. They must sign in through ClickUp using this same email.`);
+    } catch {
+      setError("Network error while creating the profile.");
+    } finally {
+      setInviting(false);
+    }
+  }
 
   async function updateRole(member: Profile, nextRole: "admin" | "viewer") {
     if (member.id === currentUserId || member.role === "owner" || member.role === nextRole) return;
@@ -114,9 +157,17 @@ export default function TeamMemberManager({ currentUserId }: TeamMemberManagerPr
         <button onClick={() => void loadMembers()} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-white/60 transition hover:bg-white/5 hover:text-white disabled:opacity-50"><RefreshCw size={14} className={loading ? "animate-spin" : ""} />Refresh</button>
       </header>
 
-      <div className="rounded-2xl border border-amber-400/15 bg-amber-500/5 p-4 text-sm text-amber-100/80"><p className="font-medium text-amber-100">Invites are not available yet.</p><p className="mt-1 text-xs leading-5 text-amber-100/55">The current backend has no invite/create-user implementation: <code className="rounded bg-black/20 px-1">POST /api/admin/users</code> returns <code className="rounded bg-black/20 px-1">501 not_implemented</code>. This page only exposes real role and active-status operations.</p></div>
+      <form onSubmit={(event) => void createInvite(event)} className="rounded-2xl border border-violet-400/15 bg-violet-500/5 p-5">
+        <div className="flex items-start gap-3"><UserPlus size={18} className="mt-0.5 text-violet-300" /><div><h2 className="text-sm font-semibold text-white">Pre-provision a ClickUp teammate</h2><p className="mt-1 text-xs leading-5 text-white/45">This creates a real TrackUp profile. No email is sent by the current architecture; the teammate must later sign in through ClickUp with the same email.</p></div></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_140px_auto] md:items-end">
+          <label className="block"><span className="mb-1.5 block text-xs text-white/50">ClickUp email</span><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="teammate@example.com" className="w-full rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-violet-400/50" /></label>
+          <label className="block"><span className="mb-1.5 block text-xs text-white/50">Name <span className="text-white/25">(optional)</span></span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Teammate name" className="w-full rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-violet-400/50" /></label>
+          <label className="block"><span className="mb-1.5 block text-xs text-white/50">Role</span><select value={role} onChange={(event) => setRole(event.target.value as "admin" | "viewer")} className="w-full rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/50"><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label>
+          <button type="submit" disabled={inviting} className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"><UserPlus size={15} />{inviting ? "Creating..." : "Create profile"}</button>
+        </div>
+      </form>
 
-      {(error || notice) && <div className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${error ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"}`}>{error ? <AlertCircle size={16} className="mt-0.5 shrink-0" /> : <CheckCircle size={16} className="mt-0.5 shrink-0" />}<span>{error ?? notice}</span></div>}
+      {(error || notice) && <div role="status" className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${error ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"}`}>{error ? <AlertCircle size={16} className="mt-0.5 shrink-0" /> : <CheckCircle size={16} className="mt-0.5 shrink-0" />}<span>{error ?? notice}</span></div>}
 
       {loading ? <div className="space-y-3">{[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl border border-white/6 bg-white/[0.03]" />)}</div> : error && members.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 px-6 py-14 text-center"><AlertCircle size={28} className="mx-auto mb-3 text-red-300/70" /><p className="text-sm text-white/50">Team directory could not be loaded.</p><button onClick={() => void loadMembers()} className="mt-4 text-sm text-violet-300 hover:text-violet-200">Try again</button></div> : members.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 px-6 py-14 text-center"><UserCheck size={28} className="mx-auto mb-3 text-white/20" /><p className="text-sm text-white/50">No profiles found.</p></div> : <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03]"><div className="hidden grid-cols-[1fr_120px_110px_220px] gap-4 border-b border-white/8 px-5 py-3 text-[10px] uppercase tracking-[0.16em] text-white/30 md:grid"><span>Member</span><span>Role</span><span>Status</span><span>Owner actions</span></div><div className="divide-y divide-white/7">{members.map((member) => { const protectedAccount = member.id === currentUserId || member.role === "owner"; const busy = mutating === member.id; return <div key={member.id} className="grid gap-3 px-5 py-4 md:grid-cols-[1fr_120px_110px_220px] md:items-center md:gap-4"><div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-300"><Shield size={15} /></div><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{member.name || member.email}</p><p className="truncate text-xs text-white/35">{member.email}</p></div></div><span className={`w-fit rounded-full border px-2 py-1 text-[10px] uppercase tracking-wide ${roleStyle(member.role)}`}>{member.role}</span><span className={`w-fit rounded-full px-2 py-1 text-[10px] ${member.is_active ? "bg-emerald-500/10 text-emerald-200" : "bg-red-500/10 text-red-200"}`}>{member.is_active ? "Active" : "Inactive"}</span><div className="flex flex-wrap items-center gap-2"><button onClick={() => void updateRole(member, member.role === "admin" ? "viewer" : "admin")} disabled={protectedAccount || busy} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white/60 transition hover:border-violet-400/25 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-35">{member.role === "admin" ? "Make viewer" : "Promote admin"}</button><button onClick={() => void updateStatus(member)} disabled={protectedAccount || busy} title={member.is_active ? "Deactivate account" : "Activate account"} className="rounded-lg border border-white/10 p-1.5 text-white/45 transition hover:border-red-400/25 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-35">{member.is_active ? <UserX size={14} /> : <UserCheck size={14} />}</button></div></div>; })}</div></div>}
     </div>
