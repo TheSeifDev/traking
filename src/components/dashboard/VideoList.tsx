@@ -225,8 +225,8 @@ export default function VideoList({ role }: VideoListProps) {
                 <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-white/45">{video.description || "No description added."}</p>
 
                 <div className="mt-auto grid grid-cols-3 gap-2 border-t border-white/7 pt-4 text-center">
-                  <div><p className="text-lg font-semibold text-white">{video.view_count ?? 0}</p><p className="text-[10px] uppercase tracking-wide text-white/35">Views</p></div>
-                  <div><p className="text-lg font-semibold text-white">{video.watch_links?.length ?? 0}</p><p className="text-[10px] uppercase tracking-wide text-white/35">Links</p></div>
+                  <div><p className="text-lg font-semibold text-white">{video.view_count ?? 0}</p><p className="text-[10px] uppercase tracking-wide text-white/35">Sessions</p></div>
+                  <div><p className="text-lg font-semibold text-white">{activeLinks}</p><p className="text-[10px] uppercase tracking-wide text-white/35">Active link</p></div>
                   <div><p className="text-lg font-semibold text-white">{video.avg_completion === null || video.avg_completion === undefined ? "—" : `${video.avg_completion}%`}</p><p className="text-[10px] uppercase tracking-wide text-white/35">Completion</p></div>
                 </div>
 

@@ -126,7 +126,7 @@ async function runTests(): Promise<void> {
   assert(watchLinkPanel.includes("appOrigin") && !watchLinkPanel.includes("window.location.origin"), "watch-link UI builds URLs without server-side window access");
   assert(watchPage.includes("getCurrentUser") && watchPage.includes("Sign in to watch this video") && watchPage.includes("/login?redirect="), "viewer requires auth and preserves the exact return path");
   assert(videoList.includes('video.avg_completion === null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
-  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("statusLabel"), "video library derives YouTube thumbnails and link status from real fields");
+  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("statusLabel") && videoList.includes("Active link"), "video library derives thumbnails, link status, and the single active-link metric from real fields");
   assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksPage.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
