@@ -1,5 +1,8 @@
 const PRODUCTION_APP_URL = "https://trakeup.vercel.app";
 const DEVELOPMENT_APP_URL = "http://localhost:3000";
+const CLICKUP_CALLBACK_PATH = "/api/auth/clickup/callback";
+const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`;
+const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`;
 
 function normalizeAppUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
@@ -33,20 +36,28 @@ export function getAppUrl(): string {
 }
 
 /**
- * Returns the callback URI sent to ClickUp and used during token exchange.
- * A localhost callback is valid for local development only; production uses
- * the public Trakeup callback even if an old Vercel value still says localhost.
+ * Returns the exact callback URI for the current deployment environment.
+ * ClickUp must register both values on the same OAuth app:
+ * - local development: https://localhost:3000/api/auth/clickup/callback
+ * - production/Vercel: https://trakeup.vercel.app/api/auth/clickup/callback
+ *
+ * A stale CLICKUP_REDIRECT_URI is ignored when it points at the other
+ * environment, preventing production from redirecting to localhost and
+ * preventing local development from accidentally using the production URI.
  */
 export function getClickUpRedirectUri(): string {
   const configured = process.env.CLICKUP_REDIRECT_URI;
-  if (configured) {
-    const normalized = normalizeAppUrl(configured);
-    if (normalized && (process.env.NODE_ENV !== "production" || !isLocalAppUrl(normalized))) {
-      return normalized;
-    }
+  const expected = process.env.NODE_ENV === "production"
+    ? PRODUCTION_CLICKUP_REDIRECT_URI
+    : DEVELOPMENT_CLICKUP_REDIRECT_URI;
+
+  if (configured && normalizeAppUrl(configured) === expected) {
+    return expected;
   }
 
-  return `${getAppUrl()}/api/auth/clickup/callback`;
+  return expected;
 }
 
 export const PRODUCTION_APP_ORIGIN = PRODUCTION_APP_URL;
+export const PRODUCTION_CLICKUP_CALLBACK_URI = PRODUCTION_CLICKUP_REDIRECT_URI;
+export const DEVELOPMENT_CLICKUP_CALLBACK_URI = DEVELOPMENT_CLICKUP_REDIRECT_URI;
