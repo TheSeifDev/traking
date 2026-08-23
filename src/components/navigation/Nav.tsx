@@ -65,7 +65,7 @@ const Nav = () => {
           <Link
             href="/login"
             className="
-              flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 
+              flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4
               bg-linear-to-r from-[#8b3dff] to-[#5d4cff] 
               text-[13px] font-semibold text-white 
               shadow-[0_8px_30px_rgba(105,65,255,0.28)] transition-all duration-200 

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
 
@@ -9,8 +9,25 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Video Tracker",
-  description: "Video tracking and analytics platform",
+  metadataBase: new URL("https://trakeup.vercel.app"),
+  title: {
+    default: "TrackUp | Video intelligence for ClickUp teams",
+    template: "%s | TrackUp",
+  },
+  description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+  applicationName: "TrackUp",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/logo.ico", sizes: "256x256", type: "image/x-icon" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/logo.ico",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#070720",
 };
 
 export default function RootLayout({

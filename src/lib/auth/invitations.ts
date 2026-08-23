@@ -119,23 +119,72 @@ function invitationUrl(rawToken: string): string {
   return `${getAppUrl()}/invite/${encodeURIComponent(rawToken)}`;
 }
 
-function invitationEmail(input: { name: string | null; role: ManagedRole; url: string }): { html: string; text: string } {
-  const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>\"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '\"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+function invitationEmail(input: {
+  name: string | null;
+  role: ManagedRole;
+  url: string;
+  inviterName: string | null;
+  appUrl: string;
+}): { html: string; text: string } {
+  const safeName = input.name ? escapeHtml(input.name) : null;
+  const greeting = safeName ? `Hi ${safeName},` : "Hi,";
   const roleLabel = input.role === USER_ROLES.ADMIN ? "Admin" : "Viewer";
+  const inviterLabel = input.inviterName ? escapeHtml(input.inviterName) : "Your TrackUp team";
+  const safeUrl = escapeHtml(input.url);
+  const safeLogoUrl = escapeHtml(`${input.appUrl}/logo.webp`);
+  const plainGreeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const plainInviterLabel = input.inviterName || "Your TrackUp team";
   return {
-    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17172f;line-height:1.6"><h1>You have been invited to TrackUp</h1><p>${greeting}</p><p>You have been invited to join TrackUp as a <strong>${roleLabel}</strong>.</p><p><a href="${input.url}" style="display:inline-block;background:#6d28d9;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none">Accept invitation</a></p><p>This secure invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.</p></body></html>`,
-    text: `${greeting}\n\nYou have been invited to join TrackUp as a ${roleLabel}.\n\nAccept your invitation: ${input.url}\n\nThis secure invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.`,
+    html: `<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="margin:0;background:#f4f3fb;color:#17172f;font-family:Arial,Helvetica,sans-serif;line-height:1.6">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#f4f3fb;padding:32px 12px">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e7e4f3;border-radius:18px;overflow:hidden">
+          <tr><td style="padding:24px 28px;background:#070720;color:#ffffff">
+            <img src="${safeLogoUrl}" alt="TrackUp" width="112" style="display:block;width:112px;height:auto;border:0">
+            <div style="margin-top:10px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#a8a0ff">Secure video workspace</div>
+          </td></tr>
+          <tr><td style="padding:32px 28px 12px">
+            <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#7658e8;font-weight:bold">You have been invited</div>
+            <h1 style="margin:10px 0 14px;font-size:28px;line-height:1.2;color:#17172f">Join TrackUp</h1>
+            <p style="margin:0 0 16px">${greeting}</p>
+            <p style="margin:0 0 16px"><strong>${inviterLabel}</strong> invited you to join TrackUp as a <strong>${roleLabel}</strong>.</p>
+            <p style="margin:0 0 24px;color:#4d4a68">TrackUp keeps shared video review organized, private, and measurable inside one workspace.</p>
+            <p style="margin:0 0 24px"><a href="${safeUrl}" style="display:inline-block;background:#6d28d9;color:#ffffff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Accept invitation</a></p>
+            <p style="margin:0 0 8px;color:#67637e;font-size:13px">This invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.</p>
+            <p style="margin:16px 0 0;color:#67637e;font-size:12px;word-break:break-all">If the button does not work, copy and paste this URL into your browser:<br><a href="${safeUrl}" style="color:#5b3fd1">${safeUrl}</a></p>
+          </td></tr>
+          <tr><td style="padding:20px 28px 26px;border-top:1px solid #eeeaf8;color:#85819a;font-size:12px">This is a secure TrackUp invitation. If you were not expecting it, you can safely ignore this email.<br><span style="display:inline-block;margin-top:8px;color:#aaa6b8">TrackUp · Private video review for ClickUp-connected teams</span></td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`,
+    text: `${plainGreeting}\n\n${plainInviterLabel} invited you to join TrackUp as a ${roleLabel}.\n\nTrackUp keeps shared video review organized, private, and measurable inside one workspace.\n\nAccept your invitation: ${input.url}\n\nThis invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.\n\nIf you were not expecting this invitation, you can safely ignore this email.\n\nTrackUp`,
   };
 }
 
-async function sendInvitationEmail(input: { invitationId: string; email: string; name: string | null; role: ManagedRole; rawToken: string }) {
-  const message = invitationEmail({ name: input.name, role: input.role, url: invitationUrl(input.rawToken) });
+async function sendInvitationEmail(input: { invitationId: string; email: string; name: string | null; role: ManagedRole; rawToken: string; inviterName: string | null }) {
+  const appUrl = getAppUrl();
+  const message = invitationEmail({ name: input.name, role: input.role, url: invitationUrl(input.rawToken), inviterName: input.inviterName, appUrl });
   return sendTransactionalEmail({
     to: input.email,
     subject: "You are invited to TrackUp",
     html: message.html,
     text: message.text,
-    idempotencyKey: `trackup-invitation-${input.invitationId}-${input.rawToken.slice(0, 16)}`,
+    idempotencyKey: `trackup-invitation-${input.invitationId}`,
   });
 }
 
@@ -252,7 +301,7 @@ export async function createInvitation(email: string, name: string | null, reque
       .single();
     if (insertInvitationError || !invitation) return { success: false, error: "database_error" };
 
-    const delivery = await sendInvitationEmail({ invitationId: invitation.id, email: normalizedEmail, name: profile.name, role: requestedRole, rawToken });
+    const delivery = await sendInvitationEmail({ invitationId: invitation.id, email: normalizedEmail, name: profile.name, role: requestedRole, rawToken, inviterName: requester.name });
     if (!delivery.success) {
       await supabase.from("invitations").update({ revoked_at: new Date().toISOString() }).eq("id", invitation.id).is("accepted_at", null);
       return delivery;
@@ -297,7 +346,7 @@ export async function resendInvitation(invitationId: string): Promise<Invitation
       .single();
     if (replacementError || !replacement) return { success: false, error: "database_error" };
 
-    const delivery = await sendInvitationEmail({ invitationId: replacement.id, email: profile.email, name: profile.name, role: replacement.role, rawToken });
+    const delivery = await sendInvitationEmail({ invitationId: replacement.id, email: profile.email, name: profile.name, role: replacement.role, rawToken, inviterName: requester.name });
     if (!delivery.success) {
       await supabase.from("invitations").update({ revoked_at: new Date().toISOString() }).eq("id", replacement.id).is("accepted_at", null);
       return delivery;

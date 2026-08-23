@@ -533,7 +533,7 @@ export default function WatchPlayer({
   if (error) {
     const loginUrl = `/login?redirect=${encodeURIComponent(`/watch/${watchLinkToken}`)}`;
     return (
-      <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-xl border border-red-400/20 bg-red-500/5 px-6 text-center">
+      <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-red-400/20 bg-[#120b22] px-6 text-center shadow-2xl shadow-black/25">
         <AlertCircle size={25} className="text-red-300" />
         <p className="text-sm text-red-100">{error}</p>
         {error.includes("sign-in") && <a href={loginUrl} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-500">Sign in again</a>}
@@ -543,8 +543,8 @@ export default function WatchPlayer({
   }
 
   return (
-    <div>
-      <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+    <div className="space-y-3">
+      <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/25">
         {isDirectUrl ? (
           <video
             ref={videoRef}
@@ -586,7 +586,7 @@ export default function WatchPlayer({
           </div>
         )}
       </div>
-      <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-white/40"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p>
+      <p className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/45"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p>
     </div>
   );
 }

@@ -17,6 +17,13 @@ const presence = readFileSync("supabase/migrations/20260824000003_add_profile_la
 const adminRoute = readFileSync("app/api/admin/users/route.ts", "utf8");
 const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
 const startRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
+const resend = readFileSync("src/lib/email/resend.ts", "utf8");
+const envExample = readFileSync(".env.example", "utf8");
+const rootLayout = readFileSync("app/layout.tsx", "utf8");
+const watchPlayer = readFileSync("src/components/watch/WatchPlayer.tsx", "utf8");
+const publicNav = readFileSync("src/components/navigation/Nav.tsx", "utf8");
+const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
+const favicon = readFileSync("app/favicon.ico");
 
 assert(service.includes("randomBytes(32)") && service.includes("createHash(\"sha256\")"), "creation uses cryptographically random raw token and SHA-256 digest");
 assert(!service.includes("token: rawToken") && !service.includes("raw_token: rawToken"), "database insert does not persist raw token");
@@ -28,6 +35,14 @@ assert(acceptance.includes("v_invitation.email <> v_email") && acceptance.includ
 assert(acceptance.includes("FOR UPDATE") && acceptance.includes("SET accepted_at = v_now"), "acceptance locks and marks one invitation atomically");
 assert(adminRoute.includes("withPermission") && adminRoute.includes("PERMISSIONS.USERS_MANAGE") && adminRoute.includes("delivery_not_configured"), "creation endpoint is protected and exposes configuration failure honestly");
 assert(startRoute.includes("hashInvitationToken") && startRoute.includes("createInvitationContextCookie"), "invite start carries only hashed context through OAuth");
+assert(resend.includes("process.env.RESEND_API_KEY") && resend.includes("process.env.RESEND_FROM_EMAIL") && !resend.includes("use client"), "Resend configuration remains server-only and environment-driven");
+assert(envExample.includes("RESEND_API_KEY=") && envExample.includes("RESEND_FROM_EMAIL=") && envExample.includes("RESEND_REPLY_TO="), "Resend environment variables are documented without committed secrets");
+assert(service.includes("logo.webp") && service.includes("Accept invitation") && service.includes("expires in 7 days") && service.includes("text:") && !service.includes("<script"), "invitation email is branded, responsive-safe, and includes plain-text fallback");
+assert(service.includes("idempotencyKey: `trackup-invitation-${input.invitationId}`") && !service.includes("rawToken.slice"), "email idempotency key never contains raw invitation token material");
+assert(rootLayout.includes("metadataBase: new URL(\"https://trakeup.vercel.app\")") && rootLayout.includes("/favicon.ico") && rootLayout.includes("themeColor"), "root metadata uses TrackUp production identity and favicon");
+assert(!watchPlayer.includes("View in YouTube") && !watchPlayer.includes("view in YouTube"), "viewer contains no custom external YouTube CTA");
+assert(publicNav.includes('src="/logo.webp"') && dashboardShell.includes('src="/logo.webp"'), "TrackUp logo asset is used in public and dashboard navigation");
+assert(favicon.length > 1000, "favicon is a non-empty TrackUp icon asset");
 assert(presence.includes("interval '5 minutes'") && presenceRoute.includes("withAuth") && presenceRoute.includes("user.id"), "presence uses authenticated identity and server debounce");
 assert(!presenceRoute.includes("request.json") && !presenceRoute.includes("user_id"), "presence route accepts no client-supplied identity");
 

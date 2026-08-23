@@ -5,6 +5,7 @@
  * not rendered, and the page stays non-indexable. Viewing requires an active
  * TrackUp session; the original viewer path is preserved through ClickUp OAuth.
  */
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolveWatchLink } from "@/src/lib/tracking/service";
@@ -16,9 +17,9 @@ type Props = { params: Promise<{ token: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
   const resolved = await resolveWatchLink(token);
-  if (!resolved) return { title: "Video Not Found | TrackUp" };
+  if (!resolved) return { title: "Video Not Found" };
   return {
-    title: `${resolved.title} | TrackUp`,
+    title: resolved.title,
     description: "Watch this video inside TrackUp.",
     robots: { index: false, follow: false },
   };
@@ -31,9 +32,7 @@ function LoginRequired({ token }: { token: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#070720] px-5 py-12 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl shadow-black/20 sm:p-9">
-        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-500">
-          <span className="font-bold">T</span>
-        </div>
+        <Image src="/logo.webp" alt="TrackUp" width={44} height={44} priority className="mx-auto h-11 w-11 object-contain" />
         <p className="mt-6 text-xs uppercase tracking-[0.18em] text-violet-300/70">Private viewer</p>
         <h1 className="mt-2 text-2xl font-semibold">Sign in to watch this video</h1>
         <p className="mt-3 text-sm leading-6 text-white/50">
@@ -68,7 +67,7 @@ export default async function WatchPage({ params }: Props) {
       <div className="mx-auto w-full max-w-5xl">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-blue-500"><span className="text-xs font-bold">T</span></div>
+            <Image src="/logo.webp" alt="TrackUp" width={40} height={40} priority className="h-8 w-8 object-contain" />
             <span className="text-sm font-semibold tracking-wide text-white/85">TrackUp</span>
           </div>
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-white/40">Private viewer</span>
@@ -80,7 +79,7 @@ export default async function WatchPage({ params }: Props) {
             <span className="w-fit rounded-full border border-violet-400/15 bg-violet-500/10 px-2.5 py-1 text-xs capitalize text-violet-200">{sourceLabel}</span>
           </div>
           <WatchPlayer watchLinkToken={token} title={resolved.title} sourceType={resolved.source_type} sourceUrl={resolved.source_url} duration={resolved.duration} />
-          <div className="mt-6 flex flex-col gap-2 border-t border-white/8 pt-4 text-xs leading-5 text-white/35 sm:flex-row sm:items-center sm:justify-between"><span>{hasPlaybackTelemetry ? "Your playback session is registered securely by TrackUp." : "This provider does not expose reliable playback callbacks, so TrackUp does not record fabricated session metrics."}</span><span>{isDirectUrl ? "Native playback metrics are available." : resolved.source_type === "youtube" ? "YouTube IFrame metrics are available." : "Playback metrics are unavailable for this provider."}</span></div>
+          <div className="mt-6 flex flex-col gap-2 border-t border-white/8 pt-4 text-xs leading-5 text-white/35 sm:flex-row sm:items-center sm:justify-between"><span>{hasPlaybackTelemetry ? "Your playback session is registered securely by TrackUp." : "This provider does not expose reliable playback callbacks, so TrackUp does not record fabricated session metrics."}</span><span>{isDirectUrl ? "Native playback telemetry is supported." : resolved.source_type === "youtube" ? "YouTube IFrame telemetry is supported when valid player events are stored." : "Playback metrics are unavailable for this provider."}</span></div>
         </section>
 
         <p className="mt-5 text-center text-xs text-white/25">Shared through TrackUp · This page does not send viewers to the source provider.</p>

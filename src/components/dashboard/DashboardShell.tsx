@@ -84,8 +84,8 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
-          <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-500 to-blue-500"><span className="text-xs font-bold text-white">T</span></div>
+          <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5" aria-label="TrackUp dashboard">
+            <Image src="/logo.webp" alt="TrackUp" width={44} height={44} priority className="h-8 w-8 shrink-0 object-contain" />
             <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{workspace && <span className="block max-w-28 truncate text-[10px] text-white/35">{workspace.name}</span>}</div>
           </Link>
           <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
