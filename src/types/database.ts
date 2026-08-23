@@ -134,6 +134,73 @@ export interface Database {
         };
         Relationships: [];
       };
+      owner_logs: {
+        Row: {
+          id: string;
+          created_at: string;
+          level: "INFO" | "WARN" | "ERROR";
+          category: "AUTH" | "TRACKING" | "SESSION" | "VIDEO" | "ANALYTICS" | "API" | "DATABASE" | "SYSTEM" | "PROVIDER" | "SECURITY";
+          action: string;
+          user_id: string | null;
+          video_id: string | null;
+          session_id: string | null;
+          route: string | null;
+          status: number | null;
+          duration_ms: number | null;
+          metadata: Json;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          level: "INFO" | "WARN" | "ERROR";
+          category: "AUTH" | "TRACKING" | "SESSION" | "VIDEO" | "ANALYTICS" | "API" | "DATABASE" | "SYSTEM" | "PROVIDER" | "SECURITY";
+          action: string;
+          user_id?: string | null;
+          video_id?: string | null;
+          session_id?: string | null;
+          route?: string | null;
+          status?: number | null;
+          duration_ms?: number | null;
+          metadata?: Json;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          level?: "INFO" | "WARN" | "ERROR";
+          category?: "AUTH" | "TRACKING" | "SESSION" | "VIDEO" | "ANALYTICS" | "API" | "DATABASE" | "SYSTEM" | "PROVIDER" | "SECURITY";
+          action?: string;
+          user_id?: string | null;
+          video_id?: string | null;
+          session_id?: string | null;
+          route?: string | null;
+          status?: number | null;
+          duration_ms?: number | null;
+          metadata?: Json;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "owner_logs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_logs_video_id_fkey";
+            columns: ["video_id"];
+            isOneToOne: false;
+            referencedRelation: "videos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "owner_logs_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "watch_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspaces: {
         Row: {
           id: string;

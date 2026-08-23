@@ -5,6 +5,7 @@ import { AlertCircle, Info, RotateCcw } from "lucide-react";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
 
 type YouTubeStateChangeEvent = { data: number };
+type YouTubeErrorEvent = { data?: number };
 type YouTubeReadyEvent = { target: YouTubePlayer };
 type YouTubePlayer = {
   getCurrentTime: () => number;
@@ -22,7 +23,7 @@ type YouTubeApi = {
       events: {
         onReady: (event: YouTubeReadyEvent) => void;
         onStateChange: (event: YouTubeStateChangeEvent) => void;
-        onError?: () => void;
+        onError?: (event?: YouTubeErrorEvent) => void;
       };
     },
   ) => YouTubePlayer;
@@ -297,6 +298,18 @@ export default function WatchPlayer({
     return request;
   }, [watchLinkToken]);
 
+  const reportProviderError = useCallback((providerCode: number) => {
+    const sessionId = sessionIdRef.current;
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionId || !sessionToken || !Number.isInteger(providerCode)) return;
+    void fetch("/api/tracking/provider-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, source_type: sourceType, provider_code: providerCode }),
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [sourceType]);
+
   const accumulateWatchTime = useCallback((resume: boolean) => {
     const playStartedAt = startTimeRef.current;
     if (playStartedAt === null) return;
@@ -548,8 +561,9 @@ export default function WatchPlayer({
             setPlayerReady(true);
           },
           onStateChange: handleYouTubeStateChange,
-          onError: () => {
+          onError: (providerError) => {
             setError("YouTube could not load this video inside TrackUp.");
+            reportProviderError(providerError?.data ?? 0);
             void endSession();
           },
         },
@@ -566,7 +580,7 @@ export default function WatchPlayer({
       player?.destroy();
       youtubePlayerRef.current = null;
     };
-  }, [endSession, handleYouTubeStateChange, isYouTube, retryNonce, sourceUrl, stopHeartbeat]);
+  }, [endSession, handleYouTubeStateChange, isYouTube, reportProviderError, retryNonce, sourceUrl, stopHeartbeat]);
 
   useEffect(() => {
     const onBeforeUnload = () => { void endSession(); };

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2 } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
 
@@ -22,10 +22,15 @@ const navItems = [
 ];
 
 const teamNavItem = { label: "Team", href: "/admin/users", icon: UsersRound };
+const ownerNavItem = { label: "Owner console", href: "/owner", icon: ShieldCheck };
 
 export default function DashboardShell({ children, user, workspace }: DashboardShellProps) {
   const pathname = usePathname();
-  const visibleNavItems = user.role === "owner" || user.role === "admin" ? [...navItems, teamNavItem] : navItems;
+  const visibleNavItems = user.role === "owner"
+    ? [...navItems, teamNavItem, ownerNavItem]
+    : user.role === "admin"
+      ? [...navItems, teamNavItem]
+      : navItems;
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";

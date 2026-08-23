@@ -27,6 +27,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireRole, requirePermission, AuthError } from "./session";
 import type { AuthenticatedUser, UserRole } from "@/src/types/auth";
 import type { Permission } from "@/src/types/permissions";
+import { writeOwnerLog } from "@/src/lib/observability/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,11 +52,19 @@ function authErrorToResponse(err: unknown): NextResponse {
           ? 403
           : 500;
 
+    void writeOwnerLog({
+      level: status >= 500 ? "ERROR" : "WARN",
+      category: "AUTH",
+      action: `auth_${err.code}`,
+      status,
+      metadata: { auth_error: err.code },
+    });
     return NextResponse.json(
       { error: err.code },
       { status }
     );
   }
+  void writeOwnerLog({ level: "ERROR", category: "AUTH", action: "auth_unknown_failure", status: 500 });
   return NextResponse.json({ error: "server_error" }, { status: 500 });
 }
 

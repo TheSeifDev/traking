@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
+import { writeOwnerLog } from "@/src/lib/observability/logger";
 
 export interface ViewerClientMetadata {
   device_type: string | null;
@@ -137,12 +138,33 @@ export async function createWatchSession(
       .single();
 
     if (error || !data) {
-      console.error("Failed to create watch session", error);
+      console.error("Failed to create watch session", { code: error?.code ?? "missing_data" });
+      void writeOwnerLog({
+        level: "ERROR",
+        category: "TRACKING",
+        action: "session_create_failed",
+        userId: viewerIdentity,
+        metadata: { reason: error?.code ?? "missing_data" },
+      });
       return null;
     }
 
+    void writeOwnerLog({
+      level: "INFO",
+      category: "SESSION",
+      action: "session_created",
+      userId: viewerIdentity,
+      sessionId: data.id,
+      metadata: { watch_link_id: watchLinkId },
+    });
     return { id: data.id, sessionToken: data.session_token };
   } catch {
+    void writeOwnerLog({
+      level: "ERROR",
+      category: "TRACKING",
+      action: "session_create_exception",
+      userId: viewerIdentity,
+    });
     return null;
   }
 }
@@ -196,7 +218,17 @@ export async function recordTrackingEvents(
   viewerIdentity: string,
 ): Promise<boolean> {
   if (!sessionId || !sessionToken || events.length === 0) return false;
-  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
+  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) {
+    void writeOwnerLog({
+      level: "WARN",
+      category: "SECURITY",
+      action: "tracking_events_rejected",
+      userId: viewerIdentity,
+      sessionId,
+      metadata: { event_count: events.length, reason: "unauthorized_session" },
+    });
+    return false;
+  }
 
   try {
     const supabase = createAdminClient();
@@ -212,7 +244,17 @@ export async function recordTrackingEvents(
       metadata: event.metadata ?? {},
     }));
     const { error } = await supabase.from("watch_events").upsert(rows, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
-    if (error) return false;
+    if (error) {
+      void writeOwnerLog({
+        level: "ERROR",
+        category: "DATABASE",
+        action: "tracking_events_persist_failed",
+        userId: viewerIdentity,
+        sessionId,
+        metadata: { event_count: events.length, reason: error.code },
+      });
+      return false;
+    }
 
     const { error: sessionUpdateError } = await supabase
       .from("watch_sessions")
@@ -220,7 +262,26 @@ export async function recordTrackingEvents(
       .eq("id", sessionId)
       .eq("session_token", sessionToken)
       .is("ended_at", null);
-    return !sessionUpdateError;
+    if (sessionUpdateError) {
+      void writeOwnerLog({
+        level: "ERROR",
+        category: "DATABASE",
+        action: "tracking_session_touch_failed",
+        userId: viewerIdentity,
+        sessionId,
+        metadata: { reason: sessionUpdateError.code },
+      });
+      return false;
+    }
+    void writeOwnerLog({
+      level: "INFO",
+      category: "TRACKING",
+      action: "tracking_events_recorded",
+      userId: viewerIdentity,
+      sessionId,
+      metadata: { event_count: events.length, event_types: Array.from(new Set(events.map((event) => event.event_type))).slice(0, 8) },
+    });
+    return true;
   } catch {
     return false;
   }
@@ -231,6 +292,25 @@ export async function recordTrackingEvent(
   viewerIdentity: string,
 ): Promise<boolean> {
   return recordTrackingEvents(payload.session_id, payload.session_token, [payload], viewerIdentity);
+}
+
+export async function recordProviderError(
+  sessionId: string,
+  sessionToken: string,
+  viewerIdentity: string,
+  sourceType: "youtube" | "direct_url",
+  providerCode: number,
+): Promise<boolean> {
+  if (!Number.isInteger(providerCode) || providerCode < 1 || providerCode > 999) return false;
+  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
+  return writeOwnerLog({
+    level: "WARN",
+    category: "PROVIDER",
+    action: "provider_error_reported",
+    userId: viewerIdentity,
+    sessionId,
+    metadata: { source_type: sourceType, provider_code: providerCode },
+  });
 }
 
 /**
@@ -283,8 +363,34 @@ export async function endWatchSession(
       .select("id")
       .maybeSingle();
 
-    return !error && !!data;
+    if (error || !data) {
+      void writeOwnerLog({
+        level: "ERROR",
+        category: "DATABASE",
+        action: "session_end_failed",
+        userId: viewerIdentity,
+        sessionId,
+        metadata: { reason: error?.code ?? "not_updated" },
+      });
+      return false;
+    }
+    void writeOwnerLog({
+      level: "INFO",
+      category: "SESSION",
+      action: "session_ended",
+      userId: viewerIdentity,
+      sessionId,
+      metadata: { completion_percentage: Math.min(100, Math.max(0, completionPercentage)) },
+    });
+    return true;
   } catch {
+    void writeOwnerLog({
+      level: "ERROR",
+      category: "SESSION",
+      action: "session_end_exception",
+      userId: viewerIdentity,
+      sessionId,
+    });
     return false;
   }
 }

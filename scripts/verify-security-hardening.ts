@@ -83,7 +83,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes('.eq("session_token", sessionToken)'), "session end updates scope by capability");
   assert(trackingService.includes('event_type: "ended"') && trackingService.includes("position: position ?? 0") && trackingService.includes("duration: duration ?? null"), "session end stores an ended event only when final player telemetry exists");
   assert(trackingService.includes("duration: event.duration !== null") && trackingService.includes("duration: event.duration"), "provider duration is stored with each event");
-  assert(trackingService.includes("const { error: sessionUpdateError } = await supabase") && trackingService.includes("return !sessionUpdateError"), "event ingestion awaits the last-activity session update");
+  assert(trackingService.includes("const { error: sessionUpdateError } = await supabase") && trackingService.includes("if (sessionUpdateError)") && trackingService.includes("return true"), "event ingestion awaits the last-activity session update");
   assert(trackingService.includes("from_position: event.from_position !== null") && trackingService.includes("from_position: event.from_position"), "seek origin is stored in the dedicated from_position field");
   assert(trackingService.includes("hashViewerIdentity") && trackingService.includes('.select("id, viewer_identifier, viewer_profile_id")') && trackingService.includes("data.viewer_profile_id === viewerIdentity && data.viewer_identifier === await hashViewerIdentity(viewerIdentity)"), "tracking writes are bound to the exact authenticated profile identity and its stable hash");
   assert(trackingService.includes('.is("ended_at", null)'), "events and session end reject already-ended sessions");
