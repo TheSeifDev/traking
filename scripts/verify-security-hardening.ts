@@ -134,7 +134,7 @@ async function runTests(): Promise<void> {
   assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");
   assert(watchLinkService.includes("23505") && watchLinkService.includes("toResult(racedLink, true)"), "watch-link generation safely reuses the active link across concurrent requests");
   assert(watchLinkRoute.includes("link.reused ? 200 : 201"), "watch-link API distinguishes a newly created link from an existing active link");
-  assert(watchLinkPanel.includes("Copy active link") && watchLinkPanel.includes("One active TrackUp viewer link per video"), "watch-link UI communicates and reuses the single active link contract");
+  assert(watchLinkPanel.includes("Viewer link") && watchLinkPanel.includes("One private TrackUp link per video") && !watchLinkPanel.includes("Copy active link"), "watch-link UI communicates a single viewer-link contract without duplicate header actions");
   assert(watchLinkRoute.includes("export const DELETE") && watchLinkRoute.includes("revokeWatchLink"), "watch-link route exposes protected DELETE revocation");
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
@@ -149,9 +149,9 @@ async function runTests(): Promise<void> {
   assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksManager.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(watchLinksManager.includes("Search watch links") && watchLinksManager.includes("Revoked links") && watchLinksManager.includes("No active link"), "watch-links UI provides searchable access cards and explicit active/revoked states");
-  assert(watchLinksManager.includes("aspect-video") && watchLinksManager.includes("line-clamp-2") && watchLinksManager.includes("grid-cols-2") && watchLinksManager.includes("grid-cols-1"), "watch-links cards preserve media ratio and mobile information hierarchy");
-  assert(watchLinkPanel.includes("min-h-11") && watchLinkPanel.includes("flex-col gap-2 sm:w-auto sm:flex-row"), "watch-link actions maintain mobile touch targets and stack without overflow");
-  assert(watchLinkPanel.includes("Revoked history") && watchLinkPanel.includes("View audit") && !watchLinkPanel.includes("historyLinks.map((link) => {\n            const url"), "watch-link history is separated from active access without presenting revoked URLs as active");
+  assert(watchLinksManager.includes("aspect-video") && watchLinksManager.includes("line-clamp-2") && watchLinksManager.includes("grid-cols-3") && watchLinksManager.includes("grid-cols-1") && watchLinksManager.includes("Session counts are recorded views"), "watch-links cards preserve media ratio and compact page-level information hierarchy");
+  assert(watchLinkPanel.includes("min-h-11") && watchLinkPanel.includes("grid-cols-1") && watchLinkPanel.includes("sm:grid-cols-3") && watchLinkPanel.includes("Copy link") && watchLinkPanel.includes("Open") && watchLinkPanel.includes("Revoke"), "watch-link actions maintain mobile touch targets with explicit primary, secondary, and danger labels");
+  assert(watchLinkPanel.includes("Revoked history") && watchLinkPanel.includes("View audit") && watchLinkPanel.includes("previous URL hidden") && !watchLinkPanel.includes("historyLinks.map((link) => {\n            const url"), "watch-link history is separated from active access without presenting revoked URLs as active");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
   assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
   assert(watchPlayer.includes("https://www.youtube.com/iframe_api") && watchPlayer.includes("new api.Player"), "YouTube uses the official IFrame Player API inside TrackUp");
