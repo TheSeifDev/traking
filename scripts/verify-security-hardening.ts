@@ -94,6 +94,7 @@ async function runTests(): Promise<void> {
   section("Watch-link lifecycle and owner mutation checks");
   const revocationMigration = readFileSync("supabase/migrations/20260822000005_add_watch_link_revocation.sql", "utf8");
   const eventPositionMigration = readFileSync("supabase/migrations/20260822000006_add_watch_event_from_position.sql", "utf8");
+  const activeLinkMigration = readFileSync("supabase/migrations/20260823000001_enforce_one_active_watch_link.sql", "utf8");
   const watchLinkService = readFileSync("src/lib/videos/service.ts", "utf8");
   const watchLinkRoute = readFileSync("app/api/videos/[id]/watch-link/route.ts", "utf8");
   const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
@@ -108,6 +109,7 @@ async function runTests(): Promise<void> {
   const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
   assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
+  assert(activeLinkMigration.includes("CREATE UNIQUE INDEX") && activeLinkMigration.includes("WHERE revoked_at IS NULL"), "database enforces one active watch link per video while preserving revoked history");
   assert(revocationMigration.includes("idx_watch_links_revoked_at"), "watch-link revocation is indexed");
   assert(trackingService.includes("if (link.revoked_at) return null"), "revoked links cannot create new sessions");
   assert(trackingService.includes('.select("id, expires_at, revoked_at")') && trackingService.includes("const { data: activeLink"), "session creation re-checks link lifecycle before insert");
@@ -115,6 +117,9 @@ async function runTests(): Promise<void> {
   assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
   assert(watchLinkService.includes('.eq("workspace_id", workspaceId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video workspace ownership");
   assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");
+  assert(watchLinkService.includes("23505") && watchLinkService.includes("toResult(racedLink, true)"), "watch-link generation safely reuses the active link across concurrent requests");
+  assert(watchLinkRoute.includes("link.reused ? 200 : 201"), "watch-link API distinguishes a newly created link from an existing active link");
+  assert(watchLinkPanel.includes("Copy active link") && watchLinkPanel.includes("One active TrackUp viewer link per video"), "watch-link UI communicates and reuses the single active link contract");
   assert(watchLinkRoute.includes("export const DELETE") && watchLinkRoute.includes("revokeWatchLink"), "watch-link route exposes protected DELETE revocation");
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
@@ -147,7 +152,7 @@ async function runTests(): Promise<void> {
   assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
   assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
   assert(workspaceAnalyticsDashboard.includes("Views over time") && workspaceAnalyticsDashboard.includes("Top videos by watch time") && workspaceAnalyticsDashboard.includes("Date range"), "workspace analytics dashboard communicates overview charts and filters");
-  assert(dashboardPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "dashboard does not display unsupported completion as zero");
+  assert(dashboardPage.includes("formatDuration") && dashboardPage.includes("Not measured"), "dashboard does not display unsupported playback metrics as fabricated zeroes");
   assert(videoDetailPage.includes("VideoAnalyticsDashboard") && videoAnalyticsDashboard.includes("Coverage and heatmap") && videoAnalyticsDashboard.includes("Not measured yet"), "video analytics dashboard explains provider limits and honest empty states");
   assert(analyticsService.includes("viewer_sessions") && analyticsService.includes("first_play_at") && analyticsService.includes("last_activity_at") && analyticsService.includes("latestEvent"), "analytics service exposes per-session timestamps and viewer breakdown");
   assert(analyticsService.includes("from_position") && analyticsService.includes("eventsBySession") && analyticsService.includes("last_position"), "analytics service exposes supported playback event timelines and last position");

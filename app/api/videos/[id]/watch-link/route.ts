@@ -22,7 +22,7 @@ export const POST = withPermission(
 
     const link = await generateWatchLink(id, workspaceId, user.id);
     if (!link) return NextResponse.json({ error: "generation_failed" }, { status: 500 });
-    return NextResponse.json({ watch_link: link }, { status: 201 });
+    return NextResponse.json({ watch_link: link }, { status: link.reused ? 200 : 201 });
   },
 );
 

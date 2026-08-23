@@ -133,7 +133,7 @@ export default function VideoList({ role }: VideoListProps) {
         return;
       }
       await navigator.clipboard.writeText(url);
-      setNotice("Watch link created and copied to your clipboard.");
+      setNotice(data.watch_link.reused ? "The active TrackUp viewer link was copied." : "Watch link created and copied to your clipboard.");
       await fetchVideos();
     } catch {
       setError("The link was created, but copying it failed. Open the video to copy it manually.");
@@ -232,7 +232,7 @@ export default function VideoList({ role }: VideoListProps) {
 
                 <div className="mt-4 flex items-center gap-2">
                   <Link href={`/videos/${video.id}`} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600/15 px-3 py-2 text-xs font-medium text-violet-200 transition hover:bg-violet-600/25"><Eye size={14} />Open details</Link>
-                  {canManage && <button onClick={() => void handleShare(video)} disabled={sharing === video.id} title="Create and copy watch link" className="rounded-xl border border-white/10 p-2 text-white/45 transition hover:border-violet-400/30 hover:text-violet-200 disabled:opacity-50"><Link2 size={15} /></button>}
+                  {canManage && <button onClick={() => void handleShare(video)} disabled={sharing === video.id} title="Copy the active TrackUp viewer link" className="rounded-xl border border-white/10 p-2 text-white/45 transition hover:border-violet-400/30 hover:text-violet-200 disabled:opacity-50"><Link2 size={15} /></button>}
                   {canManage && <button onClick={() => void handleDelete(video)} disabled={deleting === video.id} title="Delete video" className="rounded-xl border border-white/10 p-2 text-white/35 transition hover:border-red-400/25 hover:text-red-200 disabled:opacity-50"><Trash2 size={15} /></button>}
                   <Link href={`/videos/${video.id}`} title="Open details" className="hidden rounded-xl border border-white/10 p-2 text-white/35 transition hover:text-white sm:block"><ExternalLink size={15} /></Link>
                 </div>

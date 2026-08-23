@@ -21,6 +21,7 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
   const [currentTime] = useState(() => new Date().getTime());
 
   const getUrl = (token: string) => `${appOrigin}/watch/${token}`;
+  const activeLink = links.find((link) => !link.revoked_at && !(link.expires_at && new Date(link.expires_at).getTime() <= currentTime));
 
   async function handleGenerate() {
     if (!canManage) return;
@@ -39,11 +40,14 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
         setError("The server did not return a valid watch link.");
         return;
       }
-      setLinks((current) => [link, ...current]);
+      setLinks((current) => {
+        const alreadyLoaded = current.some((item) => item.id === link.id);
+        return alreadyLoaded ? current.map((item) => item.id === link.id ? { ...item, ...link } : item) : [link, ...current];
+      });
       const url = typeof data.watch_link.url === "string" ? data.watch_link.url : getUrl(link.token);
       try {
         await navigator.clipboard.writeText(url);
-        setNotice("Watch link created and copied to your clipboard.");
+        setNotice(data.watch_link.reused ? "The active TrackUp viewer link was copied." : "Watch link created and copied to your clipboard.");
       } catch {
         setNotice("Watch link created. Copy it from the list below.");
       }
@@ -96,9 +100,9 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Link2 size={15} className="text-violet-400" />Viewer access</h2>
-          <p className="mt-1 text-xs text-white/35">Share a TrackUp page, not the provider URL. Revoke access at any time.</p>
+          <p className="mt-1 text-xs text-white/35">One active TrackUp viewer link per video. Revoke access at any time; historical revoked links remain visible for audit.</p>
         </div>
-        {canManage && <button onClick={() => void handleGenerate()} disabled={generating} className="flex items-center justify-center gap-1.5 rounded-xl border border-violet-400/20 bg-violet-600/15 px-3 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-600/25 disabled:opacity-50"><Plus size={14} />{generating ? "Creating..." : "Create link"}</button>}
+        {canManage && <button onClick={() => void handleGenerate()} disabled={generating} className="flex items-center justify-center gap-1.5 rounded-xl border border-violet-400/20 bg-violet-600/15 px-3 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-600/25 disabled:opacity-50"><>{activeLink ? <Copy size={14} /> : <Plus size={14} />}{generating ? "Checking..." : activeLink ? "Copy active link" : "Create viewer link"}</></button>}
       </div>
 
       {(error || notice) && <div className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs ${error ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"}`}>{error ? <AlertCircle size={15} className="mt-0.5 shrink-0" /> : <CheckCircle size={15} className="mt-0.5 shrink-0" />}<span>{error ?? notice}</span></div>}
