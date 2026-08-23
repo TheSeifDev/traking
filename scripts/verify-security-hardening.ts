@@ -105,6 +105,7 @@ async function runTests(): Promise<void> {
   const ownerAdminsRoute = readFileSync("app/api/owner/admins/route.ts", "utf8");
   const watchLinkPanel = readFileSync("src/components/dashboard/WatchLinkPanel.tsx", "utf8");
   const videoList = readFileSync("src/components/dashboard/VideoList.tsx", "utf8");
+  const videosApi = readFileSync("app/api/videos/route.ts", "utf8");
   const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
   const teamManager = readFileSync("src/components/dashboard/TeamMemberManager.tsx", "utf8");
   const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
@@ -138,8 +139,12 @@ async function runTests(): Promise<void> {
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
   assert(watchLinkPanel.includes("appOrigin") && !watchLinkPanel.includes("window.location.origin"), "watch-link UI builds URLs without server-side window access");
   assert(watchPage.includes("getCurrentUser") && watchPage.includes("Sign in to watch this video") && watchPage.includes("/login?redirect="), "viewer requires auth and preserves the exact return path");
-  assert(videoList.includes('video.avg_completion === null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
-  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("statusLabel") && videoList.includes("Active link"), "video library derives thumbnails, link status, and the single active-link metric from real fields");
+  assert(videoList.includes('video.playback_metrics_available && video.avg_completion !== null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
+  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("getLinkState") && videoList.includes("Active"), "video library derives thumbnails, link status, and the single active-link state from real fields");
+  assert(videosApi.includes("getWorkspaceAnalytics") && videosApi.includes("summary") && videosApi.includes("total_viewers"), "video API returns real library summary data alongside videos");
+  assert(videoList.includes("providerFilter") && videoList.includes("statusFilter") && videoList.includes("sortBy") && videoList.includes("Search videos, descriptions, providers"), "video library provides real search, provider/status filters, and sorting");
+  assert(videoList.includes("Most viewed") && videoList.includes("Alphabetical") && videoList.includes("Copy link") && videoList.includes("Open viewer") && videoList.includes("Revoke"), "video cards expose the required real management actions");
+  assert(videoList.includes('method: "DELETE"') && videoList.includes("link_id: activeLink.id") && videoList.includes("Retry"), "video library exposes protected revoke and retry states");
   assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksPage.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
