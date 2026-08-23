@@ -313,14 +313,14 @@ assert(simulateApiHandler(viewer, PERMISSIONS.VIDEOS_DELETE) === 403, "viewer: v
 assert(simulateApiHandler(admin, PERMISSIONS.VIDEOS_DELETE) === 200, "admin: videos.delete → 200");
 assert(simulateApiHandler(owner, PERMISSIONS.VIDEOS_DELETE) === 200, "owner: videos.delete → 200");
 
-// users.manage – only owner
+// users.manage – owner and admin; viewer denied
 assert(simulateApiHandler(viewer, PERMISSIONS.USERS_MANAGE) === 403, "viewer: users.manage → 403");
-assert(simulateApiHandler(admin, PERMISSIONS.USERS_MANAGE) === 403, "admin: users.manage → 403");
+assert(simulateApiHandler(admin, PERMISSIONS.USERS_MANAGE) === 200, "admin: users.manage → 200");
 assert(simulateApiHandler(owner, PERMISSIONS.USERS_MANAGE) === 200, "owner: users.manage → 200");
 
-// admins.manage – only owner
+// admins.manage – owner and admin; viewer denied
 assert(simulateApiHandler(viewer, PERMISSIONS.ADMINS_MANAGE) === 403, "viewer: admins.manage → 403");
-assert(simulateApiHandler(admin, PERMISSIONS.ADMINS_MANAGE) === 403, "admin: admins.manage → 403");
+assert(simulateApiHandler(admin, PERMISSIONS.ADMINS_MANAGE) === 200, "admin: admins.manage → 200");
 assert(simulateApiHandler(owner, PERMISSIONS.ADMINS_MANAGE) === 200, "owner: admins.manage → 200");
 
 // settings.manage – only owner

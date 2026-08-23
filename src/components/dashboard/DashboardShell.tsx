@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
+import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -20,11 +21,11 @@ const navItems = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-const ownerNavItem = { label: "Team", href: "/owner/admins", icon: UsersRound };
+const teamNavItem = { label: "Team", href: "/admin/users", icon: UsersRound };
 
 export default function DashboardShell({ children, user, workspace }: DashboardShellProps) {
   const pathname = usePathname();
-  const visibleNavItems = user.role === "owner" ? [...navItems, ownerNavItem] : navItems;
+  const visibleNavItems = user.role === "owner" || user.role === "admin" ? [...navItems, teamNavItem] : navItems;
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -32,7 +33,9 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#070720] text-white">
+    <>
+      <PresenceHeartbeat />
+      <div className="flex h-screen overflow-hidden bg-[#070720] text-white">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-white/8 bg-[#0b0b28] lg:flex">
         <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -97,6 +100,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
 
         <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

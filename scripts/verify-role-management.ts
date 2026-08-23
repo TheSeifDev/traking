@@ -90,8 +90,8 @@ function simulateRoleChange(
   if (!requester) return { success: false, error: "unauthenticated" };
   if (!requester.is_active) return { success: false, error: "inactive_account" };
 
-  // 3: Must be owner
-  if (requester.role !== USER_ROLES.OWNER) return { success: false, error: "forbidden" };
+  // 3: Must be an active owner or admin
+  if (requester.role !== USER_ROLES.OWNER && requester.role !== USER_ROLES.ADMIN) return { success: false, error: "forbidden" };
 
   // 4: Validate requested role (must be admin|viewer — never owner)
   if (!isValidManagedRole(requestedRole)) return { success: false, error: "invalid_role" };
@@ -134,7 +134,7 @@ function simulateStatusChange(
 
   if (!requester) return { success: false, error: "unauthenticated" };
   if (!requester.is_active) return { success: false, error: "inactive_account" };
-  if (requester.role !== USER_ROLES.OWNER) return { success: false, error: "forbidden" };
+  if (requester.role !== USER_ROLES.OWNER && requester.role !== USER_ROLES.ADMIN) return { success: false, error: "forbidden" };
   if (targetId === requesterId) return { success: false, error: "self_modification" };
 
   const target = db[targetId];
@@ -189,16 +189,16 @@ if (r2.success) {
 assert(db[ADMIN_ID].role === USER_ROLES.VIEWER, "DB role updated to viewer");
 
 // ---------------------------------------------------------------------------
-// 3. Admin → promote viewer (denied: not owner)
+// 3. Admin → promote viewer (allowed)
 // ---------------------------------------------------------------------------
 
-section("3. Admin: promote viewer → denied");
+section("3. Admin: promote viewer → allowed");
 
 resetDb();
 const r3 = simulateRoleChange(ADMIN_ID, VIEWER_ID, "admin");
-assert(r3.success === false, "result.success is false");
-assert(!r3.success && r3.error === "forbidden", "error is 'forbidden'");
-assert(db[VIEWER_ID].role === USER_ROLES.VIEWER, "DB role unchanged");
+assert(r3.success === true, "result.success is true");
+assert(r3.success && r3.newRole === USER_ROLES.ADMIN, "admin can promote viewer without owner escalation");
+assert(db[VIEWER_ID].role === USER_ROLES.ADMIN, "DB role updated by admin");
 
 // ---------------------------------------------------------------------------
 // 4. Viewer → promote self (denied: not owner)
@@ -226,8 +226,8 @@ section("5. Admin: modify owner → denied");
 resetDb();
 const r5 = simulateRoleChange(ADMIN_ID, OWNER_ID, "viewer");
 assert(r5.success === false, "result.success is false");
-// Admin is not owner → forbidden fires first (before target_is_owner check)
-assert(!r5.success && r5.error === "forbidden", "error is 'forbidden' (requester is not owner)");
+// Admin may manage the directory, but the owner target remains protected.
+assert(!r5.success && r5.error === "target_is_owner", "error is 'target_is_owner'");
 assert(db[OWNER_ID].role === USER_ROLES.OWNER, "owner DB role unchanged");
 
 // Additional: even if we simulate the owner trying to demote themselves
@@ -348,11 +348,12 @@ if (s2.success) {
   assert(s2.is_active === true, "is_active = true");
 }
 
-// Admin cannot deactivate
+// Admin can deactivate a non-owner
 const s3 = simulateStatusChange(ADMIN_ID, VIEWER_ID, false);
-assert(!s3.success && s3.error === "forbidden", "admin cannot deactivate users");
+assert(s3.success && s3.is_active === false, "admin can deactivate users");
 
 // Viewer cannot deactivate
+resetDb();
 const s4 = simulateStatusChange(VIEWER_ID, ADMIN_ID, false);
 assert(!s4.success && s4.error === "forbidden", "viewer cannot deactivate users");
 
@@ -371,15 +372,15 @@ delete db[hypotheticalOwner3Id];
 // 11. Permission model: only owner has admins.manage
 // ---------------------------------------------------------------------------
 
-section("11. admins.manage permission — owner only");
+section("11. admins.manage permission — owner and admin");
 
 assert(
   roleHasPermission(USER_ROLES.OWNER, PERMISSIONS.ADMINS_MANAGE),
   "owner has admins.manage"
 );
 assert(
-  !roleHasPermission(USER_ROLES.ADMIN, PERMISSIONS.ADMINS_MANAGE),
-  "admin does NOT have admins.manage"
+  roleHasPermission(USER_ROLES.ADMIN, PERMISSIONS.ADMINS_MANAGE),
+  "admin has admins.manage"
 );
 assert(
   !roleHasPermission(USER_ROLES.VIEWER, PERMISSIONS.ADMINS_MANAGE),

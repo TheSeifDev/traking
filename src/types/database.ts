@@ -1,4 +1,4 @@
-import type { UserRole } from "./auth";
+import type { ManagedRole, UserRole } from "./auth";
 
 export type Json =
   | string
@@ -24,6 +24,7 @@ export interface Database {
           is_active: boolean;
           created_at: string;
           updated_at: string;
+          last_seen_at: string | null;
         };
         Insert: {
           id?: string;
@@ -34,6 +35,7 @@ export interface Database {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          last_seen_at?: string | null;
         };
         Update: {
           id?: string;
@@ -44,8 +46,66 @@ export interface Database {
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+          last_seen_at?: string | null;
         };
         Relationships: [];
+      };
+      invitations: {
+        Row: {
+          id: string;
+          profile_id: string;
+          email: string;
+          role: ManagedRole;
+          token_hash: string;
+          created_at: string;
+          expires_at: string;
+          accepted_at: string | null;
+          revoked_at: string | null;
+          last_sent_at: string | null;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          email: string;
+          role: ManagedRole;
+          token_hash: string;
+          created_at?: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          last_sent_at?: string | null;
+          created_by: string;
+        };
+        Update: {
+          id?: string;
+          profile_id?: string;
+          email?: string;
+          role?: ManagedRole;
+          token_hash?: string;
+          created_at?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          last_sent_at?: string | null;
+          created_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invitations_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invitations_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       role_change_audit: {
         Row: {
@@ -360,6 +420,20 @@ export interface Database {
       is_owner: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      accept_invitation: {
+        Args: {
+          p_invitation_id: string;
+          p_token_hash: string;
+          p_email: string;
+          p_clickup_user_id: string;
+          p_name: string | null;
+        };
+        Returns: Database["public"]["Tables"]["profiles"]["Row"];
+      };
+      touch_profile_last_seen: {
+        Args: { p_profile_id: string };
+        Returns: string;
       };
     };
     Enums: {
