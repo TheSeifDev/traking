@@ -29,7 +29,7 @@ function formatPosition(seconds: number | null): string {
 function viewerLabel(session: ViewerSessionAnalytics): string {
   if (session.viewer_name?.trim()) return session.viewer_name.trim();
   if (session.viewer_email?.trim()) return session.viewer_email.trim();
-  return "Anonymous Viewer";
+  return session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer";
 }
 
 function scopeLabel(scope: PlaybackMetricsScope): string {
@@ -63,7 +63,7 @@ export default function ViewerAnalyticsPanel({
       session.source_type,
     ].some((value) => value.toLowerCase().includes(normalized)));
   }, [query, sessions]);
-  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`)).size;
   const measuredSessions = visibleSessions.filter((session) => session.has_playback_telemetry);
   const measuredWatchTime = measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0);
   const averageWatchTime = measuredSessions.length > 0 ? measuredWatchTime / measuredSessions.length : null;
@@ -110,13 +110,13 @@ export default function ViewerAnalyticsPanel({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-white">{viewerLabel(session)}</p>
                     <p className="mt-1 truncate text-xs text-white/40">{session.video_title}</p>
-                    <p className="mt-1 truncate text-[11px] text-white/30">{session.viewer_email ?? (session.viewer_status === "anonymous" ? "Anonymous Viewer" : "Viewer identity unavailable")} · Viewer ID {session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier?.slice(0, 12) ?? "—"}</p>
+                    <p className="mt-1 truncate text-[11px] text-white/30">{session.viewer_email ?? (session.viewer_status === "anonymous" ? "Legacy viewer" : "Authenticated viewer")} · Viewer ID {session.viewer_profile_id ?? session.viewer_identifier?.slice(0, 12) ?? "—"}</p>
                     <p className="mt-1 text-[11px] text-white/30">Session {session.session_number} of {session.session_count_for_viewer}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`w-fit rounded-full border px-2 py-1 text-[10px] ${statusClass}`}>{telemetryLabel(session)}</span>
                     <Link href={`/analytics/videos/${session.video_id}/sessions/${session.session_id}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View session</Link>
-                    {(session.viewer_profile_id || session.viewer_identity_id || session.viewer_identifier) && <Link href={`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? "")}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
+                    {(session.viewer_profile_id || session.viewer_identifier) && <Link href={`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identifier ?? "")}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
                   </div>
                 </div>
 

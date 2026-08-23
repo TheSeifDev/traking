@@ -3,8 +3,8 @@
  * POST - Record one or more events for the authenticated TrackUp viewer's session.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "@/src/lib/auth/api-handler";
 import { recordTrackingEvents } from "@/src/lib/tracking/service";
-import { resolveWatchActor } from "@/src/lib/tracking/viewer-identity";
 import { isValidEventType, type TrackingEventPayload } from "@/src/types/tracking";
 
 const MAX_BATCH_SIZE = 50;
@@ -48,10 +48,7 @@ function normalizeEvent(value: unknown): Omit<TrackingEventPayload, "session_id"
   };
 }
 
-export async function POST(request: NextRequest) {
-  const actor = await resolveWatchActor(request);
-  if (!actor) return NextResponse.json({ error: "viewer_identity_required" }, { status: 401 });
-
+export const POST = withAuth(async (request: NextRequest, user) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -75,10 +72,10 @@ export async function POST(request: NextRequest) {
     sessionId,
     sessionToken,
     events.map((event) => ({ ...event as Omit<TrackingEventPayload, "session_id" | "session_token">, session_id: sessionId, session_token: sessionToken })),
-    actor,
+    user.id,
   );
 
   // Do not reveal whether the session id exists when the capability or identity is invalid.
   if (!ok) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
   return NextResponse.json({ recorded: true, count: events.length });
-}
+});

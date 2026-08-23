@@ -162,10 +162,10 @@ export type TelemetryState = "measured" | "missing" | "unsupported";
 export interface AnalyticsViewerSummary {
   viewer_id: string;
   viewer_identifier: string | null;
-  viewer_identity_id?: string | null;
   viewer_name: string | null;
   viewer_email: string | null;
   viewer_status: "identified" | "anonymous";
+  viewer_is_active: boolean | null;
   first_seen_at: string | null;
   last_seen_at: string | null;
   total_sessions: number;
@@ -188,10 +188,10 @@ export interface ViewerSessionAnalytics {
   session_id: string;
   viewer_identifier: string | null;
   viewer_profile_id?: string | null;
-  viewer_identity_id?: string | null;
   viewer_name?: string | null;
   viewer_email?: string | null;
   viewer_status?: "identified" | "anonymous";
+  viewer_is_active?: boolean | null;
   video_id: string;
   video_title: string;
   source_type: VideoSourceType;

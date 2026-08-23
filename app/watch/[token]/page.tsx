@@ -2,18 +2,14 @@
  * /watch/[token] - Internal TrackUp viewer
  *
  * The token is resolved server-side. Invalid, expired, or revoked links are
- * not rendered, and the page stays non-indexable. Viewing requires either an
- * active TrackUp session or a valid link-scoped guest identity captured before playback.
+ * not rendered, and the page stays non-indexable. Viewing requires an active
+ * TrackUp session; the original viewer path is preserved through ClickUp OAuth.
  */
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { resolveWatchLink } from "@/src/lib/tracking/service";
 import { getCurrentUser } from "@/src/lib/auth/session";
-import { getGuestViewerIdentityForLink } from "@/src/lib/tracking/viewer-identity";
-import { VIEWER_IDENTITY_COOKIE } from "@/src/lib/auth/viewer-identity-cookie";
-import ViewerIdentityGate from "@/src/components/watch/ViewerIdentityGate";
 import WatchPlayer from "@/src/components/watch/WatchPlayer";
 
 type Props = { params: Promise<{ token: string }> };
@@ -29,24 +25,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function LoginRequired({ token }: { token: string }) {
+  const returnPath = `/watch/${encodeURIComponent(token)}`;
+  const loginUrl = `/login?redirect=${encodeURIComponent(returnPath)}`;
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#070720] px-5 py-12 text-white">
+      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl shadow-black/20 sm:p-9">
+        <Image src="/logo.webp" alt="TrackUp" width={44} height={44} priority className="mx-auto h-11 w-11 object-contain" />
+        <p className="mt-6 text-xs uppercase tracking-[0.18em] text-violet-300/70">Private viewer</p>
+        <h1 className="mt-2 text-2xl font-semibold">Sign in to watch this video</h1>
+        <p className="mt-3 text-sm leading-6 text-white/50">
+          This TrackUp viewer requires an active ClickUp-connected account. After sign-in, you will return to this exact video.
+        </p>
+        <a
+          href={loginUrl}
+          className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+        >
+          Continue with ClickUp
+        </a>
+        <p className="mt-4 text-xs text-white/30">TrackUp keeps the video inside this viewer and does not redirect to the provider.</p>
+      </section>
+    </main>
+  );
+}
+
 export default async function WatchPage({ params }: Props) {
   const { token } = await params;
   const resolved = await resolveWatchLink(token);
   if (!resolved) notFound();
 
   const user = await getCurrentUser();
-  const cookieStore = await cookies();
-  const guestIdentity = await getGuestViewerIdentityForLink(
-    cookieStore.get(VIEWER_IDENTITY_COOKIE)?.value,
-    resolved.watch_link_id,
-  );
-  if (!user && !guestIdentity) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#070720] px-5 py-12 text-white">
-        <ViewerIdentityGate token={token} />
-      </main>
-    );
-  }
+  if (!user) return <LoginRequired token={token} />;
 
   const sourceLabel = resolved.source_type.replace("_", " ");
   const isDirectUrl = resolved.source_type === "direct_url";

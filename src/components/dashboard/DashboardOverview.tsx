@@ -157,7 +157,7 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
   const completionRate = measuredCompletions.length > 0
     ? Math.round((measuredCompletions.filter((session) => (session.completion_percentage ?? 0) >= 90).length / measuredCompletions.length) * 100)
     : null;
-  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`)).size;
 
   const activity = useMemo(() => {
     const grouped = new Map<string, { date: string; views: number; sessions: number }>();
@@ -180,7 +180,7 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
     return {
       video,
       sessions: sessions.length,
-      viewers: new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size,
+      viewers: new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`)).size,
       measuredWatchTime: watchTime,
       completion,
     };
@@ -265,8 +265,8 @@ function VideoThumb({ video, compact = false }: { video: Video; compact?: boolea
 function ActivityRow({ session, now }: { session: ViewerSessionAnalytics; now: number }) {
   const event = session.playback_events[session.playback_events.length - 1];
   const action = actionLabel(session);
-  const viewerName = session.viewer_name?.trim() || session.viewer_email?.trim() || "Anonymous Viewer";
-  const viewerId = session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? "—";
+  const viewerName = session.viewer_name?.trim() || session.viewer_email?.trim() || (session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer");
+  const viewerId = session.viewer_profile_id ?? session.viewer_identifier ?? "—";
   return <div className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0"><div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${event ? "bg-violet-400/10 text-violet-200" : "bg-white/[0.05] text-white/35"}`}>{event ? <PlayCircle size={14} /> : <Eye size={14} />}</div><div className="min-w-0 flex-1"><p className="truncate text-sm text-white/78"><span className="font-medium text-white">{viewerName}</span> <span className="text-white/38">{action.toLowerCase()}</span></p><p className="mt-1 truncate text-[11px] text-white/35">{session.video_title} · {formatProvider(session.source_type)} · Session {session.session_number} · Viewer ID {viewerId}</p></div><span className="shrink-0 text-[10px] text-white/32">{formatRelative(session.last_activity_at, now)}</span></div>;
 }
 

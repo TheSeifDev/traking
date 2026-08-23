@@ -87,7 +87,7 @@ export default function WorkspaceAnalyticsDashboard({
   const completionRate = measuredCompletions.length > 0
     ? Math.round((measuredCompletions.filter((session) => (session.completion_percentage ?? 0) >= 90).length / measuredCompletions.length) * 100)
     : null;
-  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`)).size;
 
   const activity = useMemo(() => {
     const byDate = new Map<string, { date: string; views: number; sessions: number }>();
@@ -137,7 +137,7 @@ export default function WorkspaceAnalyticsDashboard({
 
   const stats = [
     { label: "Views", value: filteredSessions.length.toLocaleString(), note: "Real watch sessions", icon: Eye, color: "text-violet-300" },
-    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Profiles, link-scoped guests, or anonymous IDs", icon: Users, color: "text-blue-300" },
+    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Authenticated profiles or legacy anonymous IDs", icon: Users, color: "text-blue-300" },
     { label: "Sessions", value: filteredSessions.length.toLocaleString(), note: "One record per visit", icon: Layers3, color: "text-cyan-300" },
     { label: "Measured watch time", value: formatDuration(totalWatchTime), note: "Direct URL + YouTube API", icon: Clock3, color: "text-emerald-300" },
     { label: "Avg watch time", value: formatDuration(averageWatchTime), note: "Measured sessions only", icon: Clock3, color: "text-cyan-300" },
@@ -204,7 +204,7 @@ export default function WorkspaceAnalyticsDashboard({
         <div className="rounded-3xl border border-dashed border-white/12 bg-white/[0.02] px-6 py-16 text-center">
           <Activity size={32} className="mx-auto text-white/20" />
           <h2 className="mt-4 text-base font-medium text-white">No activity in this view</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have a signed-in viewer start playback. Change the video or date filter if you expected older activity.</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have an authenticated ClickUp viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
       ) : section === "viewers" ? (
         <ViewerAnalyticsPanel sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. New sessions can show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback details are shown only for measured native or YouTube API events." />
