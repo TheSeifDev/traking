@@ -6,14 +6,20 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary } from "@/src/types/video";
+import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
+import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
 
 interface AnalyticsSessionRow {
   id: string;
   watch_link_id: string;
   viewer_identifier: string | null;
+  viewer_profile_id: string | null;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  profiles?: unknown;
   started_at: string;
   last_seen_at: string;
   ended_at: string | null;
@@ -29,6 +35,10 @@ interface AnalyticsEventRow {
   position: number;
   duration: number | null;
   from_position: number | null;
+  client_event_id: string | null;
+  sequence_number: number | null;
+  occurred_at: string | null;
+  metadata: Record<string, string | number | boolean | null>;
   created_at: string;
 }
 
@@ -51,7 +61,7 @@ function firstRelation(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
 
-type AnalyticsVideoInfo = { id: string; title: string; source_type: Video["source_type"] };
+type AnalyticsVideoInfo = { id: string; title: string; source_type: Video["source_type"]; duration: number | null };
 
 function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
   return sourceType === "direct_url" || sourceType === "youtube";
@@ -65,6 +75,73 @@ function isValidTelemetryEvent(event: AnalyticsEventRow): boolean {
     && event.duration > 0;
 }
 
+function profileFromRelation(value: unknown): { id: string; name: string | null; email: string | null; is_active: boolean } | null {
+  const relation = firstRelation(value);
+  if (!relation || typeof relation.id !== "string" || typeof relation.email !== "string") return null;
+  return {
+    id: relation.id,
+    name: typeof relation.name === "string" ? relation.name : null,
+    email: relation.email,
+    is_active: relation.is_active !== false,
+  };
+}
+
+function telemetryState(sourceType: Video["source_type"], hasTelemetry: boolean): "measured" | "missing" | "unsupported" {
+  if (!supportsPlaybackMetrics(sourceType)) return "unsupported";
+  return hasTelemetry ? "measured" : "missing";
+}
+
+async function attachSessionProfiles(
+  supabase: ReturnType<typeof createAdminClient>,
+  sessions: AnalyticsSessionRow[],
+): Promise<void> {
+  const profileIds = Array.from(new Set(sessions.map((session) => session.viewer_profile_id).filter((id): id is string => Boolean(id))));
+  if (profileIds.length === 0) return;
+  const { data } = await supabase.from("profiles").select("id, name, email, is_active").in("id", profileIds);
+  const profilesById = new Map((data ?? []).map((profile) => [profile.id, profile]));
+  for (const session of sessions) session.profiles = session.viewer_profile_id ? profilesById.get(session.viewer_profile_id) ?? null : null;
+}
+
+function effectiveWatchTime(session: VideoAnalytics["viewer_sessions"][number]): number | null {
+  if (!session.has_playback_telemetry) return null;
+  if (session.heatmap?.available) return Math.round(session.heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0));
+  return session.watch_time_seconds;
+}
+
+function buildViewerSummaries(sessions: VideoAnalytics["viewer_sessions"]): AnalyticsViewerSummary[] {
+  const grouped = new Map<string, VideoAnalytics["viewer_sessions"]>();
+  for (const session of sessions) {
+    const key = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), session]);
+  }
+  return Array.from(grouped.entries()).map(([key, viewerSessions]) => {
+    const measured = viewerSessions.filter((session) => session.has_playback_telemetry);
+    const watchTimes = measured.map(effectiveWatchTime).filter((value): value is number => value !== null);
+    const completions = measured.map((session) => session.completion_percentage).filter((value): value is number => value !== null);
+    const latest = viewerSessions.slice().sort((a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime())[0];
+    const measuredCount = measured.length;
+    return {
+      viewer_id: key,
+      viewer_identifier: latest.viewer_identifier,
+      viewer_name: latest.viewer_name ?? null,
+      viewer_email: latest.viewer_email ?? null,
+      viewer_status: latest.viewer_status ?? "anonymous",
+      first_seen_at: viewerSessions.reduce((min, session) => !min || session.started_at < min ? session.started_at : min, null as string | null),
+      last_seen_at: latest.last_activity_at,
+      total_sessions: viewerSessions.length,
+      total_watch_time_seconds: watchTimes.length > 0 ? watchTimes.reduce((sum, value) => sum + value, 0) : null,
+      avg_watch_time_seconds: watchTimes.length > 0 ? Math.round(watchTimes.reduce((sum, value) => sum + value, 0) / watchTimes.length) : null,
+      avg_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null,
+      last_position: latest.last_position,
+      videos_watched: new Set(viewerSessions.map((session) => session.video_id)).size,
+      device_type: latest.device_type ?? null,
+      browser: latest.browser ?? null,
+      os: latest.os ?? null,
+      telemetry_state: measuredCount > 0 ? ("measured" as const) : viewerSessions.every((session) => session.telemetry_state === "unsupported") ? ("unsupported" as const) : ("missing" as const),
+    };
+  }).sort((a, b) => new Date(b.last_seen_at ?? 0).getTime() - new Date(a.last_seen_at ?? 0).getTime());
+}
+
 function buildViewerSessionAnalytics(
   sessions: AnalyticsSessionRow[],
   events: AnalyticsEventRow[],
@@ -72,7 +149,7 @@ function buildViewerSessionAnalytics(
 ): VideoAnalytics["viewer_sessions"] {
   const sessionsByViewer = new Map<string, AnalyticsSessionRow[]>();
   for (const session of sessions) {
-    const key = session.viewer_identifier ?? `anonymous:${session.id}`;
+    const key = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
     const group = sessionsByViewer.get(key) ?? [];
     group.push(session);
     sessionsByViewer.set(key, group);
@@ -85,6 +162,15 @@ function buildViewerSessionAnalytics(
     eventsBySession.set(event.session_id, group);
   }
 
+  const eventTime = (event: AnalyticsEventRow): number => {
+    const occurred = event.occurred_at ? new Date(event.occurred_at).getTime() : Number.NaN;
+    return Number.isFinite(occurred) ? occurred : new Date(event.created_at).getTime();
+  };
+  const sortEvents = (eventList: AnalyticsEventRow[]) => eventList.slice().sort((a, b) => {
+    if (a.sequence_number !== null && a.sequence_number !== undefined && b.sequence_number !== null && b.sequence_number !== undefined && a.sequence_number !== b.sequence_number) return a.sequence_number - b.sequence_number;
+    return eventTime(a) - eventTime(b);
+  });
+
   return sessions
     .slice()
     .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
@@ -96,22 +182,32 @@ function buildViewerSessionAnalytics(
         : video.source_type === "youtube"
           ? "youtube_iframe_api" as const
           : "session_only" as const;
-      const viewerKey = session.viewer_identifier ?? `anonymous:${session.id}`;
+      const viewerKey = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
       const viewerSessions = (sessionsByViewer.get(viewerKey) ?? [])
         .slice()
         .sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
       const sessionNumber = viewerSessions.findIndex((item) => item.id === session.id) + 1;
-      const sessionEvents = (eventsBySession.get(session.id) ?? [])
-        .slice()
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const sessionEvents = sortEvents(eventsBySession.get(session.id) ?? []);
+      const playbackEvents = sessionEvents.map((event) => ({
+        id: event.id,
+        event_type: event.event_type,
+        position: Number(event.position ?? 0),
+        from_position: event.from_position === null ? null : Number(event.from_position),
+        duration: event.duration === null ? null : Number(event.duration),
+        created_at: event.created_at,
+        sequence_number: event.sequence_number,
+        occurred_at: event.occurred_at,
+        metadata: event.metadata,
+      }));
       const telemetryEventCount = sessionEvents.filter(isValidTelemetryEvent).length;
       const hasPlaybackTelemetry = supportsPlaybackMetrics(video.source_type) && telemetryEventCount > 0;
       const firstPlay = sessionEvents.find((event) => event.event_type === "play" || event.event_type === "resume");
       const latestEvent = sessionEvents[sessionEvents.length - 1];
       const latestTelemetryEvent = sessionEvents.slice().reverse().find(isValidTelemetryEvent);
       const latestDurationEvent = sessionEvents.slice().reverse().find((event) => isValidTelemetryEvent(event));
-      const lastActivityAt = latestEvent && new Date(latestEvent.created_at).getTime() > new Date(session.last_seen_at).getTime()
-        ? latestEvent.created_at
+      const latestEventTime = latestEvent ? eventTime(latestEvent) : 0;
+      const lastActivityAt = latestEvent && latestEventTime > new Date(session.last_seen_at).getTime()
+        ? latestEvent.occurred_at ?? latestEvent.created_at
         : session.last_seen_at;
       const lastPosition = hasPlaybackTelemetry && latestTelemetryEvent ? Number(latestTelemetryEvent.position ?? 0) : null;
       const lastDuration = hasPlaybackTelemetry && latestDurationEvent?.duration !== null && latestDurationEvent?.duration !== undefined
@@ -120,34 +216,38 @@ function buildViewerSessionAnalytics(
       const reachedPercentage = hasPlaybackTelemetry
         ? Math.min(100, Math.max(0, Number(session.completion_percentage ?? 0)))
         : null;
+      const profile = profileFromRelation(session.profiles);
+      const heatmap = buildPlaybackHeatmap(playbackEvents, video.duration ?? lastDuration, supportsPlaybackMetrics(video.source_type));
 
       return {
         session_id: session.id,
         viewer_identifier: session.viewer_identifier,
+        viewer_profile_id: session.viewer_profile_id,
+        viewer_name: profile?.name ?? null,
+        viewer_email: profile?.email ?? null,
+        viewer_status: profile ? "identified" as const : "anonymous" as const,
         video_id: video.id,
         video_title: video.title,
         source_type: video.source_type,
         session_number: sessionNumber,
         session_count_for_viewer: viewerSessions.length,
         started_at: session.started_at,
-        first_play_at: hasPlaybackTelemetry ? firstPlay?.created_at ?? null : null,
+        first_play_at: hasPlaybackTelemetry ? firstPlay ? firstPlay.occurred_at ?? firstPlay.created_at : null : null,
         last_activity_at: lastActivityAt,
         ended_at: session.ended_at,
-        watch_time_seconds: hasPlaybackTelemetry ? Number(session.watch_time_seconds ?? 0) : null,
+        watch_time_seconds: hasPlaybackTelemetry ? Math.max(0, heatmap.available ? Math.round(heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0)) : Number(session.watch_time_seconds ?? 0)) : null,
         completion_percentage: reachedPercentage,
-        playback_events: hasPlaybackTelemetry ? sessionEvents.map((event) => ({
-          id: event.id,
-          event_type: event.event_type,
-          position: Number(event.position ?? 0),
-          from_position: event.from_position === null ? null : Number(event.from_position),
-          duration: event.duration === null ? null : Number(event.duration),
-          created_at: event.created_at,
-        })) : [],
+        playback_events: playbackEvents,
         last_position: hasPlaybackTelemetry ? lastPosition : null,
         last_duration: hasPlaybackTelemetry ? lastDuration : null,
         playback_metrics_scope: scope,
         has_playback_telemetry: hasPlaybackTelemetry,
-        telemetry_event_count: hasPlaybackTelemetry ? telemetryEventCount : 0,
+        telemetry_event_count: telemetryEventCount,
+        device_type: session.device_type,
+        browser: session.browser,
+        os: session.os,
+        telemetry_state: telemetryState(video.source_type, hasPlaybackTelemetry),
+        heatmap,
       };
     });
 }
@@ -193,13 +293,14 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
         watch_sessions?: Array<{
           id: string;
           viewer_identifier: string | null;
+          viewer_profile_id: string | null;
           started_at: string;
           last_seen_at: string;
           completion_percentage: number;
         }>;
       }>;
       const sessions = rawWatchLinks.flatMap((watchLink) => watchLink.watch_sessions ?? []);
-      const uniqueViewerCount = new Set(sessions.map((session) => session.viewer_identifier ?? session.id)).size;
+      const uniqueViewerCount = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
 
       return {
         ...v,
@@ -498,6 +599,10 @@ export async function getVideoAnalytics(
         id,
         watch_link_id,
         viewer_identifier,
+        viewer_profile_id,
+        device_type,
+        browser,
+        os,
         started_at,
         last_seen_at,
         ended_at,
@@ -512,12 +617,13 @@ export async function getVideoAnalytics(
     if (sessionsError) return null;
 
     const sessions = (rawSessions ?? []) as unknown as AnalyticsSessionRow[];
+    await attachSessionProfiles(supabase, sessions);
     const sessionIds = sessions.map((session) => session.id);
     let events: AnalyticsEventRow[] = [];
     if (sessionIds.length > 0) {
       const { data: rawEvents, error: eventsError } = await supabase
         .from("watch_events")
-        .select("id, session_id, event_type, position, duration, from_position, created_at")
+        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, metadata, created_at")
         .in("session_id", sessionIds)
         .order("created_at", { ascending: true })
         .limit(5000);
@@ -526,27 +632,25 @@ export async function getVideoAnalytics(
     }
 
     const totalViews = sessions.length;
-    const uniqueViewers = new Set(sessions.map((session) => session.viewer_identifier ?? session.id)).size;
+    const uniqueViewers = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
     const playbackMetricsScope = video.source_type === "direct_url"
       ? "direct_url_native_html5" as const
       : video.source_type === "youtube"
         ? "youtube_iframe_api" as const
         : "session_only" as const;
-    const measurableSessionIds = new Set(events.filter(isValidTelemetryEvent).map((event) => event.session_id));
-    const measuredSessions = supportsPlaybackMetrics(video.source_type)
-      ? sessions.filter((session) => measurableSessionIds.has(session.id))
-      : [];
-    const measuredCount = measuredSessions.length;
     const videoInfo: AnalyticsVideoInfo = {
       id: video.id,
       title: video.title,
       source_type: video.source_type as Video["source_type"],
+      duration: video.duration ?? null,
     };
     const viewerSessions = buildViewerSessionAnalytics(
       sessions,
       events,
       new Map(sessions.map((session) => [session.id, videoInfo])),
     );
+    const measuredSessions = viewerSessions.filter((session) => session.has_playback_telemetry);
+    const measuredCount = measuredSessions.length;
 
     const totalMeasurableWatchTime = measuredCount > 0
       ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0))
@@ -573,8 +677,8 @@ export async function getVideoAnalytics(
       viewer_identifier: session.viewer_identifier,
       started_at: session.started_at,
       ended_at: session.ended_at,
-      watch_time_seconds: supportsPlaybackMetrics(video.source_type) && measurableSessionIds.has(session.id) ? session.watch_time_seconds ?? 0 : null,
-      completion_percentage: supportsPlaybackMetrics(video.source_type) && measurableSessionIds.has(session.id) ? Number(session.completion_percentage ?? 0) : null,
+      watch_time_seconds: session.watch_time_seconds,
+      completion_percentage: session.completion_percentage,
     }));
 
     return {
@@ -594,6 +698,13 @@ export async function getVideoAnalytics(
       }, null),
       recent_sessions: recentSessions,
       viewer_sessions: viewerSessions,
+      viewers: buildViewerSummaries(viewerSessions),
+      heatmap: aggregateHeatmaps(viewerSessions.map((session) => session.heatmap).filter((heatmap): heatmap is PlaybackHeatmap => Boolean(heatmap)), video.duration ?? null, supportsPlaybackMetrics(video.source_type)),
+      telemetry_health: {
+        measured_sessions: viewerSessions.filter((session) => session.telemetry_state === "measured").length,
+        missing_sessions: viewerSessions.filter((session) => session.telemetry_state === "missing").length,
+        unsupported_sessions: viewerSessions.filter((session) => session.telemetry_state === "unsupported").length,
+      },
     };
   } catch {
     return null;
@@ -671,6 +782,10 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
         id,
         watch_link_id,
         viewer_identifier,
+        viewer_profile_id,
+        device_type,
+        browser,
+        os,
         started_at,
         last_seen_at,
         ended_at,
@@ -678,7 +793,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
         completion_percentage,
         watch_links!inner(
           video_id,
-          videos!inner(id, title, workspace_id, source_type)
+          videos!inner(id, title, workspace_id, source_type, duration)
         )
       `)
       .eq("watch_links.videos.workspace_id", workspaceId)
@@ -687,7 +802,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     if (sessionsError) return empty;
 
     const workspaceSessions: AnalyticsSessionRow[] = [];
-    const sessionVideos = new Map<string, { id: string; title: string; source_type: Video["source_type"] }>();
+    const sessionVideos = new Map<string, AnalyticsVideoInfo>();
     for (const raw of (rawSessions ?? []) as unknown[]) {
       if (!raw || typeof raw !== "object") continue;
       const row = raw as AnalyticsSessionRow;
@@ -703,15 +818,17 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
         id: relatedVideo.id,
         title: relatedVideo.title,
         source_type: relatedVideo.source_type,
+        duration: typeof relatedVideo.duration === "number" ? relatedVideo.duration : null,
       });
     }
 
+    await attachSessionProfiles(supabase, workspaceSessions);
     const sessionIds = workspaceSessions.map((session) => session.id);
     let events: AnalyticsEventRow[] = [];
     if (sessionIds.length > 0) {
       const { data: rawEvents, error: eventsError } = await supabase
         .from("watch_events")
-        .select("id, session_id, event_type, position, duration, from_position, created_at")
+        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, metadata, created_at")
         .in("session_id", sessionIds)
         .order("created_at", { ascending: true })
         .limit(10000);
@@ -721,14 +838,9 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
 
     const viewerSessions = buildViewerSessionAnalytics(workspaceSessions, events, sessionVideos);
     const totalViews = workspaceSessions.length;
-    const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_identifier ?? session.id)).size;
-    const measurableSessionIds = new Set(events.filter(isValidTelemetryEvent).map((event) => event.session_id));
-    const measuredSessions = workspaceSessions.filter((session) => {
-      const sourceType = sessionVideos.get(session.id)?.source_type;
-      return sourceType === "direct_url" || sourceType === "youtube"
-        ? measurableSessionIds.has(session.id)
-        : false;
-    });
+    const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
+    const measuredSessions = viewerSessions.filter((session) => session.has_playback_telemetry);
+    const measuredSessionIds = new Set(measuredSessions.map((session) => session.session_id));
     const avgCompletion = measuredSessions.length > 0
       ? Math.round(measuredSessions.reduce((sum, session) => sum + Number(session.completion_percentage ?? 0), 0) / measuredSessions.length)
       : null;
@@ -769,8 +881,9 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
         measurable_watch_time_seconds: null,
       };
       summary.total_views += 1;
-      if ((video.source_type === "direct_url" || video.source_type === "youtube") && measurableSessionIds.has(session.id)) {
-        summary.measurable_watch_time_seconds = (summary.measurable_watch_time_seconds ?? 0) + (session.watch_time_seconds ?? 0);
+      const normalizedSession = viewerSessions.find((item) => item.session_id === session.id);
+      if ((video.source_type === "direct_url" || video.source_type === "youtube") && measuredSessionIds.has(session.id)) {
+        summary.measurable_watch_time_seconds = (summary.measurable_watch_time_seconds ?? 0) + (normalizedSession?.watch_time_seconds ?? 0);
       }
       videoSummaries.set(video.id, summary);
     }
@@ -801,8 +914,47 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
       top_videos_by_watch_time: topVideosByWatchTime,
       recent_activity: viewerSessions.slice(0, 10),
       viewer_sessions: viewerSessions,
+      viewers: buildViewerSummaries(viewerSessions),
+      telemetry_health: {
+        measured_sessions: viewerSessions.filter((session) => session.telemetry_state === "measured").length,
+        missing_sessions: viewerSessions.filter((session) => session.telemetry_state === "missing").length,
+        unsupported_sessions: viewerSessions.filter((session) => session.telemetry_state === "unsupported").length,
+      },
     };
   } catch {
     return empty;
   }
+}
+
+export async function getVideoViewerAnalytics(
+  videoId: string,
+  workspaceId: string,
+  viewerId: string,
+): Promise<{ video_id: string; video_title: string; source_type: Video["source_type"]; viewer: AnalyticsViewerSummary | null; sessions: VideoAnalytics["viewer_sessions"] } | null> {
+  if (!viewerId) return null;
+  const analytics = await getVideoAnalytics(videoId, workspaceId);
+  if (!analytics) return null;
+  const sessions = analytics.viewer_sessions.filter((session) => {
+    const sessionViewerId = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
+    return sessionViewerId === viewerId;
+  });
+  if (sessions.length === 0) return null;
+  const viewer = analytics.viewers?.find((item) => item.viewer_id === viewerId) ?? buildViewerSummaries(sessions)[0] ?? null;
+  return {
+    video_id: analytics.video_id,
+    video_title: sessions[0]?.video_title ?? "Video",
+    source_type: sessions[0]?.source_type ?? "direct_url",
+    viewer,
+    sessions,
+  };
+}
+
+export async function getVideoSessionAnalytics(
+  videoId: string,
+  workspaceId: string,
+  sessionId: string,
+): Promise<VideoAnalytics["viewer_sessions"][number] | null> {
+  if (!sessionId) return null;
+  const analytics = await getVideoAnalytics(videoId, workspaceId);
+  return analytics?.viewer_sessions.find((session) => session.session_id === sessionId) ?? null;
 }

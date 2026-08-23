@@ -8,7 +8,21 @@
  */
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { TrackingEventPayload } from "@/src/types/tracking";
+import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
+
+export interface ViewerClientMetadata {
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+}
+
+export function deriveViewerClientMetadata(userAgent: string | null): ViewerClientMetadata {
+  const ua = userAgent?.toLowerCase() ?? "";
+  const device_type = /mobile|iphone|android.*mobile/.test(ua) ? "mobile" : /tablet|ipad|android/.test(ua) ? "tablet" : ua ? "desktop" : null;
+  const browser = /edg\//.test(ua) ? "Edge" : /opr\//.test(ua) ? "Opera" : /chrome\//.test(ua) ? "Chrome" : /firefox\//.test(ua) ? "Firefox" : /safari\//.test(ua) && !/chrome\//.test(ua) ? "Safari" : /msie|trident\//.test(ua) ? "Internet Explorer" : null;
+  const os = /windows/.test(ua) ? "Windows" : /mac os|macintosh/.test(ua) ? "macOS" : /android/.test(ua) ? "Android" : /iphone|ipad|ios/.test(ua) ? "iOS" : /linux/.test(ua) ? "Linux" : null;
+  return { device_type, browser, os };
+}
 
 export interface ResolvedWatchLink {
   watch_link_id: string;
@@ -82,6 +96,7 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
 export async function createWatchSession(
   watchLinkId: string,
   viewerIdentity: string,
+  userAgent: string | null = null,
 ): Promise<{ id: string; sessionToken: string } | null> {
   try {
     const supabase = createAdminClient();
@@ -105,12 +120,17 @@ export async function createWatchSession(
     const sessionToken = randomBytes(32).toString("hex");
 
     const viewerIdentifier = await hashViewerIdentity(viewerIdentity);
+    const viewerMetadata = deriveViewerClientMetadata(userAgent);
 
     const { data, error } = await supabase
       .from("watch_sessions")
       .insert({
         watch_link_id: watchLinkId,
         viewer_identifier: viewerIdentifier,
+        viewer_profile_id: viewerIdentity,
+        device_type: viewerMetadata.device_type,
+        browser: viewerMetadata.browser,
+        os: viewerMetadata.os,
         session_token: sessionToken,
       })
       .select("id, session_token")
@@ -166,40 +186,51 @@ export async function isAuthorizedWatchSession(
 }
 
 /**
- * Records a tracking event for an authorized authenticated session.
- * The capability is checked before the event insert and is also used to scope
- * the last-seen update.
+ * Records one or more tracking events for an authorized authenticated session.
+ * Client ids make retries safe and sequence/occurred_at preserve playback order.
  */
-export async function recordTrackingEvent(
-  payload: TrackingEventPayload,
+export async function recordTrackingEvents(
+  sessionId: string,
+  sessionToken: string,
+  events: TrackingEventPayload[],
   viewerIdentity: string,
 ): Promise<boolean> {
-  if (!payload.session_id || !payload.session_token || !payload.event_type) return false;
-  if (!(await isAuthorizedWatchSession(payload.session_id, payload.session_token, viewerIdentity))) return false;
+  if (!sessionId || !sessionToken || events.length === 0) return false;
+  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
 
   try {
     const supabase = createAdminClient();
-    const { error } = await supabase.from("watch_events").insert({
-      session_id: payload.session_id,
-      event_type: payload.event_type,
-      position: payload.position ?? 0,
-      duration: payload.duration ?? null,
-      from_position: payload.from_position ?? null,
-    });
-
+    const rows = events.map((event) => ({
+      session_id: sessionId,
+      event_type: event.event_type as TrackingEventType,
+      position: Math.max(0, Number.isFinite(event.position) ? event.position : 0),
+      duration: event.duration !== null && event.duration !== undefined && Number.isFinite(event.duration) && event.duration > 0 ? event.duration : null,
+      from_position: event.from_position !== null && event.from_position !== undefined && Number.isFinite(event.from_position) ? Math.max(0, event.from_position) : null,
+      client_event_id: event.client_event_id ?? null,
+      sequence_number: event.sequence_number ?? null,
+      occurred_at: event.occurred_at ?? null,
+      metadata: event.metadata ?? {},
+    }));
+    const { error } = await supabase.from("watch_events").upsert(rows, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
     if (error) return false;
 
     const { error: sessionUpdateError } = await supabase
       .from("watch_sessions")
       .update({ last_seen_at: new Date().toISOString() })
-      .eq("id", payload.session_id)
-      .eq("session_token", payload.session_token)
+      .eq("id", sessionId)
+      .eq("session_token", sessionToken)
       .is("ended_at", null);
-
     return !sessionUpdateError;
   } catch {
     return false;
   }
+}
+
+export async function recordTrackingEvent(
+  payload: TrackingEventPayload,
+  viewerIdentity: string,
+): Promise<boolean> {
+  return recordTrackingEvents(payload.session_id, payload.session_token, [payload], viewerIdentity);
 }
 
 /**
@@ -215,6 +246,7 @@ export async function endWatchSession(
   completionPercentage: number,
   position: number | null = null,
   duration: number | null = null,
+  finalEvent: { client_event_id?: string | null; sequence_number?: number | null; occurred_at?: string | null } = {},
 ): Promise<boolean> {
   if (!sessionId || !sessionToken) return false;
 
@@ -229,6 +261,10 @@ export async function endWatchSession(
         position: position ?? 0,
         duration: duration ?? null,
         from_position: null,
+        client_event_id: finalEvent.client_event_id ?? null,
+        sequence_number: finalEvent.sequence_number ?? null,
+        occurred_at: finalEvent.occurred_at ?? null,
+        metadata: {},
       });
       if (eventError) return false;
     }

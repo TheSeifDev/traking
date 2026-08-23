@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Info, RotateCcw } from "lucide-react";
-import type { TrackingEventType } from "@/src/types/tracking";
+import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
 
 type YouTubeStateChangeEvent = { data: number };
 type YouTubeReadyEvent = { target: YouTubePlayer };
@@ -30,6 +30,7 @@ type YouTubeApi = {
     ENDED: number;
     PLAYING: number;
     PAUSED: number;
+    BUFFERING: number;
   };
 };
 
@@ -123,6 +124,11 @@ function buildEmbedUrl(sourceType: string, sourceUrl: string): string {
   return sourceUrl;
 }
 
+function createClientEventId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface PlaybackSnapshot {
   position: number;
   duration: number | null;
@@ -162,6 +168,10 @@ export default function WatchPlayer({
   const pausedPositionRef = useRef<number | null>(null);
   const furthestPositionRef = useRef(0);
   const seekFromRef = useRef<number | null>(null);
+  const pendingEventsRef = useRef<TrackingEventPayload[]>([]);
+  const eventFlushRequestRef = useRef<Promise<boolean> | null>(null);
+  const flushEventsRef = useRef<((keepalive?: boolean) => Promise<boolean>) | null>(null);
+  const sequenceNumberRef = useRef(0);
   const [playerReady, setPlayerReady] = useState(sourceType !== "youtube");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -190,31 +200,66 @@ export default function WatchPlayer({
     }
   }, []);
 
+  const flushEvents = useCallback(async (keepalive = false): Promise<boolean> => {
+    const sessionId = sessionIdRef.current;
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionId || !sessionToken || pendingEventsRef.current.length === 0) return true;
+    if (eventFlushRequestRef.current) return eventFlushRequestRef.current;
+
+    const batch = pendingEventsRef.current.splice(0, 50);
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/tracking/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, events: batch }),
+          keepalive,
+        });
+        if (!response.ok) pendingEventsRef.current = [...batch, ...pendingEventsRef.current].slice(-100);
+        return response.ok;
+      } catch {
+        pendingEventsRef.current = [...batch, ...pendingEventsRef.current].slice(-100);
+        return false;
+      }
+    })();
+    eventFlushRequestRef.current = request;
+    try {
+      return await request;
+    } finally {
+      eventFlushRequestRef.current = null;
+      if (pendingEventsRef.current.length > 0 && !sessionEndedRef.current) void flushEventsRef.current?.(keepalive);
+    }
+  }, []);
+
+  useEffect(() => {
+    flushEventsRef.current = flushEvents;
+    return () => { flushEventsRef.current = null; };
+  }, [flushEvents]);
+
   const sendEvent = useCallback(async (
     eventType: TrackingEventType,
     snapshot: PlaybackSnapshot,
     fromPosition?: number | null,
+    metadata?: Record<string, string | number | boolean | null>,
   ) => {
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken || sessionEndedRef.current) return;
-    try {
-      await fetch("/api/tracking/event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: sessionId,
-          session_token: sessionToken,
-          event_type: eventType,
-          position: snapshot.position,
-          duration: snapshot.duration,
-          from_position: fromPosition ?? null,
-        }),
-      });
-    } catch {
-      // Telemetry failures must not crash playback.
-    }
-  }, []);
+    const event: TrackingEventPayload = {
+      session_id: sessionId,
+      session_token: sessionToken,
+      event_type: eventType,
+      position: snapshot.position,
+      duration: snapshot.duration,
+      from_position: fromPosition ?? null,
+      client_event_id: createClientEventId(),
+      sequence_number: sequenceNumberRef.current++,
+      occurred_at: new Date().toISOString(),
+      metadata,
+    };
+    pendingEventsRef.current.push(event);
+    if (eventType !== "heartbeat" || pendingEventsRef.current.length >= 5) void flushEvents();
+  }, [flushEvents]);
 
   const startSession = useCallback(async (): Promise<boolean> => {
     if (sessionIdRef.current && sessionTokenRef.current) return true;
@@ -291,6 +336,7 @@ export default function WatchPlayer({
     const completion = finalDuration && finalDuration > 0
       ? Math.min(100, Math.round((furthestPositionRef.current / finalDuration) * 100))
       : 0;
+    await flushEvents(true);
     const body = JSON.stringify({
       session_id: sessionId,
       session_token: sessionToken,
@@ -298,6 +344,11 @@ export default function WatchPlayer({
       completion_percentage: completion,
       position: finalPosition,
       duration: finalDuration,
+      final_event: {
+        client_event_id: createClientEventId(),
+        sequence_number: sequenceNumberRef.current++,
+        occurred_at: new Date().toISOString(),
+      },
     });
 
     try {
@@ -317,7 +368,7 @@ export default function WatchPlayer({
     } catch {
       // Best-effort end-of-session delivery on page close.
     }
-  }, [accumulateWatchTime, isYouTube, readYouTubeSnapshot, stopHeartbeat, updateSnapshot]);
+  }, [accumulateWatchTime, flushEvents, isYouTube, readYouTubeSnapshot, stopHeartbeat, updateSnapshot]);
 
   const maybeRecordCompletion = useCallback((snapshot: PlaybackSnapshot) => {
     if (completionSentRef.current || !snapshot.duration || snapshot.duration <= 0) return;
@@ -433,9 +484,8 @@ export default function WatchPlayer({
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
     };
     updateSnapshot(snapshot);
-    void sendEvent("ended", snapshot);
     void endSession();
-  }, [endSession, sendEvent, updateSnapshot]);
+  }, [endSession, updateSnapshot]);
 
   const handleYouTubeStateChange = useCallback((event: YouTubeStateChangeEvent) => {
     const api = window.YT;
@@ -456,10 +506,13 @@ export default function WatchPlayer({
       void sendEvent("pause", snapshot);
       return;
     }
+    if (event.data === api.PlayerState.BUFFERING) {
+      if (sessionIdRef.current) void sendEvent("buffer", snapshot, null, { state: "buffering" });
+      return;
+    }
     if (event.data === api.PlayerState.ENDED) {
       if (!sessionIdRef.current) return;
       updateSnapshot({ ...snapshot, position: snapshot.duration ?? snapshot.position });
-      void sendEvent("ended", snapshot);
       void endSession();
     }
   }, [accumulateWatchTime, endSession, readYouTubeSnapshot, sendEvent, startPlaybackSegment, stopHeartbeat, updateSnapshot]);
@@ -517,12 +570,23 @@ export default function WatchPlayer({
 
   useEffect(() => {
     const onBeforeUnload = () => { void endSession(); };
+    const onVisibilityChange = () => {
+      if (!sessionIdRef.current || sessionEndedRef.current) return;
+      const snapshot = isYouTube
+        ? readYouTubeSnapshot()
+        : videoRef.current
+          ? { position: videoRef.current.currentTime, duration: durationRef.current }
+          : null;
+      if (snapshot) void sendEvent("visibility_change", snapshot, null, { visibility: document.visibilityState });
+    };
     window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       void endSession();
     };
-  }, [endSession]);
+  }, [endSession, isYouTube, readYouTubeSnapshot, sendEvent]);
 
   const capabilityMessage = isDirectUrl
     ? "Native HTML5 playback is available. TrackUp records play, pause, seek origin/destination, heartbeat, completion, duration, and end."
@@ -563,6 +627,8 @@ export default function WatchPlayer({
             onSeeking={handleDirectSeeking}
             onSeeked={handleDirectSeeked}
             onTimeUpdate={handleDirectTimeUpdate}
+            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) void sendEvent("buffer", { position: video.currentTime, duration: durationRef.current }, null, { state: "waiting" }); }}
+            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) void sendEvent("rate_change", { position: video.currentTime, duration: durationRef.current }, null, { rate: event.currentTarget.playbackRate }); }}
             onEnded={handleDirectEnded}
             title={title}
           />

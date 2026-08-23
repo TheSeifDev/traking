@@ -1,12 +1,13 @@
 ﻿"use server";
 
-import { guardAuth } from "@/src/lib/auth/guards";
+import { guardPermission } from "@/src/lib/auth/guards";
+import { PERMISSIONS } from "@/src/types/permissions";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import WorkspaceAnalyticsDashboard from "@/src/components/dashboard/WorkspaceAnalyticsDashboard";
 
 export default async function AnalyticsPage() {
-  const user = await guardAuth();
+  const user = await guardPermission(PERMISSIONS.ANALYTICS_READ);
   const workspaceId = await getPrimaryWorkspaceId(user.id);
 
   if (!workspaceId) {

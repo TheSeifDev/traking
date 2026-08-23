@@ -1,3 +1,6 @@
+"use client";
+
+import Link from "next/link";
 import { Activity, Clock3, Eye, PlayCircle, Search, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlaybackMetricsScope, ViewerSessionAnalytics } from "@/src/types/video";
@@ -23,8 +26,10 @@ function formatPosition(seconds: number | null): string {
   return seconds === null ? "Unavailable" : `${Math.max(0, Math.round(seconds))}s`;
 }
 
-function viewerLabel(identifier: string | null, sessionId: string): string {
-  return identifier ? `Viewer ${identifier.slice(0, 8)}` : `Legacy anonymous ${sessionId.slice(0, 8)}`;
+function viewerLabel(session: ViewerSessionAnalytics): string {
+  if (session.viewer_name?.trim()) return session.viewer_name.trim();
+  if (session.viewer_email?.trim()) return session.viewer_email.trim();
+  return session.viewer_identifier ? `Viewer ${session.viewer_identifier.slice(0, 8)}` : `Legacy anonymous ${session.session_id.slice(0, 8)}`;
 }
 
 function scopeLabel(scope: PlaybackMetricsScope): string {
@@ -34,8 +39,8 @@ function scopeLabel(scope: PlaybackMetricsScope): string {
 }
 
 function telemetryLabel(session: ViewerSessionAnalytics): string {
-  if (session.has_playback_telemetry) return `${scopeLabel(session.playback_metrics_scope)} telemetry recorded`;
-  if (session.playback_metrics_scope === "session_only") return "Session-only lifecycle";
+  if (session.telemetry_state === "measured" || session.has_playback_telemetry) return `${scopeLabel(session.playback_metrics_scope)} telemetry measured`;
+  if (session.telemetry_state === "unsupported" || session.playback_metrics_scope === "session_only") return "Session-only lifecycle";
   return `${scopeLabel(session.playback_metrics_scope)} available; no telemetry recorded`;
 }
 
@@ -50,12 +55,15 @@ export default function ViewerAnalyticsPanel({
     if (!normalized) return sessions;
     return sessions.filter((session) => [
       session.viewer_identifier ?? "",
+      session.viewer_profile_id ?? "",
+      session.viewer_name ?? "",
+      session.viewer_email ?? "",
       session.session_id,
       session.video_title,
       session.source_type,
     ].some((value) => value.toLowerCase().includes(normalized)));
   }, [query, sessions]);
-  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.session_id)).size;
   const measuredSessions = visibleSessions.filter((session) => session.has_playback_telemetry);
   const measuredWatchTime = measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0);
   const averageWatchTime = measuredSessions.length > 0 ? measuredWatchTime / measuredSessions.length : null;
@@ -91,19 +99,24 @@ export default function ViewerAnalyticsPanel({
       ) : (
         <div className="space-y-3">
           {visibleSessions.map((session) => {
-            const measured = session.has_playback_telemetry;
-            const statusClass = measured
+            const statusClass = session.telemetry_state === "measured"
               ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-              : "border-amber-400/20 bg-amber-500/10 text-amber-100";
+              : session.telemetry_state === "unsupported"
+                ? "border-white/10 bg-white/[0.04] text-white/55"
+                : "border-amber-400/20 bg-amber-500/10 text-amber-100";
             return (
               <article key={session.session_id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{viewerLabel(session.viewer_identifier, session.session_id)}</p>
+                    <p className="truncate text-sm font-medium text-white">{viewerLabel(session)}</p>
                     <p className="mt-1 truncate text-xs text-white/40">{session.video_title}</p>
-                    <p className="mt-1 text-[11px] text-white/30">Session {session.session_number} of {session.session_count_for_viewer} for this viewer</p>
+                    <p className="mt-1 text-[11px] text-white/30">Session {session.session_number} of {session.session_count_for_viewer} for this viewer{session.viewer_email ? ` · ${session.viewer_email}` : ""}</p>
                   </div>
-                  <span className={`w-fit rounded-full border px-2 py-1 text-[10px] ${statusClass}`}>{telemetryLabel(session)}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`w-fit rounded-full border px-2 py-1 text-[10px] ${statusClass}`}>{telemetryLabel(session)}</span>
+                    <Link href={`/analytics/videos/${session.video_id}/sessions/${session.session_id}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View session</Link>
+                    {(session.viewer_profile_id || session.viewer_identifier) && <Link href={`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identifier ?? "")}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -120,14 +133,21 @@ export default function ViewerAnalyticsPanel({
                   <span>Reached: <strong className="font-medium text-white/75">{session.completion_percentage === null ? "Not measured" : `${session.completion_percentage}%`}</strong></span>
                   <span>Events: <strong className="font-medium text-white/75">{session.playback_events.length}</strong></span>
                   <span>Provider: <strong className="font-medium capitalize text-white/75">{session.source_type.replace("_", " ")}</strong></span>
+                  <span>Device: <strong className="font-medium text-white/75">{session.device_type ?? "Unknown"}</strong></span>
+                  <span>Browser: <strong className="font-medium text-white/75">{session.browser ?? "Unknown"}</strong></span>
+                  <span>OS: <strong className="font-medium text-white/75">{session.os ?? "Unknown"}</strong></span>
                 </div>
 
                 <p className="mt-3 text-[11px] leading-5 text-white/30">
-                  {measured
-                    ? "Playback telemetry is present. Watched ranges and heatmaps remain unavailable until stored events can reconstruct continuous coverage reliably."
-                    : session.playback_events.length > 0
-                      ? "Stored events exist, but no event currently contains enough provider position and duration evidence to qualify this session as measured."
-                      : "The provider capability is not evidence that playback occurred; no playback telemetry is stored for this session."}
+                  {session.heatmap?.available
+                    ? `Watched coverage reconstructed from ordered events across ${session.heatmap.ranges.length} range${session.heatmap.ranges.length === 1 ? "" : "s"}.`
+                    : session.telemetry_state === "unsupported"
+                      ? "This provider exposes session lifecycle only; playback position, duration, and watched ranges are unavailable."
+                      : session.playback_events.length > 0
+                        ? session.heatmap?.availability === "insufficient_data"
+                          ? "Stored events exist, but their ordering or transitions are insufficient to reconstruct continuous watched ranges."
+                          : "Stored events exist, but no event currently contains enough provider position and duration evidence to qualify this session as measured."
+                        : "No playback telemetry is stored for this session."}
                 </p>
 
                 <details className="mt-3 rounded-xl border border-white/7 bg-black/10 px-3 py-2">
@@ -148,6 +168,10 @@ export default function ViewerAnalyticsPanel({
                     </div>
                   )}
                 </details>
+                <div className="mt-3 rounded-xl border border-white/7 bg-black/10 px-3 py-2 text-xs text-white/45">
+                  <span className="font-medium text-white/70">Watched ranges:</span>{" "}
+                  {session.heatmap?.available ? `${session.heatmap.ranges.length} reconstructed range${session.heatmap.ranges.length === 1 ? "" : "s"}` : session.heatmap?.availability === "not_available_from_provider" ? "Not available from provider" : session.heatmap?.availability === "insufficient_data" ? "No playback data" : "No telemetry"}
+                </div>
               </article>
             );
           })}

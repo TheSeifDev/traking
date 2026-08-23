@@ -9,7 +9,7 @@ export type Json =
   | Json[];
 
 export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" | "direct_url";
-export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended";
+export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended" | "buffer" | "rate_change" | "visibility_change";
 
 export interface Database {
   public: {
@@ -330,6 +330,10 @@ export interface Database {
           watch_link_id: string;
           session_token: string;
           viewer_identifier: string | null;
+          viewer_profile_id: string | null;
+          device_type: string | null;
+          browser: string | null;
+          os: string | null;
           started_at: string;
           last_seen_at: string;
           ended_at: string | null;
@@ -341,6 +345,10 @@ export interface Database {
           watch_link_id: string;
           session_token: string;
           viewer_identifier?: string | null;
+          viewer_profile_id?: string | null;
+          device_type?: string | null;
+          browser?: string | null;
+          os?: string | null;
           started_at?: string;
           last_seen_at?: string;
           ended_at?: string | null;
@@ -352,6 +360,10 @@ export interface Database {
           watch_link_id?: string;
           session_token?: string;
           viewer_identifier?: string | null;
+          viewer_profile_id?: string | null;
+          device_type?: string | null;
+          browser?: string | null;
+          os?: string | null;
           started_at?: string;
           last_seen_at?: string;
           ended_at?: string | null;
@@ -375,6 +387,10 @@ export interface Database {
           position: number;
           duration: number | null;
           from_position: number | null;
+          client_event_id: string | null;
+          sequence_number: number | null;
+          occurred_at: string | null;
+          metadata: Json;
           created_at: string;
         };
         Insert: {
@@ -384,6 +400,10 @@ export interface Database {
           position?: number;
           duration?: number | null;
           from_position?: number | null;
+          client_event_id?: string | null;
+          sequence_number?: number | null;
+          occurred_at?: string | null;
+          metadata?: Json;
           created_at?: string;
         };
         Update: {
@@ -393,6 +413,10 @@ export interface Database {
           position?: number;
           duration?: number | null;
           from_position?: number | null;
+          client_event_id?: string | null;
+          sequence_number?: number | null;
+          occurred_at?: string | null;
+          metadata?: Json;
           created_at?: string;
         };
         Relationships: [

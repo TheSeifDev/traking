@@ -13,7 +13,10 @@ export type TrackingEventType =
   | "seek"
   | "heartbeat"
   | "complete"
-  | "ended";
+  | "ended"
+  | "buffer"
+  | "rate_change"
+  | "visibility_change";
 
 export const VALID_EVENT_TYPES: readonly TrackingEventType[] = [
   "play",
@@ -23,6 +26,9 @@ export const VALID_EVENT_TYPES: readonly TrackingEventType[] = [
   "heartbeat",
   "complete",
   "ended",
+  "buffer",
+  "rate_change",
+  "visibility_change",
 ] as const;
 
 export function isValidEventType(v: unknown): v is TrackingEventType {
@@ -41,6 +47,14 @@ export interface TrackingEventPayload {
   duration?: number | null;
   /** For seek: the position seeked FROM. */
   from_position?: number | null;
+  /** Client-generated retry-safe idempotency key. */
+  client_event_id?: string | null;
+  /** Monotonic order within one session. */
+  sequence_number?: number | null;
+  /** Provider event time, separate from server receipt time. */
+  occurred_at?: string | null;
+  /** Non-PII provider metadata such as visibility or playback rate. */
+  metadata?: Record<string, string | number | boolean | null>;
 }
 
 /** Body sent by the client to POST /api/tracking/session. */
@@ -59,6 +73,12 @@ export interface EndSessionPayload {
   position?: number | null;
   /** Final provider duration on natural end or page leave when available. */
   duration?: number | null;
+  /** Ordered final event written atomically with the session end. */
+  final_event?: {
+    client_event_id?: string | null;
+    sequence_number?: number | null;
+    occurred_at?: string | null;
+  };
 }
 
 /** Response from POST /api/tracking/session. */
@@ -66,6 +86,12 @@ export interface CreateSessionResponse {
   session_id: string;
   /** Private capability required for subsequent tracking writes. */
   session_token: string;
+}
+
+export interface TrackingEventBatchPayload {
+  session_id: string;
+  session_token: string;
+  events: TrackingEventPayload[];
 }
 
 export interface WatchedSegment {

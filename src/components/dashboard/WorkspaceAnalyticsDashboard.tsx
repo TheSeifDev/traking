@@ -87,7 +87,7 @@ export default function WorkspaceAnalyticsDashboard({
   const completionRate = measuredCompletions.length > 0
     ? Math.round((measuredCompletions.filter((session) => (session.completion_percentage ?? 0) >= 90).length / measuredCompletions.length) * 100)
     : null;
-  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.session_id)).size;
 
   const activity = useMemo(() => {
     const byDate = new Map<string, { date: string; views: number; sessions: number }>();
@@ -137,7 +137,7 @@ export default function WorkspaceAnalyticsDashboard({
 
   const stats = [
     { label: "Views", value: filteredSessions.length.toLocaleString(), note: "Real watch sessions", icon: Eye, color: "text-violet-300" },
-    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Hashed identities", icon: Users, color: "text-blue-300" },
+    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Profiles or legacy hashes", icon: Users, color: "text-blue-300" },
     { label: "Sessions", value: filteredSessions.length.toLocaleString(), note: "One record per visit", icon: Layers3, color: "text-cyan-300" },
     { label: "Measured watch time", value: formatDuration(totalWatchTime), note: "Direct URL + YouTube API", icon: Clock3, color: "text-emerald-300" },
     { label: "Avg watch time", value: formatDuration(averageWatchTime), note: "Measured sessions only", icon: Clock3, color: "text-cyan-300" },
@@ -158,7 +158,7 @@ export default function WorkspaceAnalyticsDashboard({
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-violet-200/70"><BarChart3 size={14} /> Workspace intelligence</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Analytics</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Workspace-level views, viewers, sessions, activity, and measured playback. Individual video analytics remain on each video details page so the scope is always explicit.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Workspace-level views, identified viewers, sessions, activity, and measured playback. Open a video to inspect its isolated viewers, sessions, events, and coverage.</p>
         </div>
           <div className="flex flex-col gap-2 sm:flex-row">
           <label className="text-xs text-white/40">
@@ -207,18 +207,18 @@ export default function WorkspaceAnalyticsDashboard({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have a signed-in viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
       ) : section === "viewers" ? (
-        <ViewerAnalyticsPanel sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. Viewer identifiers are one-way hashes; playback details are shown only for measured native or YouTube API events." />
+        <ViewerAnalyticsPanel sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. New sessions can show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback details are shown only for measured native or YouTube API events." />
       ) : section === "videos" ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
             <div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Top videos by views</h2><p className="mt-1 text-xs text-white/35">Session count from the selected range</p></div><Eye size={17} className="text-violet-300" /></div>
             <div className="mt-5 space-y-4">
-              {topByViews.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{video.total_views}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-400" style={{ width: `${(video.total_views / maxViews) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}
+              {topByViews.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{video.total_views}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-400" style={{ width: `${(video.total_views / maxViews) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}
             </div>
           </div>
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
             <div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Top videos by watch time</h2><p className="mt-1 text-xs text-white/35">Only sessions with measured playback</p></div><Clock3 size={17} className="text-emerald-300" /></div>
-            {topByWatchTime.length === 0 ? <p className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">No measurable watch time in this view.</p> : <div className="mt-5 space-y-4">{topByWatchTime.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-emerald-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{formatDuration(video.measurable_watch_time_seconds)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${((video.measurable_watch_time_seconds ?? 0) / maxWatchTime) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}</div>}
+            {topByWatchTime.length === 0 ? <p className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">No measurable watch time in this view.</p> : <div className="mt-5 space-y-4">{topByWatchTime.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-emerald-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{formatDuration(video.measurable_watch_time_seconds)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${((video.measurable_watch_time_seconds ?? 0) / maxWatchTime) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}</div>}
           </div>
         </div>
       ) : section === "activity" ? (
@@ -241,7 +241,7 @@ function ActivityChart({ activity }: { activity: Array<{ date: string; views: nu
 }
 
 function TopVideosCard({ title, videos, value, max, color }: { title: string; videos: Array<{ video_id: string; title: string; source_type: Video["source_type"]; total_views: number; measurable_watch_time_seconds: number | null }>; value: (video: (typeof videos)[number]) => string; max: number; color: "violet" | "emerald" }) {
-  return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">{title}</h2><div className="mt-5 space-y-4">{videos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Not measured yet.</p> : videos.map((video) => { const amount = color === "violet" ? video.total_views : video.measurable_watch_time_seconds ?? 0; return <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 text-white">{value(video)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className={`h-full rounded-full ${color === "violet" ? "bg-violet-400" : "bg-emerald-400"}`} style={{ width: `${(amount / max) * 100}%` }} /></div></div>; })}</div></div>;
+  return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">{title}</h2><div className="mt-5 space-y-4">{videos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Not measured yet.</p> : videos.map((video) => { const amount = color === "violet" ? video.total_views : video.measurable_watch_time_seconds ?? 0; return <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 text-white">{value(video)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className={`h-full rounded-full ${color === "violet" ? "bg-violet-400" : "bg-emerald-400"}`} style={{ width: `${(amount / max) * 100}%` }} /></div></div>; })}</div></div>;
 }
 
 function ActivitySection({ activity, recentActivity }: { activity: Array<{ date: string; views: number; sessions: number }>; recentActivity: ViewerSessionAnalytics[] }) {

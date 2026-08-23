@@ -22,7 +22,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   const resolved = await resolveWatchLink(token);
   if (!resolved) return NextResponse.json({ error: "invalid_token" }, { status: 404 });
 
-  const session = await createWatchSession(resolved.watch_link_id, user.id);
+  const session = await createWatchSession(resolved.watch_link_id, user.id, request.headers.get("user-agent"));
   if (!session) return NextResponse.json({ error: "session_creation_failed" }, { status: 500 });
 
   return NextResponse.json(

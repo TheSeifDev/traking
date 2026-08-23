@@ -30,10 +30,17 @@ export const POST = withAuth(async (request: NextRequest, user, context) => {
     : 0;
   const position = typeof b.position === "number" && Number.isFinite(b.position) ? Math.max(0, b.position) : null;
   const finalDuration = typeof b.duration === "number" && Number.isFinite(b.duration) && b.duration > 0 ? b.duration : null;
+  const finalEvent = b.final_event && typeof b.final_event === "object"
+    ? {
+        client_event_id: typeof b.final_event.client_event_id === "string" ? b.final_event.client_event_id.trim().slice(0, 100) : null,
+        sequence_number: typeof b.final_event.sequence_number === "number" && Number.isInteger(b.final_event.sequence_number) ? Math.max(0, Math.min(1000000, b.final_event.sequence_number)) : null,
+        occurred_at: typeof b.final_event.occurred_at === "string" && !Number.isNaN(new Date(b.final_event.occurred_at).getTime()) ? b.final_event.occurred_at : null,
+      }
+    : {};
 
   if (!sessionToken) return NextResponse.json({ error: "missing_session_token" }, { status: 400 });
 
-  const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration);
+  const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration, finalEvent);
   // Do not reveal whether the session id exists when the capability or identity is invalid.
   if (!ok) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
 
