@@ -85,7 +85,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes("duration: event.duration !== null") && trackingService.includes("duration: event.duration"), "provider duration is stored with each event");
   assert(trackingService.includes("const { error: sessionUpdateError } = await supabase") && trackingService.includes("return !sessionUpdateError"), "event ingestion awaits the last-activity session update");
   assert(trackingService.includes("from_position: event.from_position !== null") && trackingService.includes("from_position: event.from_position"), "seek origin is stored in the dedicated from_position field");
-  assert(trackingService.includes("hashViewerIdentity") && trackingService.includes("data.viewer_identifier === await hashViewerIdentity(viewerIdentity)"), "tracking writes are bound to the authenticated profile identity");
+  assert(trackingService.includes("hashViewerIdentity") && trackingService.includes('.select("id, viewer_identifier, viewer_profile_id")') && trackingService.includes("data.viewer_profile_id === viewerIdentity && data.viewer_identifier === await hashViewerIdentity(viewerIdentity)"), "tracking writes are bound to the exact authenticated profile identity and its stable hash");
   assert(trackingService.includes('.is("ended_at", null)'), "events and session end reject already-ended sessions");
   assert(watchPlayer.includes("const accumulateWatchTime = useCallback((resume: boolean)"), "watch player accumulates elapsed play segments explicitly");
   assert(watchPlayer.includes("startTimeRef.current = Date.now()") && watchPlayer.includes("const initialSnapshot = readSnapshot()") && watchPlayer.includes("startSession()"), "watch time does not start before playback begins");

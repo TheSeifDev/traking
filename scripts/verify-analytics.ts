@@ -1,56 +1,84 @@
 import assert from "node:assert/strict";
-import { buildPlaybackHeatmap, reconstructWatchedRanges } from "../src/lib/analytics/ranges";
+import { buildPlaybackHeatmap, mergeWatchedRanges, reconstructWatchedRanges } from "../src/lib/analytics/ranges";
 import type { WatchEventSummary } from "../src/types/video";
+
+let checks = 0;
+
+function equal<T>(actual: T, expected: T): void {
+  checks += 1;
+  assert.equal(actual, expected);
+}
+
+function deepEqual<T>(actual: T, expected: T): void {
+  checks += 1;
+  assert.deepEqual(actual, expected);
+}
 
 function event(
   id: string,
   event_type: WatchEventSummary["event_type"],
   position: number,
-  sequence_number: number | null,
+  sequence_number: number,
   from_position: number | null = null,
 ): WatchEventSummary {
+  const occurredAt = new Date(sequence_number * 1000).toISOString();
   return {
     id,
     event_type,
     position,
     from_position,
-    duration: 60,
-    created_at: new Date(sequence_number === null ? 0 : sequence_number * 1000).toISOString(),
+    duration: 120,
+    created_at: occurredAt,
     sequence_number,
-    occurred_at: sequence_number === null ? null : new Date(sequence_number * 1000).toISOString(),
+    occurred_at: occurredAt,
   };
 }
 
-const contiguous: WatchEventSummary[] = [
+const realisticPlayback: WatchEventSummary[] = [
   event("play", "play", 0, 1),
-  event("heartbeat", "heartbeat", 5, 2),
-  event("pause", "pause", 5, 3),
+  event("heartbeat-20", "heartbeat", 20, 2),
+  event("pause-20", "pause", 20, 3),
+  event("resume-20", "resume", 20, 4),
+  event("heartbeat-45", "heartbeat", 45, 5),
+  event("seek-90", "seek", 90, 6, 45),
+  event("heartbeat-110", "heartbeat", 110, 7),
+  event("pause-110", "pause", 110, 8),
 ];
-const reconstructed = reconstructWatchedRanges(contiguous, 60);
-assert.equal(reconstructed.reliable, true);
-assert.deepEqual(reconstructed.ranges, [{ start: 0, end: 5 }]);
-const measured = buildPlaybackHeatmap(contiguous, 60, true);
-assert.equal(measured.available, true);
-assert.equal(measured.availability, "measured");
-assert.equal(measured.buckets.reduce((sum, bucket) => sum + bucket.watched_seconds, 0), 5);
 
-const withSeek: WatchEventSummary[] = [
-  event("play", "play", 0, 1),
-  event("heartbeat", "heartbeat", 5, 2),
-  event("seek", "seek", 20, 3, 5),
-  event("heartbeat-2", "heartbeat", 25, 4),
-  event("ended", "ended", 25, 5),
-];
-const seekRanges = reconstructWatchedRanges(withSeek, 60);
-assert.equal(seekRanges.reliable, true);
-assert.deepEqual(seekRanges.ranges, [{ start: 0, end: 5 }, { start: 20, end: 25 }]);
+const reconstructed = reconstructWatchedRanges(realisticPlayback, 120);
+equal(reconstructed.reliable, true);
+deepEqual(reconstructed.ranges, [{ start: 0, end: 45 }, { start: 90, end: 110 }]);
+equal(reconstructed.ranges.reduce((sum, range) => sum + range.end - range.start, 0), 65);
+equal(reconstructed.ranges.some((range) => range.start < 90 && range.end > 45), false);
 
-const unordered = buildPlaybackHeatmap([event("play", "play", 0, null), event("pause", "pause", 5, null)], 60, true);
-assert.equal(unordered.available, false);
-assert.equal(unordered.availability, "insufficient_data");
+const measured = buildPlaybackHeatmap(realisticPlayback, 120, true);
+equal(measured.available, true);
+equal(measured.availability, "measured");
+equal(measured.buckets.reduce((sum, bucket) => sum + bucket.watched_seconds, 0), 65);
 
-const unsupported = buildPlaybackHeatmap(contiguous, 60, false);
-assert.equal(unsupported.available, false);
-assert.equal(unsupported.availability, "not_available_from_provider");
+deepEqual(
+  mergeWatchedRanges([{ start: 0, end: 20 }, { start: 10, end: 30 }], 60),
+  [{ start: 0, end: 30 }],
+);
+deepEqual(
+  mergeWatchedRanges([{ start: 0, end: 20 }, { start: 20.4, end: 30 }], 60),
+  [{ start: 0, end: 30 }],
+);
 
-console.log("Analytics Verification: 15/15 passed");
+deepEqual(
+  reconstructWatchedRanges([event("play", "play", 0, 1), event("pause", "pause", 5, 2)], 60),
+  { ranges: [{ start: 0, end: 5 }], reliable: true },
+);
+const unordered = buildPlaybackHeatmap(
+  [event("play", "play", 0, 1), { ...event("pause", "pause", 5, 2), sequence_number: null, occurred_at: null }],
+  60,
+  true,
+);
+equal(unordered.available, false);
+equal(unordered.availability, "insufficient_data");
+
+const unsupported = buildPlaybackHeatmap(realisticPlayback, 120, false);
+equal(unsupported.available, false);
+equal(unsupported.availability, "not_available_from_provider");
+
+console.log(`Analytics Verification: ${checks}/${checks} passed`);

@@ -172,14 +172,14 @@ export async function isAuthorizedWatchSession(
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("watch_sessions")
-      .select("id, viewer_identifier")
+      .select("id, viewer_identifier, viewer_profile_id")
       .eq("id", sessionId)
       .eq("session_token", sessionToken)
       .is("ended_at", null)
       .maybeSingle();
 
     if (error || !data) return false;
-    return data.viewer_identifier === await hashViewerIdentity(viewerIdentity);
+    return data.viewer_profile_id === viewerIdentity && data.viewer_identifier === await hashViewerIdentity(viewerIdentity);
   } catch {
     return false;
   }
