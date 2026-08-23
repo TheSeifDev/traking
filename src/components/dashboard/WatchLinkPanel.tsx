@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertCircle, CheckCircle, Copy, ExternalLink, Link2, Loader2, Plus, ShieldCheck, XCircle } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CheckCircle, Copy, ExternalLink, Link2, Loader2, Plus, ShieldCheck, XCircle } from "lucide-react";
 import type { WatchLink } from "@/src/types/video";
 
 interface WatchLinkPanelProps {
@@ -10,6 +10,7 @@ interface WatchLinkPanelProps {
   existingLinks: WatchLink[];
   canManage: boolean;
   appOrigin: string;
+  detailsHref?: string;
   onLinksChange?: (links: WatchLink[]) => void;
 }
 
@@ -19,7 +20,7 @@ function formatDate(value: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? "Not recorded" : date.toLocaleString();
 }
 
-export default function WatchLinkPanel({ videoId, existingLinks: initial, canManage, appOrigin, onLinksChange }: WatchLinkPanelProps) {
+export default function WatchLinkPanel({ videoId, existingLinks: initial, canManage, appOrigin, detailsHref, onLinksChange }: WatchLinkPanelProps) {
   const [links, setLinks] = useState<WatchLink[]>(initial);
   const [generating, setGenerating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -29,6 +30,7 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
   const [currentTime] = useState(() => Date.now());
 
   const getUrl = (token: string) => `${appOrigin}/watch/${token}`;
+  const getDisplayUrl = (token: string) => `${appOrigin}/watch/…${token.slice(-8)}`;
   const activeLink = links.find((link) => !link.revoked_at && !(link.expires_at && new Date(link.expires_at).getTime() <= currentTime));
   const historyLinks = links.filter((link) => link.id !== activeLink?.id);
   const revokedLinks = historyLinks.filter((link) => Boolean(link.revoked_at));
@@ -124,12 +126,12 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
 
       {activeLink ? (
         <div className="border-b border-white/8 pb-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3">
             <div className="min-w-0 flex-1">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200"><CheckCircle size={12} />Active</span>
-              <p className="mt-3 break-all rounded-xl border border-white/8 bg-black/15 px-3 py-2.5 font-mono text-xs leading-5 text-emerald-100/85">{getUrl(activeLink.token)}</p>
+              <p className="mt-3 min-w-0 truncate rounded-xl border border-white/8 bg-black/15 px-3 py-2.5 font-mono text-xs leading-5 text-emerald-100/85" aria-label="Active TrackUp viewer link">{getDisplayUrl(activeLink.token)}</p>
             </div>
-            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto lg:shrink-0">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
               <button onClick={() => void copyLink(activeLink)} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-500">{copied ? <CheckCircle size={14} className="text-emerald-200" /> : <Copy size={14} />} {copied ? "Copied" : "Copy link"}</button>
               <a href={getUrl(activeLink.token)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white"><ExternalLink size={14} />Open</a>
               {canManage && <button onClick={() => void handleRevoke(activeLink.id)} disabled={revoking === activeLink.id} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-red-300/20 bg-red-400/[0.06] px-3 py-2 text-xs font-medium text-red-200/85 transition hover:bg-red-400/10 hover:text-red-100 disabled:opacity-50">{revoking === activeLink.id ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}Revoke</button>}
@@ -144,6 +146,8 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
           {canManage && <button onClick={() => void handleGenerate()} disabled={generating} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{generating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {generating ? "Creating..." : "Create viewer link"}</button>}
         </div>
       )}
+
+      {detailsHref && <Link href={detailsHref} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-violet-400">View details <ArrowUpRight size={14} /></Link>}
 
       {historyLinks.length > 0 && <details className="group">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 py-2 text-sm font-medium text-white/55 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-violet-300/50"><span className="flex items-center gap-2"><ShieldCheck size={15} className="text-white/35" />Revoked history <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[10px] text-white/40">{revokedLinks.length}</span></span><span aria-hidden="true" className="text-xs text-white/30 transition group-open:rotate-180">⌄</span></summary>

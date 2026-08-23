@@ -186,7 +186,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
             {filteredVideos.length === 0 ? (
               <EmptyState title="No videos match these filters" description="Try a different search term or access status." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />
             ) : (
-              <div className={filteredVideos.length > 1 ? "grid gap-5 xl:grid-cols-2" : "grid grid-cols-1 gap-5"}>
+              <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {filteredVideos.map((video) => <VideoAccessCard key={video.id} video={video} now={now} canManage={canManage} appOrigin={appOrigin} onLinksChange={(links) => updateLinks(video.id, links)} />)}
               </div>
             )}
@@ -203,40 +203,37 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
   const activeLink = activeLinkFor(video, now);
   const historyCount = links.filter((link) => Boolean(link.revoked_at)).length;
   const providerLabel = SOURCE_LABELS[video.source_type];
-  const statusLabel = activeLink ? "Active" : historyCount > 0 ? "Revoked" : "Not created";
-  const statusClass = activeLink ? "bg-emerald-400/10 text-emerald-100" : historyCount > 0 ? "bg-red-400/10 text-red-100" : "bg-white/[0.08] text-white/65";
+  const statusLabel = activeLink ? "Active" : historyCount > 0 ? "Revoked" : "No link";
+  const statusClass = activeLink ? "border-emerald-300/20 bg-emerald-400/15 text-emerald-100" : historyCount > 0 ? "border-red-300/20 bg-red-400/15 text-red-100" : "border-white/10 bg-black/35 text-white/70";
   const viewerCount = video.unique_viewer_count === null || video.unique_viewer_count === undefined ? "—" : video.unique_viewer_count;
 
   return (
-    <article className="group min-w-0 overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:border-violet-300/20 hover:bg-white/[0.045]">
-      <div className="min-w-0 lg:flex lg:items-start">
-        <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735] lg:aspect-video lg:w-[240px] xl:w-[280px]" aria-label={`Open ${video.title} details`}>
-          {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
-          <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-medium text-white/75 backdrop-blur-sm"><VideoIcon size={13} />Video details</span>
-        </Link>
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-300/20 hover:bg-white/[0.045]">
+      <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
+        {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
+        <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
+          <span className={`max-w-[48%] truncate rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span>
+          <span className={`max-w-[48%] truncate rounded-lg border px-2 py-1 text-[10px] font-semibold ${statusClass}`}>{statusLabel}</span>
+        </div>
+      </Link>
 
-        <div className="min-w-0 p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span>
-                <span className={`rounded-lg px-2 py-1 text-[10px] font-semibold ${statusClass}`}>{statusLabel}</span>
-              </div>
-              <Link href={`/videos/${video.id}`} className="mt-3 block line-clamp-2 break-words text-xl font-semibold tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
-              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-white/35"><CalendarDays size={13} />Added {formatDate(video.created_at)}</p>
-            </div>
-            <Link href={`/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-2 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
+      <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Link href={`/videos/${video.id}`} className="block line-clamp-2 min-h-12 break-words text-lg font-semibold leading-6 tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
+            <p className="mt-2 flex min-w-0 items-center gap-1.5 truncate text-xs text-white/35"><CalendarDays size={13} className="shrink-0" />Added {formatDate(video.created_at)}</p>
           </div>
+          <Link href={`/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
+        </div>
 
-          <div className="mt-6 grid grid-cols-3 divide-x divide-white/8 border-y border-white/8 py-3 text-center">
-            <Metric label="Sessions" value={links.reduce((total, link) => total + (link.session_count ?? 0), 0)} />
-            <Metric label="Viewers" value={viewerCount} icon={UsersRound} />
-            <Metric label="Watch time" value={formatWatchTime(video)} unavailable={!video.playback_metrics_available} />
-          </div>
+        <div className="mt-5 grid grid-cols-3 divide-x divide-white/8 border-y border-white/8 py-3 text-center">
+          <Metric label="Sessions" value={links.reduce((total, link) => total + (link.session_count ?? 0), 0)} />
+          <Metric label="Viewers" value={viewerCount} icon={UsersRound} />
+          <Metric label="Watch time" value={formatWatchTime(video)} unavailable={!video.playback_metrics_available} />
+        </div>
 
-          <div className="mt-5">
-            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} onLinksChange={onLinksChange} />
-          </div>
+        <div className="mt-5 min-w-0">
+            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} detailsHref={`/videos/${video.id}`} onLinksChange={onLinksChange} />
         </div>
       </div>
     </article>
