@@ -56,10 +56,10 @@ const Footer = () => {
               <Image
                 src="/logo.webp"
                 alt="TrackUp"
-                width={165}
-                height={48}
+                width={128}
+                height={128}
                 priority
-                className="h-9 w-auto sm:h-10"
+                className="h-9 w-9 object-contain sm:h-10 sm:w-10"
               />
             </Link>
 

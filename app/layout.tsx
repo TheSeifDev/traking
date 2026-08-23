@@ -17,12 +17,9 @@ export const metadata: Metadata = {
   description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
   applicationName: "TrackUp",
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/logo.ico", sizes: "256x256", type: "image/x-icon" },
-    ],
+    icon: [{ url: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
     shortcut: "/favicon.ico",
-    apple: "/logo.ico",
+    apple: "/logo.webp",
   },
 };
 

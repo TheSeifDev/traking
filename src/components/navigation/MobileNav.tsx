@@ -53,10 +53,10 @@ const MobileNav = () => {
           <Image
             src="/logo.webp"
             alt="TrackUp"
-            width={180}
-            height={50}
+            width={128}
+            height={128}
             priority
-            className="h-7 w-auto"
+            className="h-7 w-7 object-contain"
           />
         </Link>
 

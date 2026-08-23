@@ -37,10 +37,10 @@ const Nav = () => {
           <Image
             src="/logo.webp"
             alt="TrackUp"
-            width={205}
-            height={58}
+            width={128}
+            height={128}
             priority
-            className="h-8 w-auto lg:h-9"
+            className="h-8 w-8 object-contain lg:h-9 lg:w-9"
           />
         </Link>
 

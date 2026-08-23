@@ -22,8 +22,14 @@ const envExample = readFileSync(".env.example", "utf8");
 const rootLayout = readFileSync("app/layout.tsx", "utf8");
 const watchPlayer = readFileSync("src/components/watch/WatchPlayer.tsx", "utf8");
 const publicNav = readFileSync("src/components/navigation/Nav.tsx", "utf8");
+const mobileNav = readFileSync("src/components/navigation/MobileNav.tsx", "utf8");
 const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
+const footer = readFileSync("src/components/home/Footer.tsx", "utf8");
+const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
+const loginIntegrationVisual = readFileSync("src/components/login/IntegrationVisual.tsx", "utf8");
+const clickUpIntegration = readFileSync("src/components/home/ClickUpIntegration.tsx", "utf8");
 const favicon = readFileSync("app/favicon.ico");
+const publicFavicon = readFileSync("public/favicon.ico");
 
 assert(service.includes("randomBytes(32)") && service.includes("createHash(\"sha256\")"), "creation uses cryptographically random raw token and SHA-256 digest");
 assert(!service.includes("token: rawToken") && !service.includes("raw_token: rawToken"), "database insert does not persist raw token");
@@ -41,8 +47,9 @@ assert(service.includes("logo.webp") && service.includes("Accept invitation") &&
 assert(service.includes("idempotencyKey: `trackup-invitation-${input.invitationId}`") && !service.includes("rawToken.slice"), "email idempotency key never contains raw invitation token material");
 assert(rootLayout.includes("metadataBase: new URL(\"https://trakeup.vercel.app\")") && rootLayout.includes("/favicon.ico") && rootLayout.includes("themeColor"), "root metadata uses TrackUp production identity and favicon");
 assert(!watchPlayer.includes("View in YouTube") && !watchPlayer.includes("view in YouTube"), "viewer contains no custom external YouTube CTA");
-assert(publicNav.includes('src="/logo.webp"') && dashboardShell.includes('src="/logo.webp"'), "TrackUp logo asset is used in public and dashboard navigation");
-assert(favicon.length > 1000, "favicon is a non-empty TrackUp icon asset");
+assert([publicNav, mobileNav, dashboardShell, footer, watchPage, loginIntegrationVisual, clickUpIntegration].every((source) => source.includes('/logo.webp')), "TrackUp logo asset is used across public, dashboard, viewer, footer, and integration surfaces");
+assert(favicon.length > 1000 && publicFavicon.length > 1000, "app and public favicons are non-empty TrackUp icon assets");
+assert(rootLayout.includes('apple: "/logo.webp"'), "metadata touch icon uses the official transparent TrackUp logo");
 assert(presence.includes("interval '5 minutes'") && presenceRoute.includes("withAuth") && presenceRoute.includes("user.id"), "presence uses authenticated identity and server debounce");
 assert(!presenceRoute.includes("request.json") && !presenceRoute.includes("user_id"), "presence route accepts no client-supplied identity");
 

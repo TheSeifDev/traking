@@ -40,7 +40,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
         <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg">
-              <Image src="/logo.webp" alt="TrackUp" width={205} height={58} priority className="h-8 w-auto lg:h-9" />
+              <Image src="/logo.webp" alt="TrackUp" width={128} height={128} priority className="h-8 w-8 object-contain lg:h-9 lg:w-9" />
             </div>
             <span className="text-sm font-semibold tracking-wide text-white">TrackUp</span>
           </Link>
@@ -85,7 +85,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5" aria-label="TrackUp dashboard">
-            <Image src="/logo.webp" alt="TrackUp" width={44} height={44} priority className="h-8 w-8 shrink-0 object-contain" />
+            <Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 shrink-0 object-contain" />
             <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{workspace && <span className="block max-w-28 truncate text-[10px] text-white/35">{workspace.name}</span>}</div>
           </Link>
           <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
