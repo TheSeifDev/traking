@@ -440,7 +440,12 @@ export default function WatchPlayer({
       }
       player = new api.Player(youtubeContainerRef.current, {
         videoId,
-        playerVars: { rel: 0, playsinline: 1, origin: window.location.origin },
+        playerVars: {
+          rel: 0,
+          playsinline: 1,
+          origin: window.location.origin,
+          widget_referrer: window.location.origin,
+        },
         events: {
           onReady: (readyEvent) => {
             youtubePlayerRef.current = readyEvent.target;
@@ -455,6 +460,8 @@ export default function WatchPlayer({
           onError: () => setError("YouTube could not load this video inside TrackUp."),
         },
       });
+      const iframe = youtubeContainerRef.current.querySelector<HTMLIFrameElement>("iframe");
+      iframe?.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
     }).catch(() => {
       if (!cancelled) setError("Unable to load the YouTube player inside TrackUp.");
     });

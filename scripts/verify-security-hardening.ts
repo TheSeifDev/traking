@@ -128,6 +128,7 @@ async function runTests(): Promise<void> {
   assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
   assert(watchPlayer.includes("https://www.youtube.com/iframe_api") && watchPlayer.includes("new api.Player"), "YouTube uses the official IFrame Player API inside TrackUp");
   assert(watchPlayer.includes("getCurrentTime") && watchPlayer.includes("getDuration") && watchPlayer.includes("onStateChange"), "YouTube telemetry reads current time, duration, and state changes from the API");
+  assert(watchPlayer.includes("widget_referrer: window.location.origin") && watchPlayer.includes('setAttribute("referrerpolicy", "strict-origin-when-cross-origin")'), "YouTube IFrame API receives a valid origin referrer configuration");
   assert(watchPlayer.includes("youtube_iframe_api") || watchPlayer.includes("YouTube IFrame API"), "YouTube capability messaging is explicit");
   assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes('fetch("/api/admin/users"'), "team UI uses real owner management and invite endpoints");
   assert(teamManager.includes("must sign in through ClickUp") && teamManager.includes("Create profile"), "invite UI explains ClickUp pre-provisioning without fake email delivery");
