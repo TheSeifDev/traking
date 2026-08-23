@@ -87,7 +87,7 @@ export default function WorkspaceAnalyticsDashboard({
   const completionRate = measuredCompletions.length > 0
     ? Math.round((measuredCompletions.filter((session) => (session.completion_percentage ?? 0) >= 90).length / measuredCompletions.length) * 100)
     : null;
-  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(filteredSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size;
 
   const activity = useMemo(() => {
     const byDate = new Map<string, { date: string; views: number; sessions: number }>();
@@ -137,7 +137,7 @@ export default function WorkspaceAnalyticsDashboard({
 
   const stats = [
     { label: "Views", value: filteredSessions.length.toLocaleString(), note: "Real watch sessions", icon: Eye, color: "text-violet-300" },
-    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Profiles or legacy hashes", icon: Users, color: "text-blue-300" },
+    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Profiles, link-scoped guests, or anonymous IDs", icon: Users, color: "text-blue-300" },
     { label: "Sessions", value: filteredSessions.length.toLocaleString(), note: "One record per visit", icon: Layers3, color: "text-cyan-300" },
     { label: "Measured watch time", value: formatDuration(totalWatchTime), note: "Direct URL + YouTube API", icon: Clock3, color: "text-emerald-300" },
     { label: "Avg watch time", value: formatDuration(averageWatchTime), note: "Measured sessions only", icon: Clock3, color: "text-cyan-300" },

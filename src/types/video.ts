@@ -162,6 +162,7 @@ export type TelemetryState = "measured" | "missing" | "unsupported";
 export interface AnalyticsViewerSummary {
   viewer_id: string;
   viewer_identifier: string | null;
+  viewer_identity_id?: string | null;
   viewer_name: string | null;
   viewer_email: string | null;
   viewer_status: "identified" | "anonymous";
@@ -187,6 +188,7 @@ export interface ViewerSessionAnalytics {
   session_id: string;
   viewer_identifier: string | null;
   viewer_profile_id?: string | null;
+  viewer_identity_id?: string | null;
   viewer_name?: string | null;
   viewer_email?: string | null;
   viewer_status?: "identified" | "anonymous";

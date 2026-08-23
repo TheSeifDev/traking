@@ -67,15 +67,15 @@ async function runTests(): Promise<void> {
   assert(capabilityMigration.includes("gen_random_bytes(32)"), "existing watch sessions receive random backfill tokens");
   assert(capabilityMigration.includes("ALTER COLUMN session_token SET NOT NULL"), "session token is mandatory after backfill");
   assert(capabilityMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token"), "session token has a unique index");
-  assert(sessionRoute.includes("withAuth") && sessionRoute.includes("createWatchSession(resolved.watch_link_id, user.id"), "session creation requires the authenticated viewer identity");
+  assert(sessionRoute.includes("resolveWatchActor") && sessionRoute.includes("viewer_identity_required") && sessionRoute.includes("createWatchSession(resolved.watch_link_id, actor"), "session creation requires a resolved profile or signed guest viewer actor");
   assert(sessionRoute.includes("session_token: session.sessionToken"), "session creation route returns the private capability");
-  assert(eventRoute.includes("withAuth") && eventRoute.includes("user.id"), "event route requires the authenticated viewer identity");
+  assert(eventRoute.includes("resolveWatchActor") && eventRoute.includes("viewer_identity_required") && eventRoute.includes("recordTrackingEvents(\n    sessionId"), "event route requires a resolved profile or signed guest viewer actor");
   assert(eventRoute.includes("missing_session_token") && eventRoute.includes("const sessionToken") && eventRoute.includes("recordTrackingEvents"), "event route requires and forwards the capability");
   assert(eventRoute.includes("status: 404") && eventRoute.includes("session_not_found"), "event route uses a non-leaking capability failure");
-  assert(endRoute.includes("withAuth") && endRoute.includes("user.id"), "end route requires the authenticated viewer identity");
+  assert(endRoute.includes("resolveWatchActor") && endRoute.includes("viewer_identity_required") && endRoute.includes("endWatchSession(sessionId, sessionToken, actor"), "end route requires a resolved profile or signed guest viewer actor");
   assert(endRoute.includes("missing_session_token") && endRoute.includes("sessionToken"), "end route requires and forwards the capability");
   assert(endRoute.includes("status: 404") && endRoute.includes("session_not_found"), "end route uses a non-leaking capability failure");
-  assert(endRoute.includes("const position") && endRoute.includes("finalDuration") && endRoute.includes("finalEvent") && endRoute.includes("endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration, finalEvent)"), "session end accepts final player position and duration");
+  assert(endRoute.includes("const position") && endRoute.includes("finalDuration") && endRoute.includes("finalEvent") && endRoute.includes("endWatchSession(sessionId, sessionToken, actor, watchTime, completion, position, finalDuration, finalEvent)"), "session end accepts final player position and duration for the resolved actor");
   assert(trackingService.includes('randomBytes(32).toString("hex")'), "tracking service creates an opaque random capability");
   assert(trackingService.includes('.select("id, session_token")'), "tracking service reads the created capability");
   assert(trackingService.includes("recordTrackingEvents") && trackingService.includes('.eq("session_token", sessionToken)'), "event writes scope last-seen updates by capability");
@@ -84,7 +84,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes("duration: event.duration !== null") && trackingService.includes("duration: event.duration"), "provider duration is stored with each event");
   assert(trackingService.includes("const { error: sessionUpdateError } = await supabase") && trackingService.includes("return !sessionUpdateError"), "event ingestion awaits the last-activity session update");
   assert(trackingService.includes("from_position: event.from_position !== null") && trackingService.includes("from_position: event.from_position"), "seek origin is stored in the dedicated from_position field");
-  assert(trackingService.includes("hashViewerIdentity") && trackingService.includes("data.viewer_identifier === await hashViewerIdentity(viewerIdentity)"), "tracking writes are bound to the authenticated viewer identity");
+  assert(trackingService.includes("hashProfileIdentity") && trackingService.includes("hashGuestIdentity") && trackingService.includes("data.viewer_identifier === await hashProfileIdentity(actor.profileId)") && trackingService.includes("data.viewer_identifier === await hashGuestIdentity(actor.identityId)"), "tracking writes are bound to the resolved profile or link-scoped guest identity");
   assert(trackingService.includes('.is("ended_at", null)'), "events and session end reject already-ended sessions");
   assert(watchPlayer.includes("const accumulateWatchTime = useCallback((resume: boolean)"), "watch player accumulates elapsed play segments explicitly");
   assert(watchPlayer.includes("startTimeRef.current = Date.now()") && watchPlayer.includes("const initialSnapshot = readSnapshot()") && watchPlayer.includes("startSession()"), "watch time does not start before playback begins");
@@ -105,7 +105,7 @@ async function runTests(): Promise<void> {
   assert(analyticsMigration.includes("client_event_id TEXT") && analyticsMigration.includes("sequence_number INTEGER") && analyticsMigration.includes("occurred_at TIMESTAMPTZ") && analyticsMigration.includes("metadata JSONB"), "analytics events persist ordered idempotent telemetry");
   assert(analyticsMigration.includes("uq_watch_events_session_client_event") && analyticsMigration.includes("idx_watch_events_session_sequence"), "analytics events have dedupe and ordering indexes");
   assert(eventRoute.includes("MAX_BATCH_SIZE") && eventRoute.includes("normalizeMetadata") && eventRoute.includes("invalid_batch_size"), "tracking batch input is bounded and sanitized");
-  assert(trackingService.includes("viewer_profile_id: viewerIdentity") && trackingService.includes("deriveViewerClientMetadata"), "new sessions bind authenticated identity and coarse client metadata");
+  assert(trackingService.includes("viewer_profile_id: actor.kind === \"profile\" ? actor.profileId : null") && trackingService.includes("viewer_identity_id: actor.kind === \"guest\" ? actor.identityId : null") && trackingService.includes("deriveViewerClientMetadata"), "new sessions bind profile-or-guest identity and coarse client metadata");
   assert(watchPlayer.includes("pendingEventsRef") && watchPlayer.includes("sequenceNumberRef") && watchPlayer.includes("flushEvents") && watchPlayer.includes("client_event_id"), "player batches ordered idempotent events");
   assert(analyticsRanges.includes("reconstructWatchedRanges") && analyticsRanges.includes("aggregateHeatmaps") && analyticsRanges.includes("not_available_from_provider"), "range aggregation has deterministic and honest availability states");
   assert(viewerAnalyticsRoute.includes("withPermission") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withPermission") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce permission and scope");
@@ -155,7 +155,8 @@ async function runTests(): Promise<void> {
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
   assert(watchLinkPanel.includes("appOrigin") && !watchLinkPanel.includes("window.location.origin"), "watch-link UI builds URLs without server-side window access");
-  assert(watchPage.includes("getCurrentUser") && watchPage.includes("Sign in to watch this video") && watchPage.includes("/login?redirect="), "viewer requires auth and preserves the exact return path");
+  assert(watchPage.includes("getCurrentUser") && watchPage.includes("getGuestViewerIdentityForLink") && watchPage.includes("ViewerIdentityGate") && watchPage.includes("resolveWatchLink"), "viewer requires a valid TrackUp profile or link-scoped guest identity");
+  assert(watchLinkService.includes("viewer_identity_id: latest.viewer_identity_id") && watchLinkService.includes("viewer_identity_id ?? session.viewer_identifier"), "analytics summaries and link counts preserve guest identity precedence");
   assert(videoList.includes('video.playback_metrics_available && video.avg_completion !== null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
   assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("getLinkState") && videoList.includes("Active"), "video library derives thumbnails, link status, and the single active-link state from real fields");
   assert(videosApi.includes("getWorkspaceAnalytics") && videosApi.includes("summary") && videosApi.includes("total_viewers"), "video API returns real library summary data alongside videos");

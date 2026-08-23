@@ -29,7 +29,7 @@ function formatPosition(seconds: number | null): string {
 function viewerLabel(session: ViewerSessionAnalytics): string {
   if (session.viewer_name?.trim()) return session.viewer_name.trim();
   if (session.viewer_email?.trim()) return session.viewer_email.trim();
-  return session.viewer_identifier ? `Viewer ${session.viewer_identifier.slice(0, 8)}` : `Legacy anonymous ${session.session_id.slice(0, 8)}`;
+  return "Anonymous Viewer";
 }
 
 function scopeLabel(scope: PlaybackMetricsScope): string {
@@ -63,7 +63,7 @@ export default function ViewerAnalyticsPanel({
       session.source_type,
     ].some((value) => value.toLowerCase().includes(normalized)));
   }, [query, sessions]);
-  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.session_id)).size;
+  const uniqueViewers = new Set(visibleSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.session_id)).size;
   const measuredSessions = visibleSessions.filter((session) => session.has_playback_telemetry);
   const measuredWatchTime = measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0);
   const averageWatchTime = measuredSessions.length > 0 ? measuredWatchTime / measuredSessions.length : null;
@@ -80,7 +80,7 @@ export default function ViewerAnalyticsPanel({
 
       <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-sm text-white/60 focus-within:border-violet-300/40">
         <Search size={15} className="shrink-0 text-white/35" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by viewer hash, session, video, or provider" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/25" aria-label="Filter viewer and session analytics" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by viewer, email, session, video, or provider" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/25" aria-label="Filter viewer and session analytics" />
       </label>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -94,7 +94,7 @@ export default function ViewerAnalyticsPanel({
         <div className="rounded-2xl border border-dashed border-white/10 px-6 py-12 text-center">
           <Eye size={28} className="mx-auto mb-3 text-white/15" />
           <p className="text-sm text-white/45">{sessions.length === 0 ? "No viewer sessions recorded yet." : "No sessions match this filter."}</p>
-          <p className="mt-1 text-xs text-white/30">{sessions.length === 0 ? "Generate a TrackUp viewer link and sign in to open it and start playback." : "Try a different viewer, session, video, or provider filter."}</p>
+          <p className="mt-1 text-xs text-white/30">{sessions.length === 0 ? "Generate a TrackUp viewer link and identify the viewer before playback, or sign in with TrackUp." : "Try a different viewer, session, video, or provider filter."}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -110,12 +110,13 @@ export default function ViewerAnalyticsPanel({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-white">{viewerLabel(session)}</p>
                     <p className="mt-1 truncate text-xs text-white/40">{session.video_title}</p>
-                    <p className="mt-1 text-[11px] text-white/30">Session {session.session_number} of {session.session_count_for_viewer} for this viewer{session.viewer_email ? ` · ${session.viewer_email}` : ""}</p>
+                    <p className="mt-1 truncate text-[11px] text-white/30">{session.viewer_email ?? (session.viewer_status === "anonymous" ? "Anonymous Viewer" : "Viewer identity unavailable")} · Viewer ID {session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier?.slice(0, 12) ?? "—"}</p>
+                    <p className="mt-1 text-[11px] text-white/30">Session {session.session_number} of {session.session_count_for_viewer}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`w-fit rounded-full border px-2 py-1 text-[10px] ${statusClass}`}>{telemetryLabel(session)}</span>
                     <Link href={`/analytics/videos/${session.video_id}/sessions/${session.session_id}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View session</Link>
-                    {(session.viewer_profile_id || session.viewer_identifier) && <Link href={`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identifier ?? "")}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
+                    {(session.viewer_profile_id || session.viewer_identity_id || session.viewer_identifier) && <Link href={`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? "")}`} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
                   </div>
                 </div>
 

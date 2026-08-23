@@ -3,14 +3,16 @@
  * POST - End the authenticated viewer's watch session.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
 import { endWatchSession } from "@/src/lib/tracking/service";
+import { resolveWatchActor } from "@/src/lib/tracking/viewer-identity";
 import type { EndSessionPayload } from "@/src/types/tracking";
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
-export const POST = withAuth(async (request: NextRequest, user, context) => {
-  const { sessionId } = await (context as RouteContext).params;
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { sessionId } = await context.params;
+  const actor = await resolveWatchActor(request);
+  if (!actor) return NextResponse.json({ error: "viewer_identity_required" }, { status: 401 });
   if (!sessionId) return NextResponse.json({ error: "missing_session_id" }, { status: 400 });
 
   let body: unknown;
@@ -40,9 +42,9 @@ export const POST = withAuth(async (request: NextRequest, user, context) => {
 
   if (!sessionToken) return NextResponse.json({ error: "missing_session_token" }, { status: 400 });
 
-  const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration, finalEvent);
+  const ok = await endWatchSession(sessionId, sessionToken, actor, watchTime, completion, position, finalDuration, finalEvent);
   // Do not reveal whether the session id exists when the capability or identity is invalid.
   if (!ok) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
 
   return NextResponse.json({ ended: true });
-});
+}

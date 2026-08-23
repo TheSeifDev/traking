@@ -1,14 +1,15 @@
 /**
  * Tracking Domain Service
  *
- * Handles authenticated watch session lifecycle and event recording.
+ * Handles private viewer watch-session lifecycle and event recording.
  * The session capability token is returned only to the viewer and is required for
  * subsequent event and end-session writes. The stable viewer identifier is a
- * one-way hash of the authenticated TrackUp profile id.
+ * one-way hash of either the TrackUp profile id or the scoped guest identity id.
  */
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
+import type { WatchActor } from "@/src/lib/tracking/viewer-identity";
 
 export interface ViewerClientMetadata {
   device_type: string | null;
@@ -90,12 +91,12 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
 }
 
 /**
- * Creates a new authenticated watch session and returns its private capability.
- * viewer_identifier is a stable one-way hash of the profile id — never raw PII.
+ * Creates a new private viewer watch session and returns its capability.
+ * viewer_identifier is a stable one-way hash of the profile/guest identity — never raw PII.
  */
 export async function createWatchSession(
   watchLinkId: string,
-  viewerIdentity: string,
+  actor: WatchActor,
   userAgent: string | null = null,
 ): Promise<{ id: string; sessionToken: string } | null> {
   try {
@@ -119,7 +120,9 @@ export async function createWatchSession(
 
     const sessionToken = randomBytes(32).toString("hex");
 
-    const viewerIdentifier = await hashViewerIdentity(viewerIdentity);
+    const viewerIdentifier = actor.kind === "profile"
+      ? await hashProfileIdentity(actor.profileId)
+      : await hashGuestIdentity(actor.identityId);
     const viewerMetadata = deriveViewerClientMetadata(userAgent);
 
     const { data, error } = await supabase
@@ -127,7 +130,8 @@ export async function createWatchSession(
       .insert({
         watch_link_id: watchLinkId,
         viewer_identifier: viewerIdentifier,
-        viewer_profile_id: viewerIdentity,
+        viewer_profile_id: actor.kind === "profile" ? actor.profileId : null,
+        viewer_identity_id: actor.kind === "guest" ? actor.identityId : null,
         device_type: viewerMetadata.device_type,
         browser: viewerMetadata.browser,
         os: viewerMetadata.os,
@@ -148,12 +152,12 @@ export async function createWatchSession(
 }
 
 /**
- * Checks the private capability and authenticated viewer identity before allowing a session write.
+ * Checks the private capability and resolved viewer actor before allowing a session write.
  * This deliberately returns only a boolean so callers cannot distinguish an
  * unknown session id from a known id with a wrong capability.
  */
-async function hashViewerIdentity(viewerIdentity: string): Promise<string> {
-  const data = new TextEncoder().encode(`profile:${viewerIdentity}`);
+async function hashCanonicalViewerIdentity(identityKey: string): Promise<string> {
+  const data = new TextEncoder().encode(identityKey);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hashBuffer))
     .slice(0, 8)
@@ -161,10 +165,18 @@ async function hashViewerIdentity(viewerIdentity: string): Promise<string> {
     .join("");
 }
 
+async function hashProfileIdentity(profileId: string): Promise<string> {
+  return hashCanonicalViewerIdentity(`profile:${profileId}`);
+}
+
+async function hashGuestIdentity(identityId: string): Promise<string> {
+  return hashCanonicalViewerIdentity(`guest:${identityId}`);
+}
+
 export async function isAuthorizedWatchSession(
   sessionId: string,
   sessionToken: string,
-  viewerIdentity: string,
+  actor: WatchActor,
 ): Promise<boolean> {
   if (!sessionId || !sessionToken) return false;
 
@@ -172,31 +184,34 @@ export async function isAuthorizedWatchSession(
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("watch_sessions")
-      .select("id, viewer_identifier")
+      .select("id, watch_link_id, viewer_identifier, viewer_profile_id, viewer_identity_id")
       .eq("id", sessionId)
       .eq("session_token", sessionToken)
       .is("ended_at", null)
       .maybeSingle();
 
     if (error || !data) return false;
-    return data.viewer_identifier === await hashViewerIdentity(viewerIdentity);
+    if (actor.kind === "profile") {
+      return data.viewer_profile_id === actor.profileId && data.viewer_identifier === await hashProfileIdentity(actor.profileId);
+    }
+    return data.watch_link_id === actor.watchLinkId && data.viewer_identity_id === actor.identityId && data.viewer_identifier === await hashGuestIdentity(actor.identityId);
   } catch {
     return false;
   }
 }
 
 /**
- * Records one or more tracking events for an authorized authenticated session.
+ * Records one or more tracking events for an authorized private viewer session.
  * Client ids make retries safe and sequence/occurred_at preserve playback order.
  */
 export async function recordTrackingEvents(
   sessionId: string,
   sessionToken: string,
   events: TrackingEventPayload[],
-  viewerIdentity: string,
+  actor: WatchActor,
 ): Promise<boolean> {
   if (!sessionId || !sessionToken || events.length === 0) return false;
-  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
+  if (!(await isAuthorizedWatchSession(sessionId, sessionToken, actor))) return false;
 
   try {
     const supabase = createAdminClient();
@@ -228,9 +243,9 @@ export async function recordTrackingEvents(
 
 export async function recordTrackingEvent(
   payload: TrackingEventPayload,
-  viewerIdentity: string,
+  actor: WatchActor,
 ): Promise<boolean> {
-  return recordTrackingEvents(payload.session_id, payload.session_token, [payload], viewerIdentity);
+  return recordTrackingEvents(payload.session_id, payload.session_token, [payload], actor);
 }
 
 /**
@@ -241,7 +256,7 @@ export async function recordTrackingEvent(
 export async function endWatchSession(
   sessionId: string,
   sessionToken: string,
-  viewerIdentity: string,
+  actor: WatchActor,
   watchTimeSeconds: number,
   completionPercentage: number,
   position: number | null = null,
@@ -251,7 +266,7 @@ export async function endWatchSession(
   if (!sessionId || !sessionToken) return false;
 
   try {
-    if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
+    if (!(await isAuthorizedWatchSession(sessionId, sessionToken, actor))) return false;
 
     const supabase = createAdminClient();
     if (position !== null || duration !== null) {

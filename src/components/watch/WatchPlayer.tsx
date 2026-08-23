@@ -274,11 +274,11 @@ export default function WatchPlayer({
         });
         const data = await response.json().catch(() => ({}));
         if (response.status === 401 || response.status === 403) {
-          setError("Your TrackUp sign-in has expired. Sign in again to continue watching.");
+          setError("Your viewer access has expired. Reopen this private link to continue watching.");
           return false;
         }
         if (!response.ok || typeof data.session_id !== "string" || typeof data.session_token !== "string") {
-          setError("Unable to start the authenticated watch session.");
+          setError("Unable to start the private watch session.");
           return false;
         }
         sessionIdRef.current = data.session_id;
@@ -595,12 +595,11 @@ export default function WatchPlayer({
       : "This provider is embedded inside TrackUp, but it does not expose a reliable playback API here. TrackUp does not create fabricated sessions or playback metrics for this source.";
 
   if (error) {
-    const loginUrl = `/login?redirect=${encodeURIComponent(`/watch/${watchLinkToken}`)}`;
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-red-400/20 bg-[#120b22] px-6 text-center shadow-2xl shadow-black/25">
         <AlertCircle size={25} className="text-red-300" />
         <p className="text-sm text-red-100">{error}</p>
-        {error.includes("sign-in") && <a href={loginUrl} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-500">Sign in again</a>}
+
         <button onClick={() => { setError(null); setPlayerReady(sourceType !== "youtube"); setRetryNonce((value) => value + 1); }} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/8 hover:text-white"><RotateCcw size={13} />Try again</button>
       </div>
     );

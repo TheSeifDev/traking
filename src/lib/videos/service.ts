@@ -16,10 +16,12 @@ interface AnalyticsSessionRow {
   watch_link_id: string;
   viewer_identifier: string | null;
   viewer_profile_id: string | null;
+  viewer_identity_id: string | null;
   device_type: string | null;
   browser: string | null;
   os: string | null;
   profiles?: unknown;
+  viewer_identities?: unknown;
   started_at: string;
   last_seen_at: string;
   ended_at: string | null;
@@ -102,6 +104,26 @@ async function attachSessionProfiles(
   for (const session of sessions) session.profiles = session.viewer_profile_id ? profilesById.get(session.viewer_profile_id) ?? null : null;
 }
 
+function viewerIdentityFromRelation(value: unknown): { id: string; name: string; email: string } | null {
+  const relation = firstRelation(value);
+  if (!relation || typeof relation.id !== "string" || typeof relation.name !== "string" || typeof relation.email !== "string") return null;
+  return { id: relation.id, name: relation.name, email: relation.email };
+}
+
+async function attachSessionViewerIdentities(
+  supabase: ReturnType<typeof createAdminClient>,
+  sessions: AnalyticsSessionRow[],
+): Promise<void> {
+  const identityIds = Array.from(new Set(sessions.map((session) => session.viewer_identity_id).filter((id): id is string => Boolean(id))));
+  if (identityIds.length === 0) return;
+  const { data } = await supabase.from("viewer_identities").select("id, name, email, watch_link_id").in("id", identityIds);
+  const identitiesById = new Map((data ?? []).map((identity) => [identity.id, identity]));
+  for (const session of sessions) {
+    const identity = session.viewer_identity_id ? identitiesById.get(session.viewer_identity_id) : null;
+    session.viewer_identities = identity && identity.watch_link_id === session.watch_link_id ? identity : null;
+  }
+}
+
 function effectiveWatchTime(session: VideoAnalytics["viewer_sessions"][number]): number | null {
   if (!session.has_playback_telemetry) return null;
   if (session.heatmap?.available) return Math.round(session.heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0));
@@ -111,7 +133,7 @@ function effectiveWatchTime(session: VideoAnalytics["viewer_sessions"][number]):
 function buildViewerSummaries(sessions: VideoAnalytics["viewer_sessions"]): AnalyticsViewerSummary[] {
   const grouped = new Map<string, VideoAnalytics["viewer_sessions"]>();
   for (const session of sessions) {
-    const key = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
+    const key = session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
     grouped.set(key, [...(grouped.get(key) ?? []), session]);
   }
   return Array.from(grouped.entries()).map(([key, viewerSessions]) => {
@@ -123,6 +145,8 @@ function buildViewerSummaries(sessions: VideoAnalytics["viewer_sessions"]): Anal
     return {
       viewer_id: key,
       viewer_identifier: latest.viewer_identifier,
+      viewer_profile_id: latest.viewer_profile_id ?? null,
+      viewer_identity_id: latest.viewer_identity_id ?? null,
       viewer_name: latest.viewer_name ?? null,
       viewer_email: latest.viewer_email ?? null,
       viewer_status: latest.viewer_status ?? "anonymous",
@@ -149,7 +173,7 @@ function buildViewerSessionAnalytics(
 ): VideoAnalytics["viewer_sessions"] {
   const sessionsByViewer = new Map<string, AnalyticsSessionRow[]>();
   for (const session of sessions) {
-    const key = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
+    const key = session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
     const group = sessionsByViewer.get(key) ?? [];
     group.push(session);
     sessionsByViewer.set(key, group);
@@ -182,7 +206,7 @@ function buildViewerSessionAnalytics(
         : video.source_type === "youtube"
           ? "youtube_iframe_api" as const
           : "session_only" as const;
-      const viewerKey = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
+      const viewerKey = session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
       const viewerSessions = (sessionsByViewer.get(viewerKey) ?? [])
         .slice()
         .sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
@@ -217,15 +241,17 @@ function buildViewerSessionAnalytics(
         ? Math.min(100, Math.max(0, Number(session.completion_percentage ?? 0)))
         : null;
       const profile = profileFromRelation(session.profiles);
+      const guestIdentity = viewerIdentityFromRelation(session.viewer_identities);
       const heatmap = buildPlaybackHeatmap(playbackEvents, video.duration ?? lastDuration, supportsPlaybackMetrics(video.source_type));
 
       return {
         session_id: session.id,
         viewer_identifier: session.viewer_identifier,
         viewer_profile_id: session.viewer_profile_id,
-        viewer_name: profile?.name ?? null,
-        viewer_email: profile?.email ?? null,
-        viewer_status: profile ? "identified" as const : "anonymous" as const,
+        viewer_identity_id: session.viewer_identity_id,
+        viewer_name: profile?.name ?? guestIdentity?.name ?? null,
+        viewer_email: profile?.email ?? guestIdentity?.email ?? null,
+        viewer_status: profile || guestIdentity ? "identified" as const : "anonymous" as const,
         video_id: video.id,
         video_title: video.title,
         source_type: video.source_type,
@@ -270,7 +296,7 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
           expires_at,
           revoked_at,
           created_at,
-          watch_sessions(id, viewer_identifier, started_at, last_seen_at, completion_percentage)
+          watch_sessions(id, viewer_identifier, viewer_profile_id, viewer_identity_id, started_at, last_seen_at, completion_percentage)
         )
       `)
       .eq("workspace_id", workspaceId)
@@ -294,13 +320,14 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
           id: string;
           viewer_identifier: string | null;
           viewer_profile_id: string | null;
+          viewer_identity_id: string | null;
           started_at: string;
           last_seen_at: string;
           completion_percentage: number;
         }>;
       }>;
       const sessions = rawWatchLinks.flatMap((watchLink) => watchLink.watch_sessions ?? []);
-      const uniqueViewerCount = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
+      const uniqueViewerCount = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.id)).size;
 
       return {
         ...v,
@@ -326,7 +353,7 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
             ...link,
             video_id: v.id,
             session_count: linkSessions.length,
-            unique_viewer_count: new Set(linkSessions.map((session) => session.viewer_identifier ?? session.id)).size,
+            unique_viewer_count: new Set(linkSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.id)).size,
             first_opened_at: orderedSessions[0]?.started_at ?? null,
             last_accessed_at: lastSession?.last_seen_at ?? null,
           };
@@ -600,6 +627,7 @@ export async function getVideoAnalytics(
         watch_link_id,
         viewer_identifier,
         viewer_profile_id,
+        viewer_identity_id,
         device_type,
         browser,
         os,
@@ -618,6 +646,7 @@ export async function getVideoAnalytics(
 
     const sessions = (rawSessions ?? []) as unknown as AnalyticsSessionRow[];
     await attachSessionProfiles(supabase, sessions);
+    await attachSessionViewerIdentities(supabase, sessions);
     const sessionIds = sessions.map((session) => session.id);
     let events: AnalyticsEventRow[] = [];
     if (sessionIds.length > 0) {
@@ -632,7 +661,7 @@ export async function getVideoAnalytics(
     }
 
     const totalViews = sessions.length;
-    const uniqueViewers = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
+    const uniqueViewers = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.id)).size;
     const playbackMetricsScope = video.source_type === "direct_url"
       ? "direct_url_native_html5" as const
       : video.source_type === "youtube"
@@ -783,6 +812,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
         watch_link_id,
         viewer_identifier,
         viewer_profile_id,
+        viewer_identity_id,
         device_type,
         browser,
         os,
@@ -823,6 +853,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     }
 
     await attachSessionProfiles(supabase, workspaceSessions);
+    await attachSessionViewerIdentities(supabase, workspaceSessions);
     const sessionIds = workspaceSessions.map((session) => session.id);
     let events: AnalyticsEventRow[] = [];
     if (sessionIds.length > 0) {
@@ -838,7 +869,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
 
     const viewerSessions = buildViewerSessionAnalytics(workspaceSessions, events, sessionVideos);
     const totalViews = workspaceSessions.length;
-    const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
+    const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? session.id)).size;
     const measuredSessions = viewerSessions.filter((session) => session.has_playback_telemetry);
     const measuredSessionIds = new Set(measuredSessions.map((session) => session.session_id));
     const avgCompletion = measuredSessions.length > 0
@@ -935,7 +966,7 @@ export async function getVideoViewerAnalytics(
   const analytics = await getVideoAnalytics(videoId, workspaceId);
   if (!analytics) return null;
   const sessions = analytics.viewer_sessions.filter((session) => {
-    const sessionViewerId = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
+    const sessionViewerId = session.viewer_profile_id ?? session.viewer_identity_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
     return sessionViewerId === viewerId;
   });
   if (sessions.length === 0) return null;

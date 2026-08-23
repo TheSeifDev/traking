@@ -281,6 +281,43 @@ export interface Database {
           },
         ];
       };
+      viewer_identities: {
+        Row: {
+          id: string;
+          watch_link_id: string;
+          name: string;
+          email: string;
+          normalized_email: string;
+          created_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          id?: string;
+          watch_link_id: string;
+          name: string;
+          email: string;
+          normalized_email: string;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Update: {
+          id?: string;
+          watch_link_id?: string;
+          name?: string;
+          email?: string;
+          normalized_email?: string;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "viewer_identities_watch_link_id_fkey";
+            columns: ["watch_link_id"];
+            referencedRelation: "watch_links";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       watch_links: {
         Row: {
           id: string;
@@ -331,6 +368,7 @@ export interface Database {
           session_token: string;
           viewer_identifier: string | null;
           viewer_profile_id: string | null;
+          viewer_identity_id: string | null;
           device_type: string | null;
           browser: string | null;
           os: string | null;
@@ -346,6 +384,7 @@ export interface Database {
           session_token: string;
           viewer_identifier?: string | null;
           viewer_profile_id?: string | null;
+          viewer_identity_id?: string | null;
           device_type?: string | null;
           browser?: string | null;
           os?: string | null;
@@ -361,6 +400,7 @@ export interface Database {
           session_token?: string;
           viewer_identifier?: string | null;
           viewer_profile_id?: string | null;
+          viewer_identity_id?: string | null;
           device_type?: string | null;
           browser?: string | null;
           os?: string | null;
@@ -375,6 +415,12 @@ export interface Database {
             foreignKeyName: "watch_sessions_watch_link_id_fkey";
             columns: ["watch_link_id"];
             referencedRelation: "watch_links";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "watch_sessions_viewer_identity_id_fkey";
+            columns: ["viewer_identity_id"];
+            referencedRelation: "viewer_identities";
             referencedColumns: ["id"];
           },
         ];
