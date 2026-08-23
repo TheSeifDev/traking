@@ -78,6 +78,13 @@ function countForVideo(video: Video): number {
   return video.view_count ?? 0;
 }
 
+function formatWatchTime(video: Video): string {
+  if (!video.playback_metrics_available || video.measurable_watch_time_seconds === null || video.measurable_watch_time_seconds === undefined) return "Not measured";
+  const seconds = Math.max(0, Math.round(video.measurable_watch_time_seconds));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
 function activeLinkFor(video: Video, now: number): WatchLink | undefined {
   return (video.watch_links ?? []).find((link) => isActiveLink(link, now));
 }
@@ -207,23 +214,23 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
   return (
     <article className="group min-w-0 overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:border-violet-300/20 hover:bg-white/[0.045]">
       <div className="grid min-w-0 lg:grid-cols-[minmax(230px,0.84fr)_minmax(0,1.16fr)]">
-        <Link href={`/videos/${video.id}`} className="relative block aspect-video min-h-full overflow-hidden bg-[#171735] lg:aspect-auto" aria-label={`Open ${video.title} details`}>
+        <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
           {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
-          <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2"><span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span><span className={`rounded-lg px-2 py-1 text-[10px] font-semibold ${activeLink ? "bg-emerald-400/10 text-emerald-100" : historyCount > 0 ? "bg-red-400/10 text-red-100" : "bg-white/[0.08] text-white/65"}`}>{activeLink ? "Active" : historyCount > 0 ? "Revoked history" : "No active link"}</span></div>
+          <div className="absolute inset-x-4 top-4 flex flex-wrap items-start justify-between gap-2"><span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span><span className={`rounded-lg px-2 py-1 text-[10px] font-semibold ${activeLink ? "bg-emerald-400/10 text-emerald-100" : historyCount > 0 ? "bg-red-400/10 text-red-100" : "bg-white/[0.08] text-white/65"}`}>{activeLink ? "Active" : historyCount > 0 ? "Revoked history" : "No active link"}</span></div>
           <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3 text-xs text-white/70"><span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45"><Link2 size={14} /></span>TrackUp viewer</span><ArrowUpRight size={16} className="text-white/50" /></div>
         </Link>
 
         <div className="min-w-0 p-5 sm:p-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0"><Link href={`/videos/${video.id}`} className="block truncate text-lg font-semibold tracking-tight text-white transition hover:text-violet-200">{video.title}</Link><p className="mt-1 flex items-center gap-1.5 text-xs text-white/35"><CalendarDays size={13} />Added {formatDate(video.created_at)} <span className="text-white/20">·</span> {providerLabel}</p></div>
+            <div className="min-w-0"><Link href={`/videos/${video.id}`} className="block line-clamp-2 break-words text-lg font-semibold tracking-tight text-white transition hover:text-violet-200">{video.title}</Link><p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-white/35"><CalendarDays size={13} />Added {formatDate(video.created_at)} <span className="text-white/20">·</span> {providerLabel}</p></div>
             <Link href={`/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/25 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
           </div>
           <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-white/42">{video.description || "No description added."}</p>
-          <div className="mt-5 grid grid-cols-4 divide-x divide-white/8 border-y border-white/8 py-4 text-center">
-            <Metric label="Views" value={countForVideo(video)} />
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/8 bg-white/8 text-center sm:grid-cols-4">
             <Metric label="Sessions" value={links.reduce((total, link) => total + (link.session_count ?? 0), 0)} />
             <Metric label="Viewers" value={uniqueViewers} icon={UsersRound} />
-            <Metric label="Links" value={activeLink ? "1" : "0"} />
+            <Metric label="Watch time" value={formatWatchTime(video)} unavailable={!video.playback_metrics_available} />
+            <Metric label="Active links" value={activeLink ? "1" : "0"} />
           </div>
           <div className="mt-5 rounded-2xl border border-white/8 bg-black/12 p-4"><div className="flex items-start gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${activeLink ? "bg-emerald-400/10 text-emerald-200" : historyCount ? "bg-red-400/10 text-red-200" : "bg-white/[0.06] text-white/45"}`}><ShieldCheck size={16} /></div><div className="min-w-0"><p className="text-xs font-semibold text-white/80">Viewer access</p><p className="mt-1 text-xs leading-5 text-white/38">{activeLink ? "One active TrackUp viewer link is available." : historyCount ? "No active link. Revoked history is retained below." : "No active viewer link has been generated."}</p></div></div></div>
           <div className="mt-5"><WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} onLinksChange={onLinksChange} /></div>
@@ -240,8 +247,8 @@ function SummaryMetric({ label, value, detail, icon: Icon, tone = "default" }: {
   return <article className="min-w-0 bg-[#10102d] p-4 sm:p-5"><div className={`flex items-center gap-2 text-xs font-medium ${toneClass}`}><Icon size={15} />{label}</div><p className="mt-4 truncate text-2xl font-semibold tracking-tight text-white">{value.toLocaleString()}</p><p className="mt-1 truncate text-[11px] text-white/30">{detail}</p></article>;
 }
 
-function Metric({ label, value, icon: Icon }: { label: string; value: number | string; icon?: typeof UsersRound }) {
-  return <div className="min-w-0 px-1"><p className="flex items-center justify-center gap-1 text-base font-semibold text-white sm:text-lg">{Icon && <Icon size={13} className="text-white/35" />}{typeof value === "number" ? value.toLocaleString() : value}</p><p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-white/30 sm:text-[10px]">{label}</p></div>;
+function Metric({ label, value, icon: Icon, unavailable = false }: { label: string; value: number | string; icon?: typeof UsersRound; unavailable?: boolean }) {
+  return <div className="min-w-0 bg-[#10102d] px-2 py-3 sm:px-1"><p className={`flex min-h-6 items-center justify-center gap-1 break-words text-sm font-semibold sm:text-base ${unavailable ? "text-white/45" : "text-white"}`}>{Icon && <Icon size={13} className="shrink-0 text-white/35" />}{typeof value === "number" ? value.toLocaleString() : value}</p><p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-white/30 sm:text-[10px]">{label}</p></div>;
 }
 
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<[string, string]> }) {
