@@ -1,17 +1,19 @@
 ﻿/**
- * /videos/[id] - Single video analytics + detail page
+ * /videos/[id] - Video detail, watch-link controls, and analytics
  */
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
 import { getAppUrl } from "@/src/lib/app-url";
-import { ArrowLeft, Eye, Clock, TrendingUp, CheckCircle, ExternalLink } from "lucide-react";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
-import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
+import VideoAnalyticsDashboard from "@/src/components/dashboard/VideoAnalyticsDashboard";
 
-type Props = { params: Promise<{ id: string }> };
+interface Props {
+  params: Promise<{ id: string }>;
+}
 
 export default async function VideoDetailPage({ params }: Props) {
   const { id } = await params;
@@ -27,98 +29,21 @@ export default async function VideoDetailPage({ params }: Props) {
   if (!video) notFound();
 
   const canManage = user.role === "owner" || user.role === "admin";
-  const currentTime = new Date().getTime();
-  const activeLink = video.watch_links?.find((link) => {
-    const expired = Boolean(link.expires_at && new Date(link.expires_at).getTime() <= currentTime);
-    return !link.revoked_at && !expired;
-  });
-
-  const stats = analytics ? [
-    { label: "Total Views", value: analytics.total_views, icon: Eye },
-    { label: "Total Sessions", value: analytics.total_sessions, icon: TrendingUp },
-    { label: "Unique Viewers", value: analytics.unique_viewers, icon: TrendingUp },
-    {
-      label: "Avg Watch Time",
-      value: analytics.avg_watch_time_seconds === null
-        ? "Unavailable"
-        : `${Math.floor(analytics.avg_watch_time_seconds / 60)}m ${analytics.avg_watch_time_seconds % 60}s`,
-      icon: Clock,
-    },
-    {
-      label: "Avg Completion",
-      value: analytics.avg_completion_percentage === null ? "Unavailable" : `${analytics.avg_completion_percentage}%`,
-      icon: CheckCircle,
-    },
-  ] : [];
 
   return (
-    <div className="p-6 lg:p-8 space-y-8 max-w-4xl">
-      <div className="flex items-center gap-3">
-        <Link href="/videos" className="p-2 rounded-xl hover:bg-white/5 text-white/40 hover:text-white transition-all">
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-white truncate">{video.title}</h1>
-            <p className="text-sm text-white/40 capitalize">{video.source_type.replace("_", " ")}</p>
-          </div>
-          {activeLink && (
-            <Link href={`/watch/${activeLink.token}`} target="_blank" className="flex items-center gap-2 rounded-xl border border-violet-400/20 bg-violet-600/15 px-3 py-2 text-xs font-medium text-violet-200 transition hover:bg-violet-600/25">
-              <ExternalLink size={14} /> Open viewer
-            </Link>
-          )}
+    <div className="p-6 lg:p-8">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/videos" className="rounded-xl p-2 text-white/40 transition hover:bg-white/5 hover:text-white" aria-label="Back to video library"><ArrowLeft size={18} /></Link>
+          <div className="min-w-0"><p className="text-xs uppercase tracking-[0.18em] text-white/30">Video analytics</p><h1 className="truncate text-xl font-semibold text-white">{video.title}</h1></div>
         </div>
+      </div>
 
-        <div className="grid gap-4 rounded-2xl border border-white/8 bg-white/[0.03] p-5 sm:grid-cols-[1fr_auto] sm:items-center">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.18em] text-white/30">Video source</p>
-            <p className="mt-2 break-all text-sm text-white/70">{video.source_url}</p>
-            {video.description && <p className="mt-2 text-sm leading-6 text-white/40">{video.description}</p>}
-          </div>
-          <div className="rounded-xl border border-white/8 bg-black/10 px-4 py-3 text-center">
-            <p className="text-lg font-semibold text-white">{video.duration ? `${Math.floor(video.duration / 60)}m ${video.duration % 60}s` : "—"}</p>
-            <p className="text-[10px] uppercase tracking-wide text-white/35">Duration</p>
-          </div>
-        </div>
-
-      {/* Stats */}
-      {analytics && (
-        <>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          {stats.map(({ label, value, icon: Icon }) => (
-            <div key={label} className="rounded-xl bg-white/4 border border-white/8 p-4">
-              <Icon size={15} className="text-violet-400 mb-2" />
-              <p className="text-xl font-bold text-white">{value}</p>
-              <p className="text-xs text-white/40 mt-0.5">{label}</p>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-white/35">
-          {analytics.playback_metrics_scope === "direct_url_native_html5"
-            ? "Playback time and completion are measured from native HTML5 events."
-            : analytics.playback_metrics_scope === "youtube_iframe_api"
-              ? "Playback state, duration, progress, and completion are measured from the official YouTube IFrame API."
-              : "This provider exposes no reliable playback API here; position, watch time, and completion are not measured."}
-        </p>
-        </>
-      )}
-
-      {/* Watch Link */}
-      <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} appOrigin={getAppUrl()} />
-
-      {analytics && (
-        <ViewerAnalyticsPanel
-          sessions={analytics.viewer_sessions}
-          title="Viewer and session activity"
-          description="Per-session records for this video. Viewer IDs are one-way hashes, not raw personal data; playback events appear only where the provider exposes reliable telemetry."
-        />
-      )}
-
-      {!analytics || analytics.total_views === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
-          <Eye size={28} className="text-white/15 mx-auto mb-3" />
-          <p className="text-white/40 text-sm">No views yet. Share the watch link to start tracking.</p>
-        </div>
-      ) : null}
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5"><p className="text-xs uppercase tracking-[0.18em] text-white/30">Source URL</p><p className="mt-2 break-all text-sm text-white/70">{video.source_url}</p>{video.description && <p className="mt-2 text-sm leading-6 text-white/40">{video.description}</p>}</div>
+        <WatchLinkPanel videoId={video.id} existingLinks={video.watch_links ?? []} canManage={canManage} appOrigin={getAppUrl()} />
+        {analytics ? <VideoAnalyticsDashboard video={video} analytics={analytics} /> : <div className="rounded-3xl border border-dashed border-red-300/20 bg-red-300/5 p-10 text-center"><p className="text-sm text-red-100">Analytics are temporarily unavailable.</p><p className="mt-2 text-xs text-red-100/50">The video is still available, but the server could not read its tracking records.</p></div>}
+      </div>
     </div>
   );
 }
