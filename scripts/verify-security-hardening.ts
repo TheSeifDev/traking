@@ -167,6 +167,7 @@ async function runTests(): Promise<void> {
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
   const workspaceAnalyticsDashboard = readFileSync("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx", "utf8");
   const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
+  const dashboardOverview = readFileSync("src/components/dashboard/DashboardOverview.tsx", "utf8");
   const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
   const videoAnalyticsDashboard = readFileSync("src/components/dashboard/VideoAnalyticsDashboard.tsx", "utf8");
   const viewerAnalyticsPanel = readFileSync("src/components/dashboard/ViewerAnalyticsPanel.tsx", "utf8");
@@ -176,7 +177,8 @@ async function runTests(): Promise<void> {
   assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
   assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
   assert(workspaceAnalyticsDashboard.includes("Views over time") && workspaceAnalyticsDashboard.includes("Top videos by watch time") && workspaceAnalyticsDashboard.includes("Date range"), "workspace analytics dashboard communicates overview charts and filters");
-  assert(dashboardPage.includes("formatDuration") && dashboardPage.includes("Not measured"), "dashboard does not display unsupported playback metrics as fabricated zeroes");
+  assert(dashboardPage.includes("DashboardOverview") && dashboardOverview.includes("Sessions over time") && dashboardOverview.includes("Top videos") && dashboardOverview.includes("Recent viewer activity") && dashboardOverview.includes("Quick actions"), "dashboard has clear workspace-level information architecture");
+  assert(dashboardOverview.includes("activity.length === 0") && dashboardOverview.includes("No activity in this range") && dashboardOverview.includes("Not measurable") && dashboardOverview.includes("Provider telemetry unavailable"), "dashboard renders truthful no-data and telemetry states");
   assert(videoDetailPage.includes("VideoAnalyticsDashboard") && videoAnalyticsDashboard.includes("Coverage and heatmap") && videoAnalyticsDashboard.includes("Not measured yet"), "video analytics dashboard explains provider limits and honest empty states");
   assert(analyticsService.includes("viewer_sessions") && analyticsService.includes("first_play_at") && analyticsService.includes("last_activity_at") && analyticsService.includes("latestEvent"), "analytics service exposes per-session timestamps and viewer breakdown");
   assert(videoAnalyticsDashboard.includes("has_playback_telemetry") && videoAnalyticsDashboard.includes("Telemetry sessions"), "video analytics shows measured session count from actual telemetry");
