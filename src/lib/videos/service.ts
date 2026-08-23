@@ -32,6 +32,17 @@ interface AnalyticsEventRow {
   created_at: string;
 }
 
+type GeneratedWatchLink = {
+  id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  url: string;
+  reused: boolean;
+};
+
 function firstRelation(value: unknown): Record<string, unknown> | null {
   if (Array.isArray(value)) {
     const first = value[0];
@@ -328,20 +339,12 @@ export async function deleteVideo(videoId: string, workspaceId: string): Promise
 export async function generateWatchLink(
   videoId: string,
   workspaceId: string,
-  createdBy: string
-): Promise<{
-  id: string;
-  token: string;
-  created_by: string | null;
-  expires_at: string | null;
-  revoked_at: string | null;
-  created_at: string;
-  url: string;
-} | null> {
+  createdBy: string,
+): Promise<GeneratedWatchLink | null> {
   try {
     const supabase = createAdminClient();
 
-    // Verify ownership first
+    // Verify ownership first.
     const { data: video } = await supabase
       .from("videos")
       .select("id")
@@ -351,27 +354,56 @@ export async function generateWatchLink(
 
     if (!video) return null;
 
+    const selectFields = "id, token, created_by, expires_at, revoked_at, created_at";
+    const appUrl = getAppUrl();
+    const toResult = (link: {
+      id: string;
+      token: string;
+      created_by: string | null;
+      expires_at: string | null;
+      revoked_at: string | null;
+      created_at: string;
+    }, reused: boolean): GeneratedWatchLink => ({
+      ...link,
+      url: `${appUrl}/watch/${link.token}`,
+      reused,
+    });
+
+    // Repeated requests return the same active TrackUp viewer link.
+    const { data: activeLink, error: activeLinkError } = await supabase
+      .from("watch_links")
+      .select(selectFields)
+      .eq("video_id", videoId)
+      .is("revoked_at", null)
+      .maybeSingle();
+
+    if (activeLinkError) {
+      console.error("Failed to find active watch link", activeLinkError);
+      return null;
+    }
+    if (activeLink) return toResult(activeLink, true);
+
     const { data, error } = await supabase
       .from("watch_links")
       .insert({ video_id: videoId, created_by: createdBy })
-      .select("id, token, created_by, expires_at, revoked_at, created_at")
+      .select(selectFields)
       .single();
 
-    if (error || !data) {
-      console.error("Failed to generate watch link", error);
-      return null;
+    if (!error && data) return toResult(data, false);
+
+    // The partial unique index closes the race between concurrent creators.
+    if (error?.code === "23505") {
+      const { data: racedLink } = await supabase
+        .from("watch_links")
+        .select(selectFields)
+        .eq("video_id", videoId)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (racedLink) return toResult(racedLink, true);
     }
 
-    const appUrl = getAppUrl();
-    return {
-      id: data.id,
-      token: data.token,
-      created_by: data.created_by,
-      expires_at: data.expires_at,
-      revoked_at: data.revoked_at,
-      created_at: data.created_at,
-      url: `${appUrl}/watch/${data.token}`,
-    };
+    console.error("Failed to generate watch link", error);
+    return null;
   } catch {
     return null;
   }

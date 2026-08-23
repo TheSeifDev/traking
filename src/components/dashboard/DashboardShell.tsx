@@ -33,7 +33,7 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#070720] text-white">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-white/8 bg-[#0b0b28] md:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-white/8 bg-[#0b0b28] lg:flex">
         <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg">
@@ -80,21 +80,22 @@ export default function DashboardShell({ children, user, workspace }: DashboardS
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/8 bg-[#0b0b28] px-4 md:hidden">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-linear-to-br from-violet-500 to-blue-500"><span className="text-[10px] font-bold text-white">T</span></div>
-            <span className="text-sm font-semibold">TrackUp</span>
+        <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
+          <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-500 to-blue-500"><span className="text-xs font-bold text-white">T</span></div>
+            <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{workspace && <span className="block max-w-28 truncate text-[10px] text-white/35">{workspace.name}</span>}</div>
           </Link>
-          <div className="flex items-center gap-1">
-            {visibleNavItems.map(({ href, icon: Icon }) => (
-              <Link key={href} href={href} className={`rounded-lg p-2 transition-colors ${isActive(href) ? "bg-violet-500/10 text-violet-400" : "text-white/40 hover:text-white"}`} aria-label={href.slice(1)}>
-                <Icon size={18} />
+          <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {visibleNavItems.map(({ label, href, icon: Icon }) => (
+              <Link key={href} href={href} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs transition-colors ${isActive(href) ? "bg-violet-500/15 text-violet-300" : "text-white/45 hover:bg-white/5 hover:text-white"}`} aria-label={label}>
+                <Icon size={16} />
+                <span className="hidden min-[430px]:inline">{label}</span>
               </Link>
             ))}
-          </div>
+          </nav>
         </header>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
