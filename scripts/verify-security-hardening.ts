@@ -110,6 +110,13 @@ async function runTests(): Promise<void> {
   const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
   const adminUsersRoute = readFileSync("app/api/admin/users/route.ts", "utf8");
   const roleManagement = readFileSync("src/lib/auth/role-management.ts", "utf8");
+  const invitationMigration = readFileSync("supabase/migrations/20260824000001_create_invitations_and_profile_presence.sql", "utf8");
+  const acceptanceMigration = readFileSync("supabase/migrations/20260824000002_add_invitation_acceptance_rpc.sql", "utf8");
+  const presenceMigration = readFileSync("supabase/migrations/20260824000003_add_profile_last_seen_rpc.sql", "utf8");
+  const invitationService = readFileSync("src/lib/auth/invitations.ts", "utf8");
+  const invitationCookie = readFileSync("src/lib/auth/invitation-cookie.ts", "utf8");
+  const inviteStartRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
+  const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
   const watchLinksPage = readFileSync("app/(dashboard)/watch-links/page.tsx", "utf8");
   const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
@@ -142,10 +149,19 @@ async function runTests(): Promise<void> {
   assert(watchPlayer.includes("widget_referrer: window.location.origin") && watchPlayer.includes('setAttribute("referrerpolicy", "strict-origin-when-cross-origin")'), "YouTube IFrame API receives a valid origin referrer configuration");
   assert(watchPlayer.includes("youtube_iframe_api") || watchPlayer.includes("YouTube IFrame API"), "YouTube capability messaging is explicit");
   assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes('fetch("/api/admin/users"'), "team UI uses real owner management and invite endpoints");
-  assert(teamManager.includes("must sign in through ClickUp") && teamManager.includes("Create profile"), "invite UI explains ClickUp pre-provisioning without fake email delivery");
-  assert(adminUsersPage.includes("owner-level users-manage permission") && !adminUsersPage.includes("501 not_implemented"), "admin UI reflects the implemented owner-only invite capability");
-  assert(adminUsersRoute.includes("createClickUpInvite") && adminUsersRoute.includes("invalid_json"), "admin invite route validates input and calls the real service");
-  assert(roleManagement.includes("export async function createClickUpInvite") && roleManagement.includes("isConfiguredOwnerEmail") && roleManagement.includes("is_active: true"), "invite service pre-provisions a protected ClickUp profile");
+  assert(teamManager.includes("Send a secure invitation") && teamManager.includes("transactional provider") && teamManager.includes("Resend"), "invite UI exposes real dispatch and lifecycle controls");
+  assert(adminUsersPage.includes("TeamMemberManager") && adminUsersPage.includes("guardAdmin"), "admin UI exposes shared owner/admin team management");
+  assert(adminUsersRoute.includes("createInvitation") && adminUsersRoute.includes("invalid_json") && adminUsersRoute.includes("delivery_not_configured"), "admin invite route validates input and requires real dispatch");
+  assert(invitationMigration.includes("CREATE TABLE IF NOT EXISTS public.invitations") && invitationMigration.includes("token_hash TEXT NOT NULL UNIQUE") && invitationMigration.includes("invitations_role_check"), "invitation schema persists only hashed single-use token state");
+  assert(invitationMigration.includes("last_seen_at TIMESTAMPTZ") && invitationMigration.includes("No direct invitation reads"), "profile presence and invitation RLS are explicit");
+  assert(acceptanceMigration.includes("CREATE OR REPLACE FUNCTION public.accept_invitation") && acceptanceMigration.includes("FOR UPDATE") && acceptanceMigration.includes("invitation_email_mismatch"), "acceptance is atomic, locked, and same-email constrained");
+  assert(presenceMigration.includes("touch_profile_last_seen") && presenceMigration.includes("interval '5 minutes'"), "presence write is server-debounced in the database");
+  assert(invitationService.includes("randomBytes(32)") && invitationService.includes("createHash(\"sha256\")") && invitationService.includes("last_sent_at"), "invitation service generates raw token once and stores only its digest");
+  assert(invitationService.includes("delivery_not_configured") && invitationService.includes("if (!delivery.success)"), "invitation success is gated on transactional provider response");
+  assert(invitationCookie.includes("tokenHash") && invitationCookie.includes("timingSafeEqual") && !invitationCookie.includes("rawToken"), "OAuth context cookie is signed and contains no raw token");
+  assert(inviteStartRoute.includes("createInvitationContextCookie") && inviteStartRoute.includes("hashInvitationToken"), "invite start converts token to signed hashed OAuth context");
+  assert(presenceRoute.includes("withAuth") && presenceRoute.includes("user.id") && !presenceRoute.includes("request.json"), "presence route uses only authenticated session identity");
+  assert(roleManagement.includes("isAdminOrOwner") && !roleManagement.includes("createClickUpInvite"), "role management no longer exposes legacy pre-provision invite");
 
   section("Provider-aware analytics honesty");
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
@@ -205,7 +221,7 @@ assert(videoServiceForUrls.includes("const appUrl = getAppUrl()") && !videoServi
   assert(authRedirect.includes("getSafeAuthReturnPath") && authRedirect.includes("startsWith(\"//\")"), "auth return path rejects external and protocol-relative redirects");
   assert(oauthStart.includes("trackup_oauth_state") && oauthStart.includes("AUTH_RETURN_COOKIE"), "OAuth start stores state and return cookies");
 assert(oauthStart.includes("https://app.clickup.com/api?"), "OAuth start uses ClickUp authorization URL");
-  assert(oauthCallback.includes("state !== expectedState") && oauthCallback.includes("new URL(returnTo, request.url)"), "OAuth callback validates state and returns to the preserved path");
+  assert(oauthCallback.includes("state !== expectedState") && oauthCallback.includes("new URL(destination, request.url)"), "OAuth callback validates state and returns to the preserved path");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/oauth/token"), "OAuth callback uses ClickUp token URL");
 assert(oauthCallback.includes("https://api.clickup.com/api/v2/team"), "OAuth callback verifies authorized Workspaces");
 assert(oauthCallback.includes("Authorization: `Bearer ${accessToken}`"), "OAuth API requests use Bearer token header");

@@ -61,6 +61,26 @@ export interface Profile {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  last_seen_at: string | null;
+}
+
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked" | "not_invited";
+
+export interface InvitationSummary {
+  id: string;
+  email: string;
+  role: ManagedRole;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  last_sent_at: string | null;
+  status: InvitationStatus;
+}
+
+export interface TeamMember extends Profile {
+  invitation: InvitationSummary | null;
+  invitation_status: InvitationStatus;
 }
 
 /**

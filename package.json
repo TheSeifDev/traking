@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/verify-provisioning.ts && tsx scripts/verify-rbac.ts && tsx scripts/verify-role-management.ts && tsx scripts/verify-routes.ts && tsx scripts/verify-security-hardening.ts"
+    "test": "tsx scripts/verify-provisioning.ts && tsx scripts/verify-rbac.ts && tsx scripts/verify-role-management.ts && tsx scripts/verify-routes.ts && tsx scripts/verify-security-hardening.ts && tsx scripts/verify-invitations.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
