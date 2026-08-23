@@ -6,6 +6,7 @@
  * never from cookies or client-supplied values.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
+import { getClickUpTokenForWorkspace } from "@/src/lib/clickup/workspace";
 
 /**
  * Fetches the stored ClickUp access token for a profile.
@@ -22,6 +23,41 @@ export async function getClickUpToken(profileId: string): Promise<string | null>
       .maybeSingle();
 
     return data?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ClickUpTeamForSync {
+  id: string;
+  name: string;
+  members?: unknown;
+}
+
+export async function getClickUpTeamForSync(profileId: string, workspaceId: string, clickupTeamId: string): Promise<ClickUpTeamForSync | null> {
+  const token = await getClickUpTokenForWorkspace(profileId, workspaceId);
+  if (!token) return null;
+  try {
+    const response = await fetch("https://api.clickup.com/api/v2/team", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") return null;
+    const teams = (data as { teams?: unknown }).teams;
+    if (!Array.isArray(teams)) return null;
+    const match = teams.find((raw) => {
+      if (!raw || typeof raw !== "object") return false;
+      const id = (raw as Record<string, unknown>).id;
+      return (typeof id === "string" || typeof id === "number") && String(id) === clickupTeamId;
+    });
+    if (!match || typeof match !== "object") return null;
+    const team = match as Record<string, unknown>;
+    const id = typeof team.id === "string" || typeof team.id === "number" ? String(team.id) : "";
+    const name = typeof team.name === "string" ? team.name.trim() : "";
+    if (!id || !name) return null;
+    return { id, name, members: team.members };
   } catch {
     return null;
   }

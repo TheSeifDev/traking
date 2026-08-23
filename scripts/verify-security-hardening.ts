@@ -109,7 +109,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes("viewer_profile_id: viewerIdentity") && !trackingService.includes("viewer_identity_id") && trackingService.includes("deriveViewerClientMetadata"), "new sessions bind only the authenticated profile and coarse client metadata");
   assert(watchPlayer.includes("pendingEventsRef") && watchPlayer.includes("sequenceNumberRef") && watchPlayer.includes("flushEvents") && watchPlayer.includes("client_event_id"), "player batches ordered idempotent events");
   assert(analyticsRanges.includes("reconstructWatchedRanges") && analyticsRanges.includes("aggregateHeatmaps") && analyticsRanges.includes("not_available_from_provider"), "range aggregation has deterministic and honest availability states");
-  assert(viewerAnalyticsRoute.includes("withPermission") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withPermission") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce permission and scope");
+  assert(viewerAnalyticsRoute.includes("withAuth") && viewerAnalyticsRoute.includes("resolveSpaceAdminForUser") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withAuth") && sessionAnalyticsRoute.includes("resolveSpaceAdminForUser") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce authenticated Space-admin scope");
   assert(videoAnalyticsPage.includes("HeatmapPanel") && viewerAnalyticsPage.includes("ViewerIdentityCard") && sessionAnalyticsPage.includes("SessionTimeline"), "scoped analytics pages render the new detail hierarchy");
 
   section("Watch-link lifecycle and owner mutation checks");

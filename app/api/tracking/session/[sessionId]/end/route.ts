@@ -4,7 +4,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
-import { endWatchSession } from "@/src/lib/tracking/service";
+import { endWatchSession, getTrackingSessionSpaceId } from "@/src/lib/tracking/service";
+import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 import type { EndSessionPayload } from "@/src/types/tracking";
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
@@ -39,6 +40,13 @@ export const POST = withAuth(async (request: NextRequest, user, context) => {
     : {};
 
   if (!sessionToken) return NextResponse.json({ error: "missing_session_token" }, { status: 400 });
+  const spaceId = await getTrackingSessionSpaceId(sessionId, user.id);
+  if (!spaceId) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+  try {
+    await authorizeSpaceMember(spaceId, user);
+  } catch {
+    return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+  }
 
   const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration, finalEvent);
   // Do not reveal whether the session id exists when the capability or identity is invalid.

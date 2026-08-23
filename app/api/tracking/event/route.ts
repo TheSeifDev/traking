@@ -4,7 +4,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
-import { recordTrackingEvents } from "@/src/lib/tracking/service";
+import { getTrackingSessionSpaceId, recordTrackingEvents } from "@/src/lib/tracking/service";
+import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 import { isValidEventType, type TrackingEventPayload } from "@/src/types/tracking";
 
 const MAX_BATCH_SIZE = 50;
@@ -67,6 +68,14 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   if (rawEvents.length === 0 || rawEvents.length > MAX_BATCH_SIZE) return NextResponse.json({ error: "invalid_batch_size" }, { status: 400 });
   const events = rawEvents.map(normalizeEvent);
   if (events.some((event) => event === null)) return NextResponse.json({ error: "invalid_event" }, { status: 400 });
+
+  const spaceId = await getTrackingSessionSpaceId(sessionId, user.id);
+  if (!spaceId) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+  try {
+    await authorizeSpaceMember(spaceId, user);
+  } catch {
+    return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+  }
 
   const ok = await recordTrackingEvents(
     sessionId,

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
 import { resolveWatchLink, createWatchSession } from "@/src/lib/tracking/service";
+import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 import type { CreateSessionPayload } from "@/src/types/tracking";
 
 export const POST = withAuth(async (request: NextRequest, user) => {
@@ -21,6 +22,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
 
   const resolved = await resolveWatchLink(token);
   if (!resolved) return NextResponse.json({ error: "invalid_token" }, { status: 404 });
+  if (!resolved.space_id) return NextResponse.json({ error: "space_not_assigned" }, { status: 422 });
+  try {
+    await authorizeSpaceMember(resolved.space_id, user);
+  } catch {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const session = await createWatchSession(resolved.watch_link_id, user.id, request.headers.get("user-agent"));
   if (!session) return NextResponse.json({ error: "session_creation_failed" }, { status: 500 });

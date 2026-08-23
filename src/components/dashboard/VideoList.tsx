@@ -64,6 +64,8 @@ interface VideosResponse {
 
 interface VideoListProps {
   role: UserRole;
+  spaceId?: string | null;
+  spaceCanManage?: boolean;
 }
 
 function getYouTubeId(sourceUrl: string): string | null {
@@ -114,8 +116,11 @@ function formatError(error: string): string {
   return error || "Unable to load your video library.";
 }
 
-export default function VideoList({ role }: VideoListProps) {
-  const canManage = role === "owner" || role === "admin";
+export default function VideoList({ role, spaceId = null, spaceCanManage }: VideoListProps) {
+  const canManage = spaceCanManage ?? (role === "owner" || role === "admin");
+  const encodedSpaceId = spaceId ? encodeURIComponent(spaceId) : "";
+  const scopeQuery = encodedSpaceId ? `?space_id=${encodedSpaceId}` : "";
+  const scopedPath = (path: string) => `${path}${encodedSpaceId ? `${path.includes("?") ? "&" : "?"}space_id=${encodedSpaceId}` : ""}`;
   const [videos, setVideos] = useState<VideoType[]>([]);
   const [summary, setSummary] = useState<LibrarySummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,7 +139,7 @@ export default function VideoList({ role }: VideoListProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/videos", { cache: "no-store" });
+      const res = await fetch(`/api/videos${scopeQuery}`, { cache: "no-store" });
       const data: VideosResponse = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(formatError(String((data as { error?: unknown }).error ?? "Unable to load your video library.")));
@@ -147,7 +152,7 @@ export default function VideoList({ role }: VideoListProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopeQuery]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void fetchVideos(), 0);
@@ -193,7 +198,7 @@ export default function VideoList({ role }: VideoListProps) {
     setNotice(null);
     setError(null);
     try {
-      const res = await fetch(`/api/videos/${video.id}/watch-link`, { method: "POST" });
+      const res = await fetch(scopedPath(`/api/videos/${video.id}/watch-link`), { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "Unable to generate a viewer link.");
@@ -226,7 +231,7 @@ export default function VideoList({ role }: VideoListProps) {
     setNotice(null);
     setError(null);
     try {
-      const res = await fetch(`/api/videos/${video.id}/watch-link`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link_id: activeLink.id }) });
+      const res = await fetch(scopedPath(`/api/videos/${video.id}/watch-link`), { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ link_id: activeLink.id }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "Unable to revoke this viewer link.");
@@ -256,7 +261,7 @@ export default function VideoList({ role }: VideoListProps) {
     setNotice(null);
     setError(null);
     try {
-      const res = await fetch(`/api/videos/${video.id}`, { method: "DELETE" });
+      const res = await fetch(scopedPath(`/api/videos/${video.id}`), { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "Unable to delete this video.");
@@ -280,7 +285,7 @@ export default function VideoList({ role }: VideoListProps) {
   return (
     <div className="min-h-full bg-[#08081f] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <div className="mx-auto max-w-[1440px] space-y-7">
-        <header className="flex flex-col gap-5 border-b border-white/8 pb-6 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Library</p><h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">Videos</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{manageMessage}</p></div>{canManage && <CreateVideoDialog onCreated={fetchVideos} />}</header>
+        <header className="flex flex-col gap-5 border-b border-white/8 pb-6 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Library</p><h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">Videos</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{manageMessage}</p></div>{canManage && <CreateVideoDialog onCreated={fetchVideos} spaceId={spaceId} />}</header>
 
         {(error || notice) && <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${error ? "border-red-300/20 bg-red-400/[0.08] text-red-100" : "border-emerald-300/20 bg-emerald-400/[0.08] text-emerald-100"}`}>{error ? <AlertCircle size={17} className="mt-0.5 shrink-0" /> : <CheckCircle size={17} className="mt-0.5 shrink-0" />}<span className="min-w-0 flex-1">{error ?? notice}</span><button onClick={() => { setError(null); setNotice(null); }} className="shrink-0 text-white/45 transition hover:text-white" aria-label="Dismiss notification"><X size={16} /></button></div>}
 

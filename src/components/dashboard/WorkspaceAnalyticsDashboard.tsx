@@ -28,6 +28,7 @@ import type { Video, ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/ty
 interface WorkspaceAnalyticsDashboardProps {
   analytics: WorkspaceAnalytics;
   videos: Video[];
+  spaceId: string;
 }
 
 type DateRange = "7" | "30" | "all";
@@ -58,11 +59,13 @@ function providerLabel(sourceType: Video["source_type"]): string {
 export default function WorkspaceAnalyticsDashboard({
   analytics,
   videos,
+  spaceId,
 }: WorkspaceAnalyticsDashboardProps) {
   const [dateRange, setDateRange] = useState<DateRange>("30");
   const [videoFilter, setVideoFilter] = useState("all");
   const [section, setSection] = useState<Section>("overview");
   const [now] = useState(() => Date.now());
+  const scoped = (path: string) => `${path}?space_id=${encodeURIComponent(spaceId)}`;
 
   const filteredSessions = useMemo(() => {
     const cutoff = dateRange === "all"
@@ -207,18 +210,18 @@ export default function WorkspaceAnalyticsDashboard({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have an authenticated ClickUp viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
       ) : section === "viewers" ? (
-        <ViewerAnalyticsPanel sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. New sessions can show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback details are shown only for measured native or YouTube API events." />
+        <ViewerAnalyticsPanel spaceId={spaceId} sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. New sessions can show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback details are shown only for measured native or YouTube API events." />
       ) : section === "videos" ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
             <div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Top videos by views</h2><p className="mt-1 text-xs text-white/35">Session count from the selected range</p></div><Eye size={17} className="text-violet-300" /></div>
             <div className="mt-5 space-y-4">
-              {topByViews.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{video.total_views}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-400" style={{ width: `${(video.total_views / maxViews) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}
+              {topByViews.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={scoped(`/analytics/videos/${video.video_id}`)} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{video.total_views}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-400" style={{ width: `${(video.total_views / maxViews) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}
             </div>
           </div>
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
             <div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Top videos by watch time</h2><p className="mt-1 text-xs text-white/35">Only sessions with measured playback</p></div><Clock3 size={17} className="text-emerald-300" /></div>
-            {topByWatchTime.length === 0 ? <p className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">No measurable watch time in this view.</p> : <div className="mt-5 space-y-4">{topByWatchTime.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-emerald-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{formatDuration(video.measurable_watch_time_seconds)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${((video.measurable_watch_time_seconds ?? 0) / maxWatchTime) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}</div>}
+            {topByWatchTime.length === 0 ? <p className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">No measurable watch time in this view.</p> : <div className="mt-5 space-y-4">{topByWatchTime.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={scoped(`/analytics/videos/${video.video_id}`)} className="truncate text-white/80 transition hover:text-emerald-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{formatDuration(video.measurable_watch_time_seconds)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${((video.measurable_watch_time_seconds ?? 0) / maxWatchTime) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}</div>}
           </div>
         </div>
       ) : section === "activity" ? (
@@ -229,7 +232,7 @@ export default function WorkspaceAnalyticsDashboard({
             <ActivityChart activity={activity} />
             <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Measurement health</h2><p className="mt-1 text-xs text-white/35">Scope of the selected activity</p></div><PlayCircle size={17} className="text-violet-300" /></div><div className="mt-6 space-y-4"><div className="flex items-center justify-between text-sm"><span className="text-white/55">Measured sessions</span><strong className="text-white">{measurableSessions.length}</strong></div><div className="h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${filteredSessions.length ? (measurableSessions.length / filteredSessions.length) * 100 : 0}%` }} /></div><div className="flex items-center justify-between text-sm"><span className="text-white/55">Completion rate</span><strong className="text-white">{completionRate === null ? "Not measured" : `${completionRate}%`}</strong></div><p className="text-xs leading-5 text-white/35">Watch time and completion never treat unsupported providers as zero. Session-only providers remain visible with their actual lifecycle timestamps.</p></div></div>
           </div>
-          <div className="grid gap-6 xl:grid-cols-2"><TopVideosCard title="Top videos by views" videos={topByViews} value={(video) => `${video.total_views} views`} max={maxViews} color="violet" /><TopVideosCard title="Top videos by measured watch time" videos={topByWatchTime} value={(video) => formatDuration(video.measurable_watch_time_seconds)} max={maxWatchTime} color="emerald" /></div>
+          <div className="grid gap-6 xl:grid-cols-2"><TopVideosCard spaceId={spaceId} title="Top videos by views" videos={topByViews} value={(video) => `${video.total_views} views`} max={maxViews} color="violet" /><TopVideosCard spaceId={spaceId} title="Top videos by measured watch time" videos={topByWatchTime} value={(video) => formatDuration(video.measurable_watch_time_seconds)} max={maxWatchTime} color="emerald" /></div>
         </div>
       )}
     </div>
@@ -240,8 +243,9 @@ function ActivityChart({ activity }: { activity: Array<{ date: string; views: nu
   return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Views over time</h2><p className="mt-1 text-xs text-white/35">Started sessions grouped by day</p></div><Activity size={17} className="text-violet-300" /></div><div className="mt-5 h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={activity}><defs><linearGradient id="viewsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.45} /><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="date" tick={{ fill: "#ffffff55", fontSize: 10 }} tickLine={false} axisLine={false} /><YAxis allowDecimals={false} tick={{ fill: "#ffffff55", fontSize: 10 }} tickLine={false} axisLine={false} width={28} /><Tooltip contentStyle={{ background: "#16121f", border: "1px solid #ffffff1c", borderRadius: 12, color: "white" }} labelStyle={{ color: "#ffffffaa" }} /><Area type="monotone" dataKey="views" stroke="#a78bfa" strokeWidth={2} fill="url(#viewsFill)" /></AreaChart></ResponsiveContainer></div></div>;
 }
 
-function TopVideosCard({ title, videos, value, max, color }: { title: string; videos: Array<{ video_id: string; title: string; source_type: Video["source_type"]; total_views: number; measurable_watch_time_seconds: number | null }>; value: (video: (typeof videos)[number]) => string; max: number; color: "violet" | "emerald" }) {
-  return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">{title}</h2><div className="mt-5 space-y-4">{videos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Not measured yet.</p> : videos.map((video) => { const amount = color === "violet" ? video.total_views : video.measurable_watch_time_seconds ?? 0; return <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={`/analytics/videos/${video.video_id}`} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 text-white">{value(video)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className={`h-full rounded-full ${color === "violet" ? "bg-violet-400" : "bg-emerald-400"}`} style={{ width: `${(amount / max) * 100}%` }} /></div></div>; })}</div></div>;
+function TopVideosCard({ spaceId, title, videos, value, max, color }: { spaceId: string; title: string; videos: Array<{ video_id: string; title: string; source_type: Video["source_type"]; total_views: number; measurable_watch_time_seconds: number | null }>; value: (video: (typeof videos)[number]) => string; max: number; color: "violet" | "emerald" }) {
+  const scoped = (path: string) => `${path}?space_id=${encodeURIComponent(spaceId)}`;
+  return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">{title}</h2><div className="mt-5 space-y-4">{videos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Not measured yet.</p> : videos.map((video) => { const amount = color === "violet" ? video.total_views : video.measurable_watch_time_seconds ?? 0; return <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={scoped(`/analytics/videos/${video.video_id}`)} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 text-white">{value(video)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className={`h-full rounded-full ${color === "violet" ? "bg-violet-400" : "bg-emerald-400"}`} style={{ width: `${(amount / max) * 100}%` }} /></div></div>; })}</div></div>;
 }
 
 function ActivitySection({ activity, recentActivity }: { activity: Array<{ date: string; views: number; sessions: number }>; recentActivity: ViewerSessionAnalytics[] }) {

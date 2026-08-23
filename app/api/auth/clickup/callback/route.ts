@@ -1,7 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 import { provisionClickUpUser } from "@/src/lib/auth/provisioning";
 import { createSignedSessionCookie, SESSION_MAX_AGE_SECONDS } from "@/src/lib/auth/session-cookie";
-import { upsertClickUpConnection } from "@/src/lib/clickup/workspace";
+import { upsertClickUpConnections } from "@/src/lib/clickup/workspace";
+import { syncClickUpAuthorizedTeams } from "@/src/lib/clickup/sync";
 import { AUTH_RETURN_COOKIE, getSafeAuthReturnPath } from "@/src/lib/auth/redirect";
 import { getClickUpRedirectUri } from "@/src/lib/app-url";
 import { acceptInvitationForClickUpUser } from "@/src/lib/auth/invitations";
@@ -41,17 +42,21 @@ function redirectToInvitationError(request: Request, returnTo: string, error: st
   return response;
 }
 
-function getPrimaryAuthorizedTeam(teams: unknown): ClickUpTeamIdentity | null {
-  if (!Array.isArray(teams) || teams.length === 0) return null;
-  const primaryTeam = teams[0];
-  if (!primaryTeam || typeof primaryTeam !== "object") return null;
-  const team = primaryTeam as Record<string, unknown>;
-  const rawId = team.id;
-  const rawName = team.name;
-  if ((typeof rawId !== "string" && typeof rawId !== "number") || typeof rawName !== "string") return null;
-  const id = String(rawId).trim();
-  const name = rawName.trim();
-  return id && name ? { id, name } : null;
+function getAuthorizedTeams(teams: unknown): ClickUpTeamIdentity[] {
+  if (!Array.isArray(teams)) return [];
+  const seen = new Set<string>();
+  return teams.slice(0, 100).flatMap((rawTeam) => {
+    if (!rawTeam || typeof rawTeam !== "object") return [];
+    const team = rawTeam as Record<string, unknown>;
+    const rawId = team.id;
+    const rawName = team.name;
+    if ((typeof rawId !== "string" && typeof rawId !== "number") || typeof rawName !== "string") return [];
+    const id = String(rawId).trim();
+    const name = rawName.trim();
+    if (!id || !name || seen.has(id)) return [];
+    seen.add(id);
+    return [{ id, name }];
+  });
 }
 
 export async function GET(request: Request) {
@@ -139,10 +144,19 @@ export async function GET(request: Request) {
       return redirectToLogin(request, error === "invalid_identity" ? "invalid_identity" : "server_error", returnTo);
     }
 
-    const primaryTeam = getPrimaryAuthorizedTeam(teamsData.teams);
-    if (primaryTeam) {
-      const persisted = await upsertClickUpConnection(provisioning.user.id, primaryTeam, accessToken);
-      if (!persisted) console.error("Failed to persist ClickUp connection — continuing without token cookie");
+    const authorizedTeams = getAuthorizedTeams(teamsData.teams);
+    if (authorizedTeams.length > 0) {
+      const persisted = await upsertClickUpConnections(provisioning.user.id, authorizedTeams, accessToken);
+      if (persisted !== authorizedTeams.length) console.error("Some ClickUp Workspace connections could not be persisted", { expected: authorizedTeams.length, persisted });
+      const syncSummary = await syncClickUpAuthorizedTeams(provisioning.user.id, provisioning.user.role, teamsData.teams);
+      console.info("ClickUp Space membership synchronization completed", {
+        teams: syncSummary.teams,
+        membershipsAddedOrUpdated: syncSummary.memberships_added_or_updated,
+        membershipsSuspended: syncSummary.memberships_suspended,
+        unmatchedMembers: syncSummary.unmatched_clickup_members,
+        incompleteMemberResponses: syncSummary.incomplete_member_responses,
+        failedTeams: syncSummary.failed_teams,
+      });
     } else {
       console.error("ClickUp authorized Workspace shape was invalid — continuing without token cookie");
     }

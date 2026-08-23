@@ -9,6 +9,7 @@ import { VIDEO_SOURCE_TYPES } from "@/src/types/video";
 
 interface CreateVideoDialogProps {
   onCreated: () => void;
+  spaceId?: string | null;
 }
 
 const SOURCE_LABELS: Record<VideoSourceType, string> = {
@@ -19,7 +20,7 @@ const SOURCE_LABELS: Record<VideoSourceType, string> = {
   direct_url: "Direct URL",
 };
 
-export default function CreateVideoDialog({ onCreated }: CreateVideoDialogProps) {
+export default function CreateVideoDialog({ onCreated, spaceId }: CreateVideoDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,8 @@ export default function CreateVideoDialog({ onCreated }: CreateVideoDialogProps)
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/videos", {
+      const endpoint = spaceId ? `/api/videos?space_id=${encodeURIComponent(spaceId)}` : "/api/videos";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

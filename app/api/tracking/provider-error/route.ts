@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
-import { recordProviderError } from "@/src/lib/tracking/service";
+import { getTrackingSessionSpaceId, recordProviderError } from "@/src/lib/tracking/service";
+import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   let body: unknown;
@@ -18,6 +19,14 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   const providerCode = typeof payload.provider_code === "number" ? payload.provider_code : Number(payload.provider_code);
   if (!sessionId || !sessionToken || !sourceType || !Number.isInteger(providerCode)) {
     return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+  }
+
+  const spaceId = await getTrackingSessionSpaceId(sessionId, user.id);
+  if (!spaceId) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
+  try {
+    await authorizeSpaceMember(spaceId, user);
+  } catch {
+    return NextResponse.json({ error: "session_not_found" }, { status: 404 });
   }
 
   const recorded = await recordProviderError(sessionId, sessionToken, user.id, sourceType, providerCode);

@@ -384,16 +384,16 @@ assert(
   "settings reconnect CTA points to the implemented ClickUp OAuth route"
 );
 assert(
-  videoListRoute.includes("withPermission") && videoListRoute.includes("PERMISSIONS.VIDEOS_READ"),
-  "video list route enforces the videos.read permission"
+  videoListRoute.includes("withAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("listVideos(access.space.clickup_workspace_id, access.space.id)"),
+  "video list route enforces authenticated Space membership and scoped reads"
 );
 assert(
-  videoDetailRoute.includes("withPermission") && videoDetailRoute.includes("PERMISSIONS.VIDEOS_READ"),
-  "video detail route enforces the videos.read permission"
+  videoDetailRoute.includes("withAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("getVideo(id, access.space.clickup_workspace_id, access.space.id)"),
+  "video detail route enforces authenticated Space membership"
 );
 assert(
-  clickupTaskSearchRoute.includes("withPermission") && clickupTaskSearchRoute.includes("PERMISSIONS.VIDEOS_UPDATE"),
-  "ClickUp task search route enforces the video-management permission"
+  clickupTaskSearchRoute.includes("withAuth") && clickupTaskSearchRoute.includes("resolveSpaceAdminForUser") && clickupTaskSearchRoute.includes("workspace.clickup_team_id"),
+  "ClickUp task search route enforces Space-admin authorization and selected workspace"
 );
 
 // ---------------------------------------------------------------------------

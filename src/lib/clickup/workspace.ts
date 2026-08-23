@@ -71,6 +71,37 @@ export async function upsertClickUpConnection(
 /**
  * Returns the first workspace ID for a profile (for MVP single-workspace flow).
  */
+export async function upsertClickUpConnections(
+  profileId: string,
+  teams: ClickUpWorkspaceIdentity[],
+  accessToken: string,
+): Promise<number> {
+  if (!profileId || !accessToken || teams.length === 0) return 0;
+  let persisted = 0;
+  for (const team of teams.slice(0, 100)) {
+    if (await upsertClickUpConnection(profileId, team, accessToken)) persisted += 1;
+  }
+  return persisted;
+}
+
+export async function getClickUpTokenForWorkspace(profileId: string, workspaceId: string): Promise<string | null> {
+  if (!profileId || !workspaceId) return null;
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("clickup_connections")
+      .select("access_token")
+      .eq("profile_id", profileId)
+      .eq("workspace_id", workspaceId)
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getPrimaryWorkspaceId(profileId: string): Promise<string | null> {
   if (!profileId) return null;
 

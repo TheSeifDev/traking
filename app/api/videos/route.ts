@@ -1,13 +1,12 @@
 ﻿/**
  * /api/videos
  *
- * GET  – List videos for the authenticated user's workspace
- * POST – Create a new video (admin + owner only)
+ * GET  – List videos for the selected accessible Space.
+ * POST – Create a video for the selected Space admin/owner.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withPermission } from "@/src/lib/auth/api-handler";
-import { PERMISSIONS } from "@/src/types/permissions";
-import { getPrimaryWorkspaceId } from "@/src/lib/clickup/workspace";
+import { withAuth } from "@/src/lib/auth/api-handler";
+import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { getWorkspaceAnalytics, listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType, type Video, type WorkspaceAnalytics } from "@/src/types/video";
 
@@ -42,85 +41,69 @@ function addLibraryAnalytics(videos: Video[], viewerSessions: WorkspaceAnalytics
   });
 }
 
-// GET /api/videos — requires videos.read
-export const GET = withPermission(
-  PERMISSIONS.VIDEOS_READ,
-  async (_request: NextRequest, user) => {
-    const workspaceId = await getPrimaryWorkspaceId(user.id);
-    if (!workspaceId) {
-      return NextResponse.json({ videos: [], summary: { total_videos: 0, active_links: 0, total_sessions: 0, total_viewers: 0 } });
+const emptySummary = { total_videos: 0, active_links: 0, total_sessions: 0, total_viewers: 0 };
+
+export const GET = withAuth(async (request: NextRequest, user) => {
+  try {
+    const access = await resolveSpaceForUser(request, user);
+    if (!access.space.clickup_workspace_id) {
+      return NextResponse.json({ videos: [], summary: emptySummary, space_connected: false });
     }
-
     const [rawVideos, analytics] = await Promise.all([
-      listVideos(workspaceId),
-      getWorkspaceAnalytics(workspaceId),
+      listVideos(access.space.clickup_workspace_id, access.space.id),
+      getWorkspaceAnalytics(access.space.clickup_workspace_id, access.space.id),
     ]);
-    const analyticsAvailable = analytics.total_videos === rawVideos.length;
-    const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analyticsAvailable);
+    const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analytics.total_videos === rawVideos.length);
     const now = Date.now();
-    const activeLinks = videos.reduce((total, video) => total + (video.watch_links?.filter((link) => !link.revoked_at && (!link.expires_at || new Date(link.expires_at).getTime() > now)).length ?? 0), 0);
-
+    const activeLinks = videos.reduce((total, video) => total + (video.watch_links?.some((link) => !link.revoked_at && (!link.expires_at || new Date(link.expires_at).getTime() > now)) ? 1 : 0), 0);
     return NextResponse.json({
       videos,
+      space: { id: access.space.id, name: access.space.name },
+      space_connected: true,
       summary: {
         total_videos: videos.length,
         active_links: activeLinks,
-        total_sessions: analyticsAvailable ? analytics.total_sessions : null,
-        total_viewers: analyticsAvailable ? analytics.unique_viewers : null,
+        total_sessions: analytics.total_sessions,
+        total_viewers: analytics.unique_viewers,
       },
     });
-  },
-);
+  } catch {
+    return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
+  }
+});
 
-// POST /api/videos — requires videos.create (admin + owner only)
-export const POST = withPermission(
-  PERMISSIONS.VIDEOS_CREATE,
-  async (request: NextRequest, user) => {
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-    }
+export const POST = withAuth(async (request: NextRequest, user) => {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object") return NextResponse.json({ error: "invalid_body" }, { status: 400 });
 
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "invalid_body" }, { status: 400 });
-    }
+  const input = body as Record<string, unknown>;
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  const source_type = input.source_type;
+  const source_url = typeof input.source_url === "string" ? input.source_url.trim() : "";
+  const description = typeof input.description === "string" ? input.description.trim() : null;
+  const duration = typeof input.duration === "number" ? input.duration : null;
+  if (!title || title.length > 255) return NextResponse.json({ error: "invalid_title" }, { status: 400 });
+  if (!isValidSourceType(source_type)) return NextResponse.json({ error: "invalid_source_type" }, { status: 400 });
+  if (!source_url) return NextResponse.json({ error: "invalid_source_url" }, { status: 400 });
 
-    const b = body as Record<string, unknown>;
-    const title = typeof b.title === "string" ? b.title.trim() : "";
-    const source_type = b.source_type;
-    const source_url = typeof b.source_url === "string" ? b.source_url.trim() : "";
-    const description = typeof b.description === "string" ? b.description.trim() : null;
-    const duration = typeof b.duration === "number" ? b.duration : null;
-
-    if (!title || title.length > 255) {
-      return NextResponse.json({ error: "invalid_title" }, { status: 400 });
-    }
-    if (!isValidSourceType(source_type)) {
-      return NextResponse.json({ error: "invalid_source_type" }, { status: 400 });
-    }
-    if (!source_url) {
-      return NextResponse.json({ error: "invalid_source_url" }, { status: 400 });
-    }
-
-    const workspaceId = await getPrimaryWorkspaceId(user.id);
-    if (!workspaceId) {
-      return NextResponse.json({ error: "no_workspace" }, { status: 422 });
-    }
-
-    const video = await createVideo(workspaceId, user.id, {
+  try {
+    const access = await resolveSpaceAdminForUser(request, user);
+    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    const video = await createVideo(access.space.clickup_workspace_id, user.id, {
       title,
       description,
       source_type,
       source_url,
       duration,
-    });
-
-    if (!video) {
-      return NextResponse.json({ error: "create_failed" }, { status: 500 });
-    }
-
-    return NextResponse.json({ video }, { status: 201 });
-  },
-);
+    }, access.space.id);
+    if (!video) return NextResponse.json({ error: "create_failed" }, { status: 500 });
+    return NextResponse.json({ video, space: { id: access.space.id, name: access.space.name } }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
+  }
+});

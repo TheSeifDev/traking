@@ -44,6 +44,8 @@ interface WatchLinksManagerProps {
   role: UserRole;
   appOrigin: string;
   hasWorkspace: boolean;
+  spaceId?: string | null;
+  spaceCanManage?: boolean;
 }
 
 function getYouTubeId(sourceUrl: string): string | null {
@@ -83,8 +85,9 @@ function activeLinkFor(video: Video, now: number): WatchLink | undefined {
   return (video.watch_links ?? []).find((link) => isActiveLink(link, now));
 }
 
-export default function WatchLinksManager({ videos: initialVideos, role, appOrigin, hasWorkspace }: WatchLinksManagerProps) {
-  const canManage = role === "owner" || role === "admin";
+export default function WatchLinksManager({ videos: initialVideos, role, appOrigin, hasWorkspace, spaceId = null, spaceCanManage }: WatchLinksManagerProps) {
+  const canManage = spaceCanManage ?? (role === "owner" || role === "admin");
+  const scopedQuery = spaceId ? `?space_id=${encodeURIComponent(spaceId)}` : "";
   const [videos, setVideos] = useState(initialVideos);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -148,7 +151,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Manage one private TrackUp viewer link per video. Session counts are recorded views; playback metrics remain Not measured unless valid provider telemetry is stored.</p>
           </div>
-          <Link href="/videos" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:w-auto">
+          <Link href={spaceId ? `/videos${scopedQuery}` : "/videos"} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:w-auto">
             Open video library
             <ArrowUpRight size={15} />
           </Link>
@@ -164,7 +167,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
         {!hasWorkspace ? (
           <EmptyState title="Connect a ClickUp workspace" description="Connect a workspace before managing viewer access." icon={Link2} />
         ) : videos.length === 0 ? (
-          <EmptyState title="Your watch links will appear here" description="Add a video first, then create a secure TrackUp viewer link for it." icon={VideoIcon} actionHref="/videos" actionLabel="Open video library" />
+          <EmptyState title="Your watch links will appear here" description="Add a video first, then create a secure TrackUp viewer link for it." icon={VideoIcon} actionHref={spaceId ? `/videos${scopedQuery}` : "/videos"} actionLabel="Open video library" />
         ) : (
           <>
             <section aria-label="Watch link filters" className="rounded-2xl border border-white/9 bg-white/[0.03] p-4 sm:p-5">
@@ -187,7 +190,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
               <EmptyState title="No videos match these filters" description="Try a different search term or access status." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />
             ) : (
               <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {filteredVideos.map((video) => <VideoAccessCard key={video.id} video={video} now={now} canManage={canManage} appOrigin={appOrigin} onLinksChange={(links) => updateLinks(video.id, links)} />)}
+                {filteredVideos.map((video) => <VideoAccessCard key={video.id} video={video} now={now} canManage={canManage} appOrigin={appOrigin} spaceId={spaceId} onLinksChange={(links) => updateLinks(video.id, links)} />)}
               </div>
             )}
           </>
@@ -197,7 +200,8 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
   );
 }
 
-function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { video: Video; now: number; canManage: boolean; appOrigin: string; onLinksChange: (links: WatchLink[]) => void }) {
+function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, onLinksChange }: { video: Video; now: number; canManage: boolean; appOrigin: string; spaceId?: string | null; onLinksChange: (links: WatchLink[]) => void }) {
+  const scopedQuery = spaceId ? `?space_id=${encodeURIComponent(spaceId)}` : "";
   const youtubeId = video.source_type === "youtube" ? getYouTubeId(video.source_url) : null;
   const links = video.watch_links ?? [];
   const activeLink = activeLinkFor(video, now);
@@ -209,7 +213,7 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
 
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-300/20 hover:bg-white/[0.045]">
-      <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
+      <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
         {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
         <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
           <span className={`max-w-[48%] truncate rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span>
@@ -220,10 +224,10 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
       <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <Link href={`/videos/${video.id}`} className="block line-clamp-2 min-h-12 break-words text-lg font-semibold leading-6 tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
+            <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="block line-clamp-2 min-h-12 break-words text-lg font-semibold leading-6 tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
             <p className="mt-2 flex min-w-0 items-center gap-1.5 truncate text-xs text-white/35"><CalendarDays size={13} className="shrink-0" />Added {formatDate(video.created_at)}</p>
           </div>
-          <Link href={`/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
+          <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
         </div>
 
         <div className="mt-5 grid grid-cols-3 divide-x divide-white/8 border-y border-white/8 py-3 text-center">
@@ -233,7 +237,7 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
         </div>
 
         <div className="mt-5 min-w-0">
-            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} detailsHref={`/videos/${video.id}`} onLinksChange={onLinksChange} />
+            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} spaceId={spaceId} detailsHref={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} onLinksChange={onLinksChange} />
         </div>
       </div>
     </article>

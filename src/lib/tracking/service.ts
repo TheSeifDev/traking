@@ -28,6 +28,7 @@ export function deriveViewerClientMetadata(userAgent: string | null): ViewerClie
 export interface ResolvedWatchLink {
   watch_link_id: string;
   video_id: string;
+  space_id: string | null;
   title: string;
   source_type: string;
   source_url: string;
@@ -62,7 +63,7 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
 
     const { data: video, error: videoError } = await supabase
       .from("videos")
-      .select("id, title, source_type, source_url, duration")
+      .select("id, space_id, title, source_type, source_url, duration")
       .eq("id", link.video_id)
       .maybeSingle();
     if (videoError) {
@@ -77,6 +78,7 @@ export async function resolveWatchLink(token: string): Promise<ResolvedWatchLink
     return {
       watch_link_id: link.id,
       video_id: video.id,
+      space_id: video.space_id ?? null,
       title: video.title,
       source_type: video.source_type,
       source_url: video.source_url,
@@ -181,6 +183,34 @@ async function hashViewerIdentity(viewerIdentity: string): Promise<string> {
     .slice(0, 8)
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function getTrackingSessionSpaceId(sessionId: string, viewerIdentity: string): Promise<string | null> {
+  if (!sessionId || !viewerIdentity) return null;
+  try {
+    const supabase = createAdminClient();
+    const { data: session, error: sessionError } = await supabase
+      .from("watch_sessions")
+      .select("watch_link_id, viewer_profile_id")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (sessionError || !session || session.viewer_profile_id !== viewerIdentity) return null;
+    const { data: link, error: linkError } = await supabase
+      .from("watch_links")
+      .select("video_id")
+      .eq("id", session.watch_link_id)
+      .maybeSingle();
+    if (linkError || !link) return null;
+    const { data: video, error: videoError } = await supabase
+      .from("videos")
+      .select("space_id")
+      .eq("id", link.video_id)
+      .maybeSingle();
+    if (videoError || !video || typeof video.space_id !== "string") return null;
+    return video.space_id;
+  } catch {
+    return null;
+  }
 }
 
 export async function isAuthorizedWatchSession(

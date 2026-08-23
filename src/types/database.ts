@@ -10,6 +10,8 @@ export type Json =
 
 export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" | "direct_url";
 export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended" | "buffer" | "rate_change" | "visibility_change";
+export type SpaceMemberRole = "admin" | "member";
+export type SpaceMemberStatus = "active" | "suspended" | "removed";
 
 export interface Database {
   public: {
@@ -201,6 +203,110 @@ export interface Database {
           },
         ];
       };
+      spaces: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          clickup_workspace_id: string | null;
+          created_by: string | null;
+          settings: Json;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          clickup_workspace_id?: string | null;
+          created_by?: string | null;
+          settings?: Json;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          clickup_workspace_id?: string | null;
+          created_by?: string | null;
+          settings?: Json;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "spaces_clickup_workspace_id_fkey";
+            columns: ["clickup_workspace_id"];
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "spaces_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      space_members: {
+        Row: {
+          id: string;
+          space_id: string;
+          profile_id: string;
+          role: SpaceMemberRole;
+          status: SpaceMemberStatus;
+          joined_at: string | null;
+          source: "manual" | "clickup";
+          clickup_user_id: string | null;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          space_id: string;
+          profile_id: string;
+          role?: SpaceMemberRole;
+          status?: SpaceMemberStatus;
+          joined_at?: string | null;
+          source?: "manual" | "clickup";
+          clickup_user_id?: string | null;
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          space_id?: string;
+          profile_id?: string;
+          role?: SpaceMemberRole;
+          status?: SpaceMemberStatus;
+          joined_at?: string | null;
+          source?: "manual" | "clickup";
+          clickup_user_id?: string | null;
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "space_members_space_id_fkey";
+            columns: ["space_id"];
+            referencedRelation: "spaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "space_members_profile_id_fkey";
+            columns: ["profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspaces: {
         Row: {
           id: string;
@@ -269,6 +375,7 @@ export interface Database {
         Row: {
           id: string;
           workspace_id: string;
+          space_id: string | null;
           created_by: string | null;
           title: string;
           description: string | null;
@@ -281,6 +388,7 @@ export interface Database {
         Insert: {
           id?: string;
           workspace_id: string;
+          space_id?: string | null;
           created_by?: string | null;
           title: string;
           description?: string | null;
@@ -293,6 +401,7 @@ export interface Database {
         Update: {
           id?: string;
           workspace_id?: string;
+          space_id?: string | null;
           created_by?: string | null;
           title?: string;
           description?: string | null;
@@ -307,6 +416,12 @@ export interface Database {
             foreignKeyName: "videos_workspace_id_fkey";
             columns: ["workspace_id"];
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "videos_space_id_fkey";
+            columns: ["space_id"];
+            referencedRelation: "spaces";
             referencedColumns: ["id"];
           },
           {
@@ -575,6 +690,8 @@ export interface Database {
     };
     Enums: {
       user_role: UserRole;
+      space_member_role: SpaceMemberRole;
+      space_member_status: SpaceMemberStatus;
       video_source_type: VideoSourceType;
       watch_event_type: WatchEventType;
     };

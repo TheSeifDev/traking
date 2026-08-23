@@ -9,6 +9,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolveWatchLink } from "@/src/lib/tracking/service";
+import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 import { getCurrentUser } from "@/src/lib/auth/session";
 import WatchPlayer from "@/src/components/watch/WatchPlayer";
 
@@ -57,6 +58,12 @@ export default async function WatchPage({ params }: Props) {
 
   const user = await getCurrentUser();
   if (!user) return <LoginRequired token={token} />;
+  if (!resolved.space_id) notFound();
+  try {
+    await authorizeSpaceMember(resolved.space_id, user);
+  } catch {
+    notFound();
+  }
 
   const sourceLabel = resolved.source_type.replace("_", " ");
   const isDirectUrl = resolved.source_type === "direct_url";
