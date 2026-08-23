@@ -88,6 +88,7 @@ export interface WatchEvent {
 
 export type WatchEventType =
   | "play"
+  | "resume"
   | "pause"
   | "seek"
   | "heartbeat"
@@ -145,6 +146,8 @@ export interface ViewerSessionAnalytics {
   last_position: number | null;
   last_duration: number | null;
   playback_metrics_scope: PlaybackMetricsScope;
+  has_playback_telemetry: boolean;
+  telemetry_event_count: number;
 }
 
 export interface VideoAnalytics {

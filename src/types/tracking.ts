@@ -8,6 +8,7 @@
 
 export type TrackingEventType =
   | "play"
+  | "resume"
   | "pause"
   | "seek"
   | "heartbeat"
@@ -16,6 +17,7 @@ export type TrackingEventType =
 
 export const VALID_EVENT_TYPES: readonly TrackingEventType[] = [
   "play",
+  "resume",
   "pause",
   "seek",
   "heartbeat",
@@ -53,6 +55,10 @@ export interface EndSessionPayload {
   session_token: string;
   watch_time_seconds: number;
   completion_percentage: number;
+  /** Final player position on natural end or page leave when available. */
+  position?: number | null;
+  /** Final provider duration on natural end or page leave when available. */
+  duration?: number | null;
 }
 
 /** Response from POST /api/tracking/session. */

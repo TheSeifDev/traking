@@ -28,10 +28,12 @@ export const POST = withAuth(async (request: NextRequest, user, context) => {
   const completion = typeof b.completion_percentage === "number" && Number.isFinite(b.completion_percentage)
     ? Math.min(100, Math.max(0, b.completion_percentage))
     : 0;
+  const position = typeof b.position === "number" && Number.isFinite(b.position) ? Math.max(0, b.position) : null;
+  const finalDuration = typeof b.duration === "number" && Number.isFinite(b.duration) && b.duration > 0 ? b.duration : null;
 
   if (!sessionToken) return NextResponse.json({ error: "missing_session_token" }, { status: 400 });
 
-  const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion);
+  const ok = await endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration);
   // Do not reveal whether the session id exists when the capability or identity is invalid.
   if (!ok) return NextResponse.json({ error: "session_not_found" }, { status: 404 });
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Info, RotateCcw } from "lucide-react";
+import type { TrackingEventType } from "@/src/types/tracking";
 
 type YouTubeStateChangeEvent = { data: number };
 type YouTubeReadyEvent = { target: YouTubePlayer };
@@ -148,7 +149,9 @@ export default function WatchPlayer({
   const sessionIdRef = useRef<string | null>(null);
   const sessionTokenRef = useRef<string | null>(null);
   const sessionStartRequestRef = useRef<Promise<boolean> | null>(null);
+  const playbackStartRequestRef = useRef<Promise<boolean> | null>(null);
   const sessionEndedRef = useRef(false);
+  const hasPlayedRef = useRef(false);
   const startTimeRef = useRef<number | null>(null);
   const watchTimeRef = useRef(0);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -156,6 +159,7 @@ export default function WatchPlayer({
   const durationRef = useRef<number | null>(duration);
   const lastDurationRef = useRef<number | null>(duration);
   const lastPositionRef = useRef<number | null>(null);
+  const pausedPositionRef = useRef<number | null>(null);
   const furthestPositionRef = useRef(0);
   const seekFromRef = useRef<number | null>(null);
   const [playerReady, setPlayerReady] = useState(sourceType !== "youtube");
@@ -187,7 +191,7 @@ export default function WatchPlayer({
   }, []);
 
   const sendEvent = useCallback(async (
-    eventType: "play" | "pause" | "seek" | "heartbeat" | "complete" | "ended",
+    eventType: TrackingEventType,
     snapshot: PlaybackSnapshot,
     fromPosition?: number | null,
   ) => {
@@ -270,8 +274,20 @@ export default function WatchPlayer({
 
     sessionEndedRef.current = true;
     stopHeartbeat();
+    const finalSnapshot = isYouTube
+      ? readYouTubeSnapshot()
+      : videoRef.current
+        ? {
+            position: Math.max(0, videoRef.current.currentTime),
+            duration: Number.isFinite(videoRef.current.duration) && videoRef.current.duration > 0
+              ? videoRef.current.duration
+              : durationRef.current,
+          }
+        : null;
+    if (finalSnapshot) updateSnapshot(finalSnapshot);
     accumulateWatchTime(false);
-    const finalDuration = lastDurationRef.current ?? durationRef.current;
+    const finalPosition = finalSnapshot?.position ?? lastPositionRef.current;
+    const finalDuration = finalSnapshot?.duration ?? lastDurationRef.current ?? durationRef.current;
     const completion = finalDuration && finalDuration > 0
       ? Math.min(100, Math.round((furthestPositionRef.current / finalDuration) * 100))
       : 0;
@@ -280,6 +296,8 @@ export default function WatchPlayer({
       session_token: sessionToken,
       watch_time_seconds: watchTimeRef.current,
       completion_percentage: completion,
+      position: finalPosition,
+      duration: finalDuration,
     });
 
     try {
@@ -299,7 +317,7 @@ export default function WatchPlayer({
     } catch {
       // Best-effort end-of-session delivery on page close.
     }
-  }, [accumulateWatchTime, stopHeartbeat]);
+  }, [accumulateWatchTime, isYouTube, readYouTubeSnapshot, stopHeartbeat, updateSnapshot]);
 
   const maybeRecordCompletion = useCallback((snapshot: PlaybackSnapshot) => {
     if (completionSentRef.current || !snapshot.duration || snapshot.duration <= 0) return;
@@ -310,30 +328,49 @@ export default function WatchPlayer({
   }, [sendEvent]);
 
   const startPlaybackSegment = useCallback(async (readSnapshot: () => PlaybackSnapshot | null): Promise<boolean> => {
-    const initialSnapshot = readSnapshot();
-    if (!initialSnapshot) return false;
-    const sessionStarted = await startSession();
-    if (!sessionStarted) return false;
+    if (startTimeRef.current !== null) return true;
+    if (playbackStartRequestRef.current) return playbackStartRequestRef.current;
 
-    updateSnapshot(initialSnapshot);
-    startTimeRef.current = startTimeRef.current ?? Date.now();
-    void sendEvent("play", initialSnapshot);
-    maybeRecordCompletion(initialSnapshot);
+    const request = (async () => {
+      const initialSnapshot = readSnapshot();
+      if (!initialSnapshot) return false;
+      const sessionStarted = await startSession();
+      if (!sessionStarted) return false;
 
-    stopHeartbeat();
-    heartbeatIntervalRef.current = setInterval(() => {
-      const snapshot = readSnapshot();
-      if (!snapshot) return;
-      const previousPosition = lastPositionRef.current;
-      updateSnapshot(snapshot);
-      accumulateWatchTime(true);
-      if (isYouTube && previousPosition !== null && Math.abs(snapshot.position - previousPosition) >= 8) {
-        void sendEvent("seek", snapshot, previousPosition);
+      const pausedPosition = pausedPositionRef.current;
+      updateSnapshot(initialSnapshot);
+      startTimeRef.current = Date.now();
+      const eventType: TrackingEventType = hasPlayedRef.current ? "resume" : "play";
+      hasPlayedRef.current = true;
+      if (eventType === "resume" && pausedPosition !== null && Math.abs(initialSnapshot.position - pausedPosition) >= 8) {
+        void sendEvent("seek", initialSnapshot, pausedPosition);
       }
-      void sendEvent("heartbeat", snapshot);
-      maybeRecordCompletion(snapshot);
-    }, 5000);
-    return true;
+      pausedPositionRef.current = null;
+      void sendEvent(eventType, initialSnapshot);
+      maybeRecordCompletion(initialSnapshot);
+
+      stopHeartbeat();
+      heartbeatIntervalRef.current = setInterval(() => {
+        const snapshot = readSnapshot();
+        if (!snapshot) return;
+        const previousPosition = lastPositionRef.current;
+        updateSnapshot(snapshot);
+        accumulateWatchTime(true);
+        if (isYouTube && previousPosition !== null && Math.abs(snapshot.position - previousPosition) >= 8) {
+          void sendEvent("seek", snapshot, previousPosition);
+        }
+        void sendEvent("heartbeat", snapshot);
+        maybeRecordCompletion(snapshot);
+      }, 5000);
+      return true;
+    })();
+
+    playbackStartRequestRef.current = request;
+    try {
+      return await request;
+    } finally {
+      playbackStartRequestRef.current = null;
+    }
   }, [accumulateWatchTime, isYouTube, maybeRecordCompletion, sendEvent, startSession, stopHeartbeat, updateSnapshot]);
 
   const handleDirectPlay = useCallback(() => {
@@ -349,7 +386,7 @@ export default function WatchPlayer({
 
   const handleDirectPause = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !sessionIdRef.current) return;
+    if (!video || !sessionIdRef.current || startTimeRef.current === null) return;
     const snapshot = {
       position: Math.max(0, video.currentTime),
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
@@ -367,7 +404,7 @@ export default function WatchPlayer({
 
   const handleDirectSeeked = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !sessionIdRef.current) return;
+    if (!video || !sessionIdRef.current || startTimeRef.current === null) return;
     const snapshot = {
       position: Math.max(0, video.currentTime),
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
@@ -413,6 +450,7 @@ export default function WatchPlayer({
     if (event.data === api.PlayerState.PAUSED) {
       if (!sessionIdRef.current) return;
       updateSnapshot(snapshot);
+      pausedPositionRef.current = snapshot.position;
       accumulateWatchTime(false);
       stopHeartbeat();
       void sendEvent("pause", snapshot);
@@ -457,7 +495,10 @@ export default function WatchPlayer({
             setPlayerReady(true);
           },
           onStateChange: handleYouTubeStateChange,
-          onError: () => setError("YouTube could not load this video inside TrackUp."),
+          onError: () => {
+            setError("YouTube could not load this video inside TrackUp.");
+            void endSession();
+          },
         },
       });
       const iframe = youtubeContainerRef.current.querySelector<HTMLIFrameElement>("iframe");
@@ -472,7 +513,7 @@ export default function WatchPlayer({
       player?.destroy();
       youtubePlayerRef.current = null;
     };
-  }, [handleYouTubeStateChange, isYouTube, retryNonce, sourceUrl, stopHeartbeat]);
+  }, [endSession, handleYouTubeStateChange, isYouTube, retryNonce, sourceUrl, stopHeartbeat]);
 
   useEffect(() => {
     const onBeforeUnload = () => { void endSession(); };

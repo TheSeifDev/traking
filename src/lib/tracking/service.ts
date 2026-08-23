@@ -187,15 +187,16 @@ export async function recordTrackingEvent(
       from_position: payload.from_position ?? null,
     });
 
-    if (!error) {
-      void supabase
-        .from("watch_sessions")
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq("id", payload.session_id)
-        .eq("session_token", payload.session_token);
-    }
+    if (error) return false;
 
-    return !error;
+    const { error: sessionUpdateError } = await supabase
+      .from("watch_sessions")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", payload.session_id)
+      .eq("session_token", payload.session_token)
+      .is("ended_at", null);
+
+    return !sessionUpdateError;
   } catch {
     return false;
   }
@@ -211,7 +212,9 @@ export async function endWatchSession(
   sessionToken: string,
   viewerIdentity: string,
   watchTimeSeconds: number,
-  completionPercentage: number
+  completionPercentage: number,
+  position: number | null = null,
+  duration: number | null = null,
 ): Promise<boolean> {
   if (!sessionId || !sessionToken) return false;
 
@@ -219,6 +222,17 @@ export async function endWatchSession(
     if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
 
     const supabase = createAdminClient();
+    if (position !== null || duration !== null) {
+      const { error: eventError } = await supabase.from("watch_events").insert({
+        session_id: sessionId,
+        event_type: "ended",
+        position: position ?? 0,
+        duration: duration ?? null,
+        from_position: null,
+      });
+      if (eventError) return false;
+    }
+
     const { data, error } = await supabase
       .from("watch_sessions")
       .update({

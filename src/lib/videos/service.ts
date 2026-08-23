@@ -57,6 +57,14 @@ function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
   return sourceType === "direct_url" || sourceType === "youtube";
 }
 
+function isValidTelemetryEvent(event: AnalyticsEventRow): boolean {
+  return Number.isFinite(event.position)
+    && event.position >= 0
+    && event.duration !== null
+    && Number.isFinite(event.duration)
+    && event.duration > 0;
+}
+
 function buildViewerSessionAnalytics(
   sessions: AnalyticsSessionRow[],
   events: AnalyticsEventRow[],
@@ -88,7 +96,6 @@ function buildViewerSessionAnalytics(
         : video.source_type === "youtube"
           ? "youtube_iframe_api" as const
           : "session_only" as const;
-      const measurable = scope !== "session_only";
       const viewerKey = session.viewer_identifier ?? `anonymous:${session.id}`;
       const viewerSessions = (sessionsByViewer.get(viewerKey) ?? [])
         .slice()
@@ -97,18 +104,21 @@ function buildViewerSessionAnalytics(
       const sessionEvents = (eventsBySession.get(session.id) ?? [])
         .slice()
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      const firstPlay = sessionEvents.find((event) => event.event_type === "play");
+      const telemetryEventCount = sessionEvents.filter(isValidTelemetryEvent).length;
+      const hasPlaybackTelemetry = supportsPlaybackMetrics(video.source_type) && telemetryEventCount > 0;
+      const firstPlay = sessionEvents.find((event) => event.event_type === "play" || event.event_type === "resume");
       const latestEvent = sessionEvents[sessionEvents.length - 1];
-      const latestDurationEvent = sessionEvents.slice().reverse().find((event) => event.duration !== null);
+      const latestTelemetryEvent = sessionEvents.slice().reverse().find(isValidTelemetryEvent);
+      const latestDurationEvent = sessionEvents.slice().reverse().find((event) => isValidTelemetryEvent(event));
       const lastActivityAt = latestEvent && new Date(latestEvent.created_at).getTime() > new Date(session.last_seen_at).getTime()
         ? latestEvent.created_at
         : session.last_seen_at;
-      const lastPosition = latestEvent ? Number(latestEvent.position ?? 0) : null;
-      const lastDuration = latestDurationEvent?.duration === null || latestDurationEvent?.duration === undefined
-        ? null
-        : Number(latestDurationEvent.duration);
-      const reachedPercentage = measurable && lastDuration && lastDuration > 0 && lastPosition !== null
-        ? Math.min(100, Math.max(0, Math.round((lastPosition / lastDuration) * 100)))
+      const lastPosition = hasPlaybackTelemetry && latestTelemetryEvent ? Number(latestTelemetryEvent.position ?? 0) : null;
+      const lastDuration = hasPlaybackTelemetry && latestDurationEvent?.duration !== null && latestDurationEvent?.duration !== undefined
+        ? Number(latestDurationEvent.duration)
+        : null;
+      const reachedPercentage = hasPlaybackTelemetry
+        ? Math.min(100, Math.max(0, Number(session.completion_percentage ?? 0)))
         : null;
 
       return {
@@ -120,12 +130,12 @@ function buildViewerSessionAnalytics(
         session_number: sessionNumber,
         session_count_for_viewer: viewerSessions.length,
         started_at: session.started_at,
-        first_play_at: measurable ? firstPlay?.created_at ?? null : null,
+        first_play_at: hasPlaybackTelemetry ? firstPlay?.created_at ?? null : null,
         last_activity_at: lastActivityAt,
         ended_at: session.ended_at,
-        watch_time_seconds: measurable && latestDurationEvent ? session.watch_time_seconds : null,
+        watch_time_seconds: hasPlaybackTelemetry ? Number(session.watch_time_seconds ?? 0) : null,
         completion_percentage: reachedPercentage,
-        playback_events: measurable ? sessionEvents.map((event) => ({
+        playback_events: hasPlaybackTelemetry ? sessionEvents.map((event) => ({
           id: event.id,
           event_type: event.event_type,
           position: Number(event.position ?? 0),
@@ -133,9 +143,11 @@ function buildViewerSessionAnalytics(
           duration: event.duration === null ? null : Number(event.duration),
           created_at: event.created_at,
         })) : [],
-        last_position: measurable ? lastPosition : null,
-        last_duration: measurable ? lastDuration : null,
+        last_position: hasPlaybackTelemetry ? lastPosition : null,
+        last_duration: hasPlaybackTelemetry ? lastDuration : null,
         playback_metrics_scope: scope,
+        has_playback_telemetry: hasPlaybackTelemetry,
+        telemetry_event_count: hasPlaybackTelemetry ? telemetryEventCount : 0,
       };
     });
 }
@@ -505,7 +517,7 @@ export async function getVideoAnalytics(
       : video.source_type === "youtube"
         ? "youtube_iframe_api" as const
         : "session_only" as const;
-    const measurableSessionIds = new Set(events.filter((event) => event.duration !== null).map((event) => event.session_id));
+    const measurableSessionIds = new Set(events.filter(isValidTelemetryEvent).map((event) => event.session_id));
     const measuredSessions = supportsPlaybackMetrics(video.source_type)
       ? sessions.filter((session) => measurableSessionIds.has(session.id))
       : [];
@@ -695,7 +707,7 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     const viewerSessions = buildViewerSessionAnalytics(workspaceSessions, events, sessionVideos);
     const totalViews = workspaceSessions.length;
     const uniqueViewers = new Set(workspaceSessions.map((session) => session.viewer_identifier ?? session.id)).size;
-    const measurableSessionIds = new Set(events.filter((event) => event.duration !== null).map((event) => event.session_id));
+    const measurableSessionIds = new Set(events.filter(isValidTelemetryEvent).map((event) => event.session_id));
     const measuredSessions = workspaceSessions.filter((session) => {
       const sourceType = sessionVideos.get(session.id)?.source_type;
       return sourceType === "direct_url" || sourceType === "youtube"
