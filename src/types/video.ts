@@ -67,6 +67,11 @@ export interface WatchLink {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  /** Derived usage fields included by workspace link listings when available. */
+  session_count?: number;
+  unique_viewer_count?: number;
+  first_opened_at?: string | null;
+  last_accessed_at?: string | null;
 }
 
 export interface WatchSession {

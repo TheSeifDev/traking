@@ -119,6 +119,7 @@ async function runTests(): Promise<void> {
   const inviteStartRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
   const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
   const watchLinksPage = readFileSync("app/(dashboard)/watch-links/page.tsx", "utf8");
+  const watchLinksManager = readFileSync("src/components/dashboard/WatchLinksManager.tsx", "utf8");
   const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
   assert(revocationMigration.includes("ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ"), "watch links have a revocation timestamp");
   assert(eventPositionMigration.includes("ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2)"), "watch events preserve seek origin position");
@@ -146,7 +147,9 @@ async function runTests(): Promise<void> {
   assert(videoList.includes("Most viewed") && videoList.includes("Alphabetical") && videoList.includes("Copy link") && videoList.includes("Open viewer") && videoList.includes("Revoke"), "video cards expose the required real management actions");
   assert(videoList.includes('method: "DELETE"') && videoList.includes("link_id: activeLink.id") && videoList.includes("Retry"), "video library exposes protected revoke and retry states");
   assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
-  assert(watchLinksPage.includes("listVideos") && watchLinksPage.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
+  assert(watchLinksPage.includes("listVideos") && watchLinksManager.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
+  assert(watchLinksManager.includes("Search watch links") && watchLinksManager.includes("Revoked links") && watchLinksManager.includes("No active link"), "watch-links UI provides searchable access cards and explicit active/revoked states");
+  assert(watchLinkPanel.includes("Revoked history") && watchLinkPanel.includes("View audit") && !watchLinkPanel.includes("historyLinks.map((link) => {\n            const url"), "watch-link history is separated from active access without presenting revoked URLs as active");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");
   assert(watchPage.includes("WatchPlayer") && watchPage.includes('robots: { index: false, follow: false }'), "public viewer remains internal and non-indexable");
   assert(watchPlayer.includes("https://www.youtube.com/iframe_api") && watchPlayer.includes("new api.Player"), "YouTube uses the official IFrame Player API inside TrackUp");

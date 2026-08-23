@@ -170,7 +170,7 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
           expires_at,
           revoked_at,
           created_at,
-          watch_sessions(id, completion_percentage)
+          watch_sessions(id, viewer_identifier, started_at, last_seen_at, completion_percentage)
         )
       `)
       .eq("workspace_id", workspaceId)
@@ -183,15 +183,29 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
     if (!data) return [];
 
     return data.map((v) => {
-      const sessions = (v.watch_links as Array<{
+      const rawWatchLinks = (v.watch_links ?? []) as Array<{
         id: string;
-        watch_sessions: Array<{ id: string; completion_percentage: number }>;
-      }>)?.flatMap((wl) => wl.watch_sessions ?? []) ?? [];
+        token: string;
+        created_by: string | null;
+        expires_at: string | null;
+        revoked_at: string | null;
+        created_at: string;
+        watch_sessions?: Array<{
+          id: string;
+          viewer_identifier: string | null;
+          started_at: string;
+          last_seen_at: string;
+          completion_percentage: number;
+        }>;
+      }>;
+      const sessions = rawWatchLinks.flatMap((watchLink) => watchLink.watch_sessions ?? []);
+      const uniqueViewerCount = new Set(sessions.map((session) => session.viewer_identifier ?? session.id)).size;
 
       return {
         ...v,
         source_type: v.source_type as Video["source_type"],
         view_count: sessions.length,
+        unique_viewer_count: uniqueViewerCount,
         avg_completion:
           v.source_type === "direct_url" && sessions.length > 0
             ? Math.round(
@@ -200,21 +214,22 @@ export async function listVideos(workspaceId: string): Promise<Video[]> {
               )
             : null,
         clickup_tasks: v.video_clickup_tasks,
-        watch_links: (v.watch_links as Array<{
-        id: string;
-        token: string;
-        created_by: string | null;
-        expires_at: string | null;
-        revoked_at: string | null;
-        created_at: string;
-        watch_sessions: unknown[];
-      }>)?.map(({ watch_sessions: _watchSessions, ...link }) => {
-        void _watchSessions;
-        return {
-          ...link,
-          video_id: v.id,
-        };
-      }),
+        watch_links: rawWatchLinks.map(({ watch_sessions: linkSessions = [], ...link }) => {
+          const orderedSessions = [...linkSessions].sort(
+            (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
+          );
+          const lastSession = [...linkSessions].sort(
+            (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
+          )[0];
+          return {
+            ...link,
+            video_id: v.id,
+            session_count: linkSessions.length,
+            unique_viewer_count: new Set(linkSessions.map((session) => session.viewer_identifier ?? session.id)).size,
+            first_opened_at: orderedSessions[0]?.started_at ?? null,
+            last_accessed_at: lastSession?.last_seen_at ?? null,
+          };
+        }),
       };
     });
   } catch (error) {
