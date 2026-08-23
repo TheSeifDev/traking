@@ -69,10 +69,10 @@ export function SessionTimeline({ session }: { session: ViewerSessionAnalytics }
         <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs text-white/35">No events were stored for this session.</div>
       ) : (
         <div className="mt-6 space-y-2">
-          {session.playback_events.map((event, index) => (
+          {session.playback_events.map((event) => (
             <div key={event.id} className="flex flex-col gap-2 rounded-xl border border-white/7 bg-black/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-400/10 text-[10px] font-semibold text-violet-200">{event.sequence_number ?? index + 1}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-400/10 text-[10px] font-semibold text-violet-200">{event.sequence_number ?? "—"}</span>
                 <div>
                   <p className="text-xs font-semibold capitalize text-white/85">{event.event_type.replace("_", " ")}</p>
                   <p className="mt-1 text-[10px] text-white/35">{formatAnalyticsDate(event.occurred_at ?? event.created_at)}</p>
