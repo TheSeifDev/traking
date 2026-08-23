@@ -142,6 +142,7 @@ export default function WorkspaceAnalyticsDashboard({
     { label: "Measured watch time", value: formatDuration(totalWatchTime), note: "Direct URL + YouTube API", icon: Clock3, color: "text-emerald-300" },
     { label: "Avg watch time", value: formatDuration(averageWatchTime), note: "Measured sessions only", icon: Clock3, color: "text-cyan-300" },
     { label: "Avg completion", value: averageCompletion === null ? "Not measured" : `${averageCompletion}%`, note: "Measured sessions only", icon: TrendingUp, color: "text-amber-300" },
+    { label: "Completion rate", value: completionRate === null ? "Not measured" : `${completionRate}%`, note: "Sessions reaching 90%+", icon: TrendingUp, color: "text-emerald-300" },
   ];
 
   const tabs: Array<{ id: Section; label: string; icon: typeof BarChart3 }> = [
@@ -153,13 +154,13 @@ export default function WorkspaceAnalyticsDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-linear-to-br from-violet-500/12 via-white/[0.03] to-blue-500/8 p-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-linear-to-br from-violet-500/12 via-white/[0.03] to-blue-500/8 p-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-violet-200/70"><BarChart3 size={14} /> Workspace intelligence</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Analytics</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">A truthful view of watch activity across your workspace. Measured playback appears only when TrackUp receives reliable native or YouTube IFrame API telemetry.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Workspace-level views, viewers, sessions, activity, and measured playback. Individual video analytics remain on each video details page so the scope is always explicit.</p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row">
           <label className="text-xs text-white/40">
             Video
             <select value={videoFilter} onChange={(event) => setVideoFilter(event.target.value)} className="mt-1 block min-w-44 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-violet-300/50">
@@ -188,7 +189,7 @@ export default function WorkspaceAnalyticsDashboard({
         ))}
       </nav>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         {stats.map(({ label, value, note, icon: Icon, color }) => (
           <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.035] p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)]">
             <Icon size={17} className={color} />

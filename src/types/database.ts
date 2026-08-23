@@ -9,7 +9,7 @@ export type Json =
   | Json[];
 
 export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" | "direct_url";
-export type WatchEventType = "play" | "pause" | "seek" | "heartbeat" | "complete" | "ended";
+export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended";
 
 export interface Database {
   public: {
