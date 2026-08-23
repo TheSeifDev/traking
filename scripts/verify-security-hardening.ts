@@ -156,6 +156,7 @@ async function runTests(): Promise<void> {
   section("OAuth state and service-role checks");
 
   const appUrlHelper = readFileSync("src/lib/app-url.ts", "utf8");
+  const nextConfig = readFileSync("next.config.ts", "utf8");
   const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");
   const oauthCallback = readFileSync("app/api/auth/clickup/callback/route.ts", "utf8");
   const logoutRoute = readFileSync("app/api/auth/logout/route.ts", "utf8");
@@ -165,12 +166,13 @@ async function runTests(): Promise<void> {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalRedirectUri = process.env.CLICKUP_REDIRECT_URI;
 
-assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
-assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
-assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
-assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
-assert(appUrlHelper.includes("const expected = process.env.NODE_ENV === \"production\""), "OAuth callback selection is environment-aware");
-assert(appUrlHelper.includes("isLocalAppUrl") && appUrlHelper.includes("return PRODUCTION_APP_URL"), "production rejects loopback app URLs");
+  assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
+  assert(nextConfig.includes('key: "Referrer-Policy"') && nextConfig.includes('strict-origin-when-cross-origin'), "YouTube embeds receive a referrer policy required for player configuration");
+  assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
+  assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
+  assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
+  assert(appUrlHelper.includes("const expected = process.env.NODE_ENV === \"production\""), "OAuth callback selection is environment-aware");
+  assert(appUrlHelper.includes("isLocalAppUrl") && appUrlHelper.includes("return PRODUCTION_APP_URL"), "production rejects loopback app URLs");
   process.env.CLICKUP_REDIRECT_URI = "http://stale.example/callback";
   Reflect.set(process.env, "NODE_ENV", "development");
   assert(getClickUpRedirectUri() === "https://localhost:3000/api/auth/clickup/callback", "development selects the localhost callback regardless of stale production config");
