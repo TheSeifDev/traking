@@ -189,7 +189,7 @@ export default function WorkspaceAnalyticsDashboard({
         ))}
       </nav>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 xl:grid-cols-7">
         {stats.map(({ label, value, note, icon: Icon, color }) => (
           <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.035] p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)]">
             <Icon size={17} className={color} />

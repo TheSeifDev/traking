@@ -200,7 +200,7 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
   const metrics = [
     { label: "Total videos", value: analytics.total_videos.toLocaleString(), note: "Workspace library", icon: VideoIcon, tone: "violet" as const },
     { label: "Viewer sessions", value: filteredSessions.length.toLocaleString(), note: `${rangeLabels[dateRange]} · real records`, icon: Eye, tone: "blue" as const },
-    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "One-way viewer identities", icon: UsersRound, tone: "cyan" as const },
+    { label: "Unique viewers", value: uniqueViewers.toLocaleString(), note: "Authenticated profiles; legacy fallback", icon: UsersRound, tone: "cyan" as const },
     { label: "Active links", value: linkHealth.active.toLocaleString(), note: "One per video maximum", icon: Link2, tone: "emerald" as const },
     { label: "Measured watch time", value: formatDuration(totalMeasuredWatchTime), note: telemetryNote(measuredSessions.length, filteredSessions.length), icon: Clock3, tone: "amber" as const },
     { label: "Average watch time", value: formatDuration(averageWatchTime), note: measuredSessions.length ? "Measured sessions only" : "Provider telemetry unavailable", icon: Activity, tone: "blue" as const },
@@ -224,7 +224,7 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
 
         {error && <div className="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-500/[0.08] px-4 py-3 text-sm text-red-100"><XCircle size={17} className="mt-0.5 shrink-0 text-red-300" /><div><p className="font-medium">Dashboard data is temporarily unavailable</p><p className="mt-1 text-xs text-red-100/60">The interface is showing safe empty states. Refresh the page to retry.</p></div></div>}
 
-        <section aria-label="Workspace metrics" className="grid grid-cols-2 gap-x-4 gap-y-5 border-b border-white/8 pb-7 sm:grid-cols-4 xl:grid-cols-7">
+        <section aria-label="Workspace metrics" className="grid grid-cols-1 gap-x-4 gap-y-5 border-b min-[360px]:grid-cols-2 border-white/8 pb-7 sm:grid-cols-4 xl:grid-cols-7">
           {metrics.map(({ label, value, note, icon: Icon, tone }) => {
             const colors = toneClasses(tone);
             return <article key={label} className="relative min-w-0"><div className={`flex h-9 w-9 items-center justify-center rounded-xl ${colors.icon}`}><Icon size={17} /></div><p className={`mt-4 truncate text-2xl font-semibold tracking-[-0.035em] ${colors.value}`}>{value}</p><p className="mt-1 text-xs font-medium text-white/65">{label}</p><p className="mt-1 truncate text-[10px] text-white/30">{note}</p><div className={`absolute bottom-[-31px] left-0 h-px w-10 ${colors.line} opacity-70`} /></article>;
