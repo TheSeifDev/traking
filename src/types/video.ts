@@ -44,6 +44,10 @@ export interface Video {
   clickup_tasks?: VideoClickUpTask[];
   watch_links?: WatchLink[];
   view_count?: number;
+  unique_viewer_count?: number | null;
+  measurable_watch_time_seconds?: number | null;
+  avg_watch_time_seconds?: number | null;
+  playback_metrics_available?: boolean;
   avg_completion?: number | null;
 }
 
