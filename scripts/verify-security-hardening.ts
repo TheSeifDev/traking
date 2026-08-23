@@ -149,7 +149,7 @@ async function runTests(): Promise<void> {
   assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksManager.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(watchLinksManager.includes("Search watch links") && watchLinksManager.includes("Revoked links") && watchLinksManager.includes("No active link"), "watch-links UI provides searchable access cards and explicit active/revoked states");
-  assert(watchLinksManager.includes("aspect-video") && watchLinksManager.includes("line-clamp-2") && watchLinksManager.includes("grid-cols-2"), "watch-links cards preserve media ratio and mobile information hierarchy");
+  assert(watchLinksManager.includes("aspect-video") && watchLinksManager.includes("line-clamp-2") && watchLinksManager.includes("grid-cols-2") && watchLinksManager.includes("grid-cols-1"), "watch-links cards preserve media ratio and mobile information hierarchy");
   assert(watchLinkPanel.includes("min-h-11") && watchLinkPanel.includes("flex-col gap-2 sm:w-auto sm:flex-row"), "watch-link actions maintain mobile touch targets and stack without overflow");
   assert(watchLinkPanel.includes("Revoked history") && watchLinkPanel.includes("View audit") && !watchLinkPanel.includes("historyLinks.map((link) => {\n            const url"), "watch-link history is separated from active access without presenting revoked URLs as active");
   assert(dashboardShell.includes('href: "/watch-links"'), "dashboard navigation exposes watch links");

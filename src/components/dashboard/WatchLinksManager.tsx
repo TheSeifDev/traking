@@ -154,7 +154,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Manage viewer access to every video in your workspace. Viewers always stay inside TrackUp, while revoked history remains available for audit.</p>
           </div>
-          <Link href="/videos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white">
+          <Link href="/videos" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:w-auto">
             Open video library
             <ArrowUpRight size={15} />
           </Link>
@@ -192,7 +192,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
             {filteredVideos.length === 0 ? (
               <EmptyState title="No videos match these filters" description="Try a different search term or access status." actionLabel="Clear filters" onAction={clearFilters} icon={Search} />
             ) : (
-              <div className="grid gap-5 xl:grid-cols-2">
+              <div className={filteredVideos.length > 1 ? "grid gap-5 xl:grid-cols-2" : "grid grid-cols-1 gap-5"}>
                 {filteredVideos.map((video) => <VideoAccessCard key={video.id} video={video} now={now} canManage={canManage} appOrigin={appOrigin} onLinksChange={(links) => updateLinks(video.id, links)} />)}
               </div>
             )}
