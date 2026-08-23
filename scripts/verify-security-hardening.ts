@@ -137,19 +137,21 @@ async function runTests(): Promise<void> {
 
   section("Provider-aware analytics honesty");
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
-  const analyticsPage = readFileSync("app/(dashboard)/analytics/page.tsx", "utf8");
+  const workspaceAnalyticsDashboard = readFileSync("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx", "utf8");
   const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
   const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
+  const videoAnalyticsDashboard = readFileSync("src/components/dashboard/VideoAnalyticsDashboard.tsx", "utf8");
   const viewerAnalyticsPanel = readFileSync("src/components/dashboard/ViewerAnalyticsPanel.tsx", "utf8");
   assert(analyticsService.includes("playback_metrics_scope") && analyticsService.includes('sourceType === "direct_url" || sourceType === "youtube"'), "analytics scope playback metrics to direct URLs and YouTube API telemetry");
   assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
   assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
-  assert(analyticsPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "analytics page does not display unsupported completion as zero");
+  assert(workspaceAnalyticsDashboard.includes("Views over time") && workspaceAnalyticsDashboard.includes("Top videos by watch time") && workspaceAnalyticsDashboard.includes("Date range"), "workspace analytics dashboard communicates overview charts and filters");
   assert(dashboardPage.includes('analytics.avg_completion_percentage === null ? "Unavailable"'), "dashboard does not display unsupported completion as zero");
-  assert(videoDetailPage.includes('analytics.playback_metrics_scope === "direct_url_native_html5"') && viewerAnalyticsPanel.includes("Session-only measurement"), "video detail and viewer panel explain provider telemetry limits");
+  assert(videoDetailPage.includes("VideoAnalyticsDashboard") && videoAnalyticsDashboard.includes("Coverage and heatmap") && videoAnalyticsDashboard.includes("Not measured yet"), "video analytics dashboard explains provider limits and honest empty states");
   assert(analyticsService.includes("viewer_sessions") && analyticsService.includes("first_play_at") && analyticsService.includes("last_activity_at") && analyticsService.includes("latestEvent"), "analytics service exposes per-session timestamps and viewer breakdown");
   assert(analyticsService.includes("from_position") && analyticsService.includes("eventsBySession") && analyticsService.includes("last_position"), "analytics service exposes supported playback event timelines and last position");
-  assert(analyticsPage.includes("analytics.viewer_sessions") && viewerAnalyticsPanel.includes("Session-only measurement") && viewerAnalyticsPanel.includes("Total sessions"), "analytics UI renders per-viewer sessions with honest provider scope");
+  assert(analyticsService.includes("total_measurable_watch_time_seconds") && analyticsService.includes("activity_over_time") && analyticsService.includes("top_videos_by_watch_time"), "analytics service exposes workspace totals, activity series, and top-video summaries");
+  assert(workspaceAnalyticsDashboard.includes("analytics.viewer_sessions") && viewerAnalyticsPanel.includes("Session-only measurement") && viewerAnalyticsPanel.includes("Total sessions"), "analytics UI renders per-viewer sessions with honest provider scope");
 
   section("OAuth state and service-role checks");
 

@@ -153,10 +153,12 @@ export interface VideoAnalytics {
   total_sessions: number;
   unique_viewers: number;
   playback_metrics_scope: PlaybackMetricsScope;
+  total_measurable_watch_time_seconds: number | null;
   avg_watch_time_seconds: number | null;
   avg_completion_percentage: number | null;
   completion_rate: number | null; // % of measured sessions that reached 90%+
   drop_off_point: number | null; // position in seconds where most measured viewers leave
+  last_activity_at: string | null;
   recent_sessions: WatchSessionSummary[];
   viewer_sessions: ViewerSessionAnalytics[];
 }
@@ -170,13 +172,33 @@ export interface WatchSessionSummary {
   completion_percentage: number | null;
 }
 
+export interface AnalyticsActivityPoint {
+  date: string;
+  views: number;
+  sessions: number;
+}
+
+export interface AnalyticsVideoSummary {
+  video_id: string;
+  title: string;
+  source_type: VideoSourceType;
+  total_views: number;
+  measurable_watch_time_seconds: number | null;
+}
+
 export interface WorkspaceAnalytics {
   total_videos: number;
   total_views: number;
   total_sessions: number;
   unique_viewers: number;
+  total_measurable_watch_time_seconds: number | null;
+  avg_watch_time_seconds: number | null;
   avg_completion_percentage: number | null;
   completion_rate: number | null;
   playback_metrics_available: boolean;
+  activity_over_time: AnalyticsActivityPoint[];
+  top_videos_by_views: AnalyticsVideoSummary[];
+  top_videos_by_watch_time: AnalyticsVideoSummary[];
+  recent_activity: ViewerSessionAnalytics[];
   viewer_sessions: ViewerSessionAnalytics[];
 }

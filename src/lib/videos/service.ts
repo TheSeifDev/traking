@@ -489,8 +489,11 @@ export async function getVideoAnalytics(
       new Map(sessions.map((session) => [session.id, videoInfo])),
     );
 
+    const totalMeasurableWatchTime = measuredCount > 0
+      ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0))
+      : null;
     const avgWatchTime = measuredCount > 0
-      ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0) / measuredCount)
+      ? Math.round((totalMeasurableWatchTime ?? 0) / measuredCount)
       : null;
     const avgCompletion = measuredCount > 0
       ? Math.round(measuredSessions.reduce((sum, session) => sum + Number(session.completion_percentage ?? 0), 0) / measuredCount)
@@ -521,10 +524,15 @@ export async function getVideoAnalytics(
       total_sessions: totalViews,
       unique_viewers: uniqueViewers,
       playback_metrics_scope: playbackMetricsScope,
+      total_measurable_watch_time_seconds: totalMeasurableWatchTime,
       avg_watch_time_seconds: avgWatchTime,
       avg_completion_percentage: avgCompletion,
       completion_rate: completionRate,
       drop_off_point: dropOffPoint,
+      last_activity_at: viewerSessions.reduce<string | null>((latest, session) => {
+        if (!latest || new Date(session.last_activity_at).getTime() > new Date(latest).getTime()) return session.last_activity_at;
+        return latest;
+      }, null),
       recent_sessions: recentSessions,
       viewer_sessions: viewerSessions,
     };
@@ -577,9 +585,15 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     total_views: 0,
     total_sessions: 0,
     unique_viewers: 0,
+    total_measurable_watch_time_seconds: null,
+    avg_watch_time_seconds: null,
     avg_completion_percentage: null,
     completion_rate: null,
     playback_metrics_available: false,
+    activity_over_time: [],
+    top_videos_by_views: [],
+    top_videos_by_watch_time: [],
+    recent_activity: [],
     viewer_sessions: [],
   };
 
@@ -662,15 +676,71 @@ export async function getWorkspaceAnalytics(workspaceId: string): Promise<Worksp
     const completionRate = measuredSessions.length > 0
       ? Math.round((measuredSessions.filter((session) => Number(session.completion_percentage) >= 90).length / measuredSessions.length) * 100)
       : null;
+    const totalMeasurableWatchTime = measuredSessions.length > 0
+      ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0))
+      : null;
+    const avgWatchTime = measuredSessions.length > 0
+      ? Math.round((totalMeasurableWatchTime ?? 0) / measuredSessions.length)
+      : null;
+
+    const activityByDate = new Map<string, { date: string; views: number; sessions: number }>();
+    for (const session of workspaceSessions) {
+      const date = session.started_at.slice(0, 10);
+      const point = activityByDate.get(date) ?? { date, views: 0, sessions: 0 };
+      point.views += 1;
+      point.sessions += 1;
+      activityByDate.set(date, point);
+    }
+
+    const videoSummaries = new Map<string, {
+      video_id: string;
+      title: string;
+      source_type: Video["source_type"];
+      total_views: number;
+      measurable_watch_time_seconds: number | null;
+    }>();
+    for (const session of workspaceSessions) {
+      const video = sessionVideos.get(session.id);
+      if (!video) continue;
+      const summary = videoSummaries.get(video.id) ?? {
+        video_id: video.id,
+        title: video.title,
+        source_type: video.source_type,
+        total_views: 0,
+        measurable_watch_time_seconds: null,
+      };
+      summary.total_views += 1;
+      if ((video.source_type === "direct_url" || video.source_type === "youtube") && measurableSessionIds.has(session.id)) {
+        summary.measurable_watch_time_seconds = (summary.measurable_watch_time_seconds ?? 0) + (session.watch_time_seconds ?? 0);
+      }
+      videoSummaries.set(video.id, summary);
+    }
+
+    const summaries = Array.from(videoSummaries.values());
+    const topVideosByViews = summaries
+      .slice()
+      .sort((a, b) => b.total_views - a.total_views || a.title.localeCompare(b.title))
+      .slice(0, 10);
+    const topVideosByWatchTime = summaries
+      .filter((summary) => summary.measurable_watch_time_seconds !== null)
+      .slice()
+      .sort((a, b) => (b.measurable_watch_time_seconds ?? 0) - (a.measurable_watch_time_seconds ?? 0) || a.title.localeCompare(b.title))
+      .slice(0, 10);
 
     return {
       total_videos: videoCount ?? 0,
       total_views: totalViews,
       total_sessions: totalViews,
       unique_viewers: uniqueViewers,
+      total_measurable_watch_time_seconds: totalMeasurableWatchTime,
+      avg_watch_time_seconds: avgWatchTime,
       avg_completion_percentage: avgCompletion,
       completion_rate: completionRate,
       playback_metrics_available: measuredSessions.length > 0,
+      activity_over_time: Array.from(activityByDate.values()).sort((a, b) => a.date.localeCompare(b.date)),
+      top_videos_by_views: topVideosByViews,
+      top_videos_by_watch_time: topVideosByWatchTime,
+      recent_activity: viewerSessions.slice(0, 10),
       viewer_sessions: viewerSessions,
     };
   } catch {
