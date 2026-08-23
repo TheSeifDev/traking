@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createSignedSessionCookie, verifySignedSessionCookie } from "../src/lib/auth/session-cookie";
+import { getClickUpRedirectUri } from "../src/lib/app-url";
 import { USER_ROLES, type AuthenticatedUser } from "../src/types/auth";
 
 let passed = 0;
@@ -159,12 +160,26 @@ async function runTests(): Promise<void> {
   const videoServiceForUrls = readFileSync("src/lib/videos/service.ts", "utf8");
   const adminClient = readFileSync("utils/supabase/admin.ts", "utf8");
   const middleware = readFileSync("middleware.ts", "utf8");
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalRedirectUri = process.env.CLICKUP_REDIRECT_URI;
 
 assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
+assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
+assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
 assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
+assert(appUrlHelper.includes("const expected = process.env.NODE_ENV === \"production\""), "OAuth callback selection is environment-aware");
 assert(appUrlHelper.includes("isLocalAppUrl") && appUrlHelper.includes("return PRODUCTION_APP_URL"), "production rejects loopback app URLs");
+  process.env.CLICKUP_REDIRECT_URI = "http://stale.example/callback";
+  Reflect.set(process.env, "NODE_ENV", "development");
+  assert(getClickUpRedirectUri() === "https://localhost:3000/api/auth/clickup/callback", "development selects the localhost callback regardless of stale production config");
+  Reflect.set(process.env, "NODE_ENV", "production");
+  assert(getClickUpRedirectUri() === "https://trakeup.vercel.app/api/auth/clickup/callback", "production selects the HTTPS Trakeup callback regardless of stale local config");
+  if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+  else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
+  if (originalRedirectUri === undefined) delete process.env.CLICKUP_REDIRECT_URI;
+  else process.env.CLICKUP_REDIRECT_URI = originalRedirectUri;
 assert(oauthStart.includes("getClickUpRedirectUri") && !oauthStart.includes('"http://localhost:3000"'), "OAuth start uses canonical redirect configuration without localhost fallback");
-assert(!oauthCallback.includes("process.env.CLICKUP_REDIRECT_URI") && !oauthCallback.includes("http://localhost:3000"), "OAuth callback does not use a loopback redirect configuration");
+assert(oauthCallback.includes("getClickUpRedirectUri") && oauthCallback.includes("redirect_uri: redirectUri"), "OAuth token exchange uses the same environment-aware callback URI");
 assert(logoutRoute.includes("getAppUrl") && !logoutRoute.includes('"http://localhost:3000"'), "logout uses canonical production origin");
 assert(videoServiceForUrls.includes("const appUrl = getAppUrl()") && !videoServiceForUrls.includes('process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"'), "watch links use canonical production origin");
   const authRedirect = readFileSync("src/lib/auth/redirect.ts", "utf8");

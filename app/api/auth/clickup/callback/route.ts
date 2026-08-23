@@ -3,6 +3,7 @@ import { provisionClickUpUser } from "@/src/lib/auth/provisioning";
 import { createSignedSessionCookie, SESSION_MAX_AGE_SECONDS } from "@/src/lib/auth/session-cookie";
 import { upsertClickUpConnection } from "@/src/lib/clickup/workspace";
 import { AUTH_RETURN_COOKIE, getSafeAuthReturnPath } from "@/src/lib/auth/redirect";
+import { getClickUpRedirectUri } from "@/src/lib/app-url";
 
 type ClickUpTokenResponse = {
   access_token?: unknown;
@@ -87,6 +88,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.CLICKUP_CLIENT_ID || process.env.CLIENT_ID;
   const clientSecret = process.env.CLICKUP_CLIENT_SECRET || process.env.CLIENT_SECRET;
+  const redirectUri = getClickUpRedirectUri();
 
   if (!clientId || !clientSecret) {
     console.error("Missing ClickUp OAuth environment variables");
@@ -105,6 +107,7 @@ export async function GET(request: Request) {
         client_id: clientId,
         client_secret: clientSecret,
         code,
+        redirect_uri: redirectUri,
         grant_type: "authorization_code",
       }),
     });
@@ -112,6 +115,7 @@ export async function GET(request: Request) {
     console.info("ClickUp OAuth token exchange completed", {
       status: tokenResponse.status,
       ok: tokenResponse.ok,
+      redirectUri,
     });
 
     if (!tokenResponse.ok) {
