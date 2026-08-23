@@ -209,8 +209,8 @@ function VideoAccessCard({ video, now, canManage, appOrigin, onLinksChange }: { 
 
   return (
     <article className="group min-w-0 overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:border-violet-300/20 hover:bg-white/[0.045]">
-      <div className="grid min-w-0 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
-        <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 overflow-hidden bg-[#171735] lg:aspect-auto lg:min-h-full" aria-label={`Open ${video.title} details`}>
+      <div className="min-w-0 lg:flex lg:items-start">
+        <Link href={`/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735] lg:aspect-video lg:w-[240px] xl:w-[280px]" aria-label={`Open ${video.title} details`}>
           {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
           <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-lg bg-black/50 px-2.5 py-1.5 text-[11px] font-medium text-white/75 backdrop-blur-sm"><VideoIcon size={13} />Video details</span>
         </Link>
