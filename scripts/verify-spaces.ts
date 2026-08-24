@@ -173,7 +173,7 @@ assert(spacesDirectory.includes("All Spaces") && spacesDirectory.includes("selec
 assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");
 assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organizationDashboard.includes("getSafeSpaceDisplayName"), "Organization dashboard renders child Space names directly");
 assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");
-assert(ownerPage.includes("getAccessibleOrganizations") && ownerPage.includes("listSpacesForUser") && ownerPage.includes("organizations={organizations}") && ownerPage.includes("spaces={spaces}"), "Owner shell receives separate Organization and authorized Space context");
+assert(ownerPage.includes("resolveActiveSpaceForUser") && ownerPage.includes("organizations={activeSpace.organizations}") && ownerPage.includes("spaces={activeSpace.spaces}") && ownerPage.includes("activeSpaceContext={activeSpace.context}") && ownerPage.includes("activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}"), "Owner shell receives resolved Organization, Space, and All Spaces context");
 
 console.log(`\n${"=".repeat(56)}`);
 console.log(`TrackUp Spaces: ${passed}/${passed + failed} tests passed`);

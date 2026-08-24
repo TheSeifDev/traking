@@ -1,19 +1,27 @@
 import DashboardShell from "@/src/components/dashboard/DashboardShell";
 import { guardOwner } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
-import { getAccessibleOrganizations } from "@/src/lib/spaces/access";
-import { listSpacesForUser } from "@/src/lib/spaces/service";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import OwnerObservabilityConsole from "@/src/components/owner/OwnerObservabilityConsole";
 
 export default async function OwnerObservabilityPage() {
   const user = await guardOwner();
-  const [workspace, spaces, organizations] = await Promise.all([
+  const [workspace, activeSpace] = await Promise.all([
     getPrimaryWorkspace(user.id),
-    listSpacesForUser(user),
-    getAccessibleOrganizations(user),
+    resolveActiveSpaceForUser(user),
   ]);
   return (
-    <DashboardShell user={user} workspace={workspace} spaces={spaces} organizations={organizations}>
+    <DashboardShell
+      user={user}
+      workspace={workspace}
+      spaces={activeSpace.spaces}
+      organizations={activeSpace.organizations}
+      activeSpaceId={activeSpace.space?.id ?? null}
+      activeOrganizationId={activeSpace.organization?.id ?? null}
+      activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}
+      activeSpacePreferenceInvalid={activeSpace.activeSpacePreferenceInvalid}
+      activeSpaceContext={activeSpace.context}
+    >
       <OwnerObservabilityConsole />
     </DashboardShell>
   );
