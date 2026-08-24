@@ -158,6 +158,7 @@ const dataScope = source("src/lib/spaces/data-scope.ts");
 const dashboardPage = source("app/(dashboard)/dashboard/page.tsx");
 const videosRoute = source("app/api/videos/route.ts");
 const videosPage = source("app/(dashboard)/videos/page.tsx");
+const videoList = source("src/components/dashboard/VideoList.tsx");
 const analyticsPage = source("app/(dashboard)/analytics/page.tsx");
 const watchLinksPage = source("app/(dashboard)/watch-links/page.tsx");
 const videoDetailPage = source("app/(dashboard)/videos/[id]/page.tsx");
@@ -176,6 +177,7 @@ assert(analyticsPage.includes("context.type === \"all\"") && analyticsPage.inclu
 assert(watchLinksPage.includes("context.type === \"all\"") && watchLinksPage.includes("organizationDataScope") && watchLinksPage.includes("listVideos(scope)") && watchLinksPage.includes("spaceCanManage={false}"), "All Spaces watch links are read-only and use the complete organization scope");
 assert(dashboardPage.includes("organizationDataScope") && dashboardPage.includes("getWorkspaceAnalytics(scope)") && dashboardPage.includes("listVideos(scope)"), "dashboard All Spaces aggregates complete organization data");
 assert(videoDetailPage.includes("organizationDataScope") && videoDetailPage.includes("getVideo(id, scope)") && videoDetailPage.includes("getVideoAnalytics(id, scope)"), "Owner All Spaces video detail includes historical organization-owned videos");
+assert(videoList.includes("organizationId={organizationId}") && videoList.includes("organization_id=${encodeURIComponent(organizationId)}"), "All Spaces library detail links preserve organization scope instead of legacy space IDs");
 assert(analyticsVideoPage.includes("organizationDataScope") && analyticsVideoPage.includes("getVideo(id, scope)") && analyticsVideoPage.includes("ViewerAnalyticsPanel") && analyticsVideoPage.includes("organizationId"), "Owner All Spaces analytics drilldown retains organization scope for viewer/session links");
 assert(viewerAnalyticsPanel.includes("organizationId?") && viewerAnalyticsPanel.includes("organization_id"), "viewer/session drilldown links preserve virtual organization context");
 assert(securityModel.includes("explicit organization data scope") && securityModel.includes("including preserved historical Organization-container rows") && securityModel.includes("excluded from normal child-Space presentation"), "security model documents the Owner organization scope and normal legacy exclusion separately");
