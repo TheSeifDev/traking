@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
+import { getSafeSpaceDisplayName } from "@/src/lib/spaces/labels";
 import { getViewerAnalytics } from "@/src/lib/videos/service";
 import ViewerAnalyticsDashboard from "@/src/components/dashboard/ViewerAnalyticsDashboard";
 import { EmptyAnalytics } from "@/src/components/dashboard/AnalyticsDetail";
@@ -40,7 +41,10 @@ export default async function ViewerAnalyticsPage({ params, searchParams }: Prop
     ? `?organization_id=${encodeURIComponent(resolution.organization?.id ?? "")}`
     : `?space_id=${encodeURIComponent(spaceScope?.spaceId ?? "")}`;
   const backHref = `/analytics${scopeQuery}`;
+  const contextLabel = organizationScope
+    ? `${resolution.organization?.name ?? "Organization"} / All Spaces`
+    : getSafeSpaceDisplayName(access?.space.name ?? "Space", access?.organization?.name);
   const initialTab = query?.tab && allowedTabs.has(query.tab) ? query.tab as "overview" | "videos" | "sessions" | "timeline" | "heatmap" | "activity" : "videos";
 
-  return <ViewerAnalyticsDashboard data={analytics} scopeQuery={scopeQuery} backHref={backHref} initialTab={initialTab} />;
+  return <ViewerAnalyticsDashboard data={analytics} scopeQuery={scopeQuery} backHref={backHref} contextLabel={contextLabel} initialTab={initialTab} />;
 }

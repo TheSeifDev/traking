@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
+import { getSafeSpaceDisplayName } from "@/src/lib/spaces/labels";
 import { getViewerVideoAnalytics } from "@/src/lib/videos/service";
 import ViewerVideoAnalyticsDashboard from "@/src/components/dashboard/ViewerVideoAnalyticsDashboard";
 import { EmptyAnalytics } from "@/src/components/dashboard/AnalyticsDetail";
@@ -38,5 +39,8 @@ export default async function ViewerVideoAnalyticsPage({ params, searchParams }:
     ? `?organization_id=${encodeURIComponent(resolution.organization?.id ?? "")}`
     : `?space_id=${encodeURIComponent(spaceScope?.spaceId ?? "")}`;
   const viewerHref = `/analytics/viewers/${encodeURIComponent(viewerId)}${scopeQuery}`;
-  return <ViewerVideoAnalyticsDashboard viewer={analytics.viewer} video={analytics.video} scopeQuery={scopeQuery} backHref={viewerHref} />;
+  const contextLabel = organizationScope
+    ? `${resolution.organization?.name ?? "Organization"} / All Spaces`
+    : getSafeSpaceDisplayName(access?.space.name ?? "Space", access?.organization?.name);
+  return <ViewerVideoAnalyticsDashboard viewer={analytics.viewer} video={analytics.video} scopeQuery={scopeQuery} backHref={viewerHref} contextLabel={contextLabel} />;
 }

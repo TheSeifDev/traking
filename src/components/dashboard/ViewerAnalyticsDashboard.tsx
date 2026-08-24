@@ -35,7 +35,7 @@ function statusForVideo(video: ViewerVideoAnalytics): TelemetryState {
   return video.telemetry_state;
 }
 
-export default function ViewerAnalyticsDashboard({ data, scopeQuery, backHref, initialTab = "videos" }: { data: ViewerAnalytics; scopeQuery: string; backHref: string; initialTab?: Tab }) {
+export default function ViewerAnalyticsDashboard({ data, scopeQuery, backHref, contextLabel, initialTab = "videos" }: { data: ViewerAnalytics; scopeQuery: string; backHref: string; contextLabel: string; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [videoSearch, setVideoSearch] = useState("");
   const [sessionSearch, setSessionSearch] = useState("");
@@ -76,7 +76,7 @@ export default function ViewerAnalyticsDashboard({ data, scopeQuery, backHref, i
           <div className="flex min-w-0 items-start gap-3">
             <Link href={backHref} className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition hover:border-violet-300/35 hover:text-white" aria-label="Back to analytics"><ChevronRight size={17} className="rotate-180" /></Link>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.23em] text-violet-300/70">Viewer analytics</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.23em] text-violet-300/70">{contextLabel} / viewer analytics</p>
               <div className="mt-2 flex flex-wrap items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-indigo-700 text-sm font-semibold text-white">{initials(viewerName)}</div><h1 className="break-words text-2xl font-semibold tracking-tight text-white sm:text-3xl">{viewerName}</h1><span className={`rounded-full border px-2.5 py-1 text-[10px] ${data.viewer.viewer_status === "identified" && data.viewer.viewer_is_active !== false ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-200" : "border-white/10 bg-white/[0.04] text-white/50"}`}>{data.viewer.viewer_status === "identified" ? (data.viewer.viewer_is_active === false ? "Inactive" : "Active") : "Legacy viewer"}</span></div>
               <p className="mt-2 text-sm text-white/45">{data.viewer.viewer_email ?? "No authenticated profile email"} · Viewer analytics and activity overview</p>
               <p className="mt-2 text-[10px] text-white/25">Viewer ID {data.viewer.viewer_id}</p>
