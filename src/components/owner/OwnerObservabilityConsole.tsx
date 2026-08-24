@@ -5,13 +5,12 @@ import { Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3, Database, Eye
 import type { WorkspaceAnalytics } from "@/src/types/video";
 import { AnalyticsMetricGrid, HeatmapPanel, formatAnalyticsDate, formatAnalyticsDuration, formatAnalyticsPosition, telemetryClass, telemetryCopy } from "@/src/components/dashboard/AnalyticsDetail";
 import GroupedSessionTimeline from "@/src/components/analytics/GroupedSessionTimeline";
-import OwnerControlRoomPanel from "@/src/components/owner/OwnerControlRoomPanel";
+import OwnerControlRoomPanel, { type ControlRoomSection } from "@/src/components/owner/OwnerControlRoomPanel";
 import type { OwnerSessionDetail, OwnerSessionListItem } from "@/src/lib/observability/service";
 import type { SafeOwnerLog, ObservabilityCategory, ObservabilityLevel } from "@/src/lib/observability/logger";
 
 type LiveState = "LIVE" | "RECONNECTING";
-type ControlRoomTab = "command" | "organizations" | "spaces" | "users" | "videos" | "activity" | "security" | "jobs" | "incidents";
-type ConsoleTab = "overview" | "sessions" | "logs" | "system" | ControlRoomTab;
+type ConsoleTab = "overview" | "sessions" | "logs" | "system" | ControlRoomSection;
 
 type OwnerRecentActivity = {
   session_id: string;
@@ -58,8 +57,8 @@ function displayViewer(session: { viewer_name?: string | null; viewer_email?: st
   return session.viewer_name?.trim() || session.viewer_email?.trim() || (session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer");
 }
 
-function isControlRoomTab(value: ConsoleTab): value is ControlRoomTab {
-  return value === "command" || value === "organizations" || value === "spaces" || value === "users" || value === "videos" || value === "activity" || value === "security" || value === "jobs" || value === "incidents";
+function isControlRoomTab(value: ConsoleTab): value is ControlRoomSection {
+  return value === "command" || value === "organizations" || value === "spaces" || value === "users" || value === "videos" || value === "playback" || value === "activity" || value === "security" || value === "jobs" || value === "health" || value === "api" || value === "database" || value === "incidents" || value === "flags" || value === "configuration";
 }
 
 function badgeForState(state: string | undefined): string {
@@ -149,11 +148,17 @@ export default function OwnerObservabilityConsole() {
     { id: "spaces", label: "Spaces", icon: Server },
     { id: "users", label: "Users", icon: Users },
     { id: "videos", label: "Videos", icon: Eye },
+    { id: "playback", label: "Playback Intelligence", icon: Activity },
     { id: "sessions", label: "Sessions", icon: Activity },
     { id: "activity", label: "Activity / Audit", icon: FileWarning },
     { id: "security", label: "Security", icon: ShieldCheck },
     { id: "jobs", label: "Jobs / Cron", icon: RefreshCw },
+    { id: "health", label: "System Health", icon: Database },
+    { id: "api", label: "API / Provider", icon: Server },
+    { id: "database", label: "Database", icon: Database },
     { id: "incidents", label: "Incidents", icon: AlertTriangle },
+    { id: "flags", label: "Feature Flags", icon: ShieldCheck },
+    { id: "configuration", label: "Configuration", icon: Server },
     { id: "overview", label: "Legacy overview", icon: BarChart3 },
     { id: "logs", label: "Legacy logs", icon: FileWarning },
     { id: "system", label: "System detail", icon: Server },

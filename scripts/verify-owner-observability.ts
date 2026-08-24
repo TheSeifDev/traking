@@ -81,6 +81,15 @@ assert.match(controlRoomService, /execution_status: \"not_observed\"/);
 assert.doesNotMatch(controlRoomService, /session_token|access_token|authorization|cookie/i);
 pass("Control Room service uses bounded persisted queries and keeps Organization, Space, and unobserved cron execution distinct");
 
+const controlRoomUi = read("src/components/owner/OwnerControlRoomPanel.tsx");
+for (const section of ["Command Center", "Organizations", "Spaces", "Users", "Videos", "Playback Intelligence", "Activity / Audit", "Security", "Jobs / Cron", "System Health", "API / Provider", "Database", "Incidents", "Feature Flags", "Configuration"]) assert.match(controlRoomUi, new RegExp(section.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")));
+assert.match(controlRoomUi, /metaKey \|\| event\.ctrlKey/);
+assert.match(controlRoomUi, /getSafeSpaceDisplayName/);
+assert.match(controlRoomUi, /Execution.*Not observed/);
+assert.match(controlRoomUi, /No aggregate uptime claim/);
+assert.match(controlRoomUi, /No persisted feature-flag registry/);
+pass("Control Room UI exposes operational sections, keyboard search, safe hierarchy labels, and honest unavailable states");
+
 const observabilityService = read("src/lib/observability/service.ts");
 assert.match(observabilityService, /getWorkspaceAnalytics/);
 assert.match(observabilityService, /OWNER_QUERY_LIMIT = 100/);
