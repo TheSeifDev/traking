@@ -25,7 +25,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requireRole, requirePermission, AuthError } from "./session";
-import type { AuthenticatedUser, UserRole } from "@/src/types/auth";
+import { USER_ROLES, type AuthenticatedUser, type UserRole } from "@/src/types/auth";
 import type { Permission } from "@/src/types/permissions";
 import { writeOwnerLog } from "@/src/lib/observability/logger";
 
@@ -84,6 +84,15 @@ export function withAuth(handler: AuthenticatedHandler) {
       return authErrorToResponse(err);
     }
   };
+}
+
+/**
+ * Wraps an internal dashboard API route. Viewer profiles are restricted to the
+ * Watch Link/tracking surface; Admin and Owner are the only roles allowed to
+ * invoke internal dashboard APIs. Resource services still enforce tenancy.
+ */
+export function withDashboardAuth(handler: AuthenticatedHandler) {
+  return withRole(USER_ROLES.ADMIN, handler);
 }
 
 /**
