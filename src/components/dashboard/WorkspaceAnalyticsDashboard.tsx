@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 import type { Video, ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
+import { getProviderLabel } from "@/src/lib/playback/providers";
 
 interface WorkspaceAnalyticsDashboardProps {
   analytics: WorkspaceAnalytics;
@@ -34,7 +35,7 @@ interface WorkspaceAnalyticsDashboardProps {
 }
 
 type DateRange = "7" | "30" | "all";
-type Section = "overview" | "videos" | "viewers" | "activity";
+type Section = "overview" | "sessions" | "viewers" | "videos" | "engagement";
 
 function formatDuration(seconds: number | null): string {
   if (seconds === null) return "Not measured";
@@ -48,14 +49,8 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleString();
 }
 
-function scopeLabel(scope: ViewerSessionAnalytics["playback_metrics_scope"]): string {
-  if (scope === "youtube_iframe_api") return "YouTube IFrame API";
-  if (scope === "direct_url_native_html5") return "Native HTML5";
-  return "Session only";
-}
-
 function providerLabel(sourceType: Video["source_type"]): string {
-  return sourceType.replace("_", " ");
+  return getProviderLabel(sourceType);
 }
 
 export default function WorkspaceAnalyticsDashboard({
@@ -85,8 +80,8 @@ export default function WorkspaceAnalyticsDashboard({
     });
   }, [analytics.viewer_sessions, dateRange, now, videoFilter]);
 
-  const measurableSessions = filteredSessions.filter((session) => session.watch_time_seconds !== null);
-  const measuredCompletions = filteredSessions.filter((session) => session.completion_percentage !== null);
+  const measurableSessions = filteredSessions.filter((session) => session.has_playback_telemetry && session.telemetry_state === "measured");
+  const measuredCompletions = measurableSessions.filter((session) => session.completion_percentage !== null);
   const totalWatchTime = measurableSessions.length > 0
     ? measurableSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)
     : null;
@@ -130,7 +125,7 @@ export default function WorkspaceAnalyticsDashboard({
         measurable_watch_time_seconds: null,
       };
       current.total_views += 1;
-      if (session.watch_time_seconds !== null) {
+      if (session.has_playback_telemetry && session.telemetry_state === "measured" && session.watch_time_seconds !== null) {
         current.measurable_watch_time_seconds = (current.measurable_watch_time_seconds ?? 0) + session.watch_time_seconds;
       }
       byVideo.set(session.video_id, current);
@@ -159,9 +154,10 @@ export default function WorkspaceAnalyticsDashboard({
 
   const tabs: Array<{ id: Section; label: string; icon: typeof BarChart3 }> = [
     { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "sessions", label: "Sessions", icon: Activity },
+    { id: "viewers", label: "Viewers", icon: Users },
     { id: "videos", label: "Videos", icon: VideoIcon },
-    { id: "viewers", label: "Viewers & sessions", icon: Users },
-    { id: "activity", label: "Activity", icon: Activity },
+    { id: "engagement", label: "Engagement", icon: TrendingUp },
   ];
 
   return (
@@ -218,8 +214,10 @@ export default function WorkspaceAnalyticsDashboard({
           <h2 className="mt-4 text-base font-medium text-white">No activity in this view</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have an authenticated ClickUp viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
+      ) : section === "sessions" ? (
+        <ViewerAnalyticsPanel spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Session activity" description="A structured view of every persisted session, with real viewer identity, provider, timing, telemetry quality, event count, and a direct timeline action." />
       ) : section === "viewers" ? (
-        <ViewerAnalyticsPanel spaceId={spaceId ?? undefined} sessions={filteredSessions} title="Viewer and session details" description="Each row is a real session. New sessions can show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback details are shown only for measured native or YouTube API events." />
+        <ViewerAnalyticsPanel spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Viewer activity" description="Understand who watched, what they watched, when they watched, and which sessions contain defensible playback evidence." />
       ) : section === "videos" ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
@@ -233,8 +231,8 @@ export default function WorkspaceAnalyticsDashboard({
             {topByWatchTime.length === 0 ? <p className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">No measurable watch time in this view.</p> : <div className="mt-5 space-y-4">{topByWatchTime.map((video) => <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={scoped(`/analytics/videos/${video.video_id}`)} className="truncate text-white/80 transition hover:text-emerald-200">{video.title}</Link><span className="shrink-0 font-medium text-white">{formatDuration(video.measurable_watch_time_seconds)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${((video.measurable_watch_time_seconds ?? 0) / maxWatchTime) * 100}%` }} /></div><p className="mt-1 text-[11px] capitalize text-white/30">{providerLabel(video.source_type)}</p></div>)}</div>}
           </div>
         </div>
-      ) : section === "activity" ? (
-        <ActivitySection activity={activity} recentActivity={recentActivity} />
+      ) : section === "engagement" ? (
+        <ActivitySection activity={activity} recentActivity={recentActivity} measuredSessions={measurableSessions.length} totalSessions={filteredSessions.length} completionRate={completionRate} />
       ) : (
         <div className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-[1.45fr_1fr]">
@@ -260,6 +258,7 @@ function TopVideosCard({ spaceId, organizationId, title, videos, value, max, col
   return <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">{title}</h2><div className="mt-5 space-y-4">{videos.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/35">Not measured yet.</p> : videos.map((video) => { const amount = color === "violet" ? video.total_views : video.measurable_watch_time_seconds ?? 0; return <div key={video.video_id}><div className="flex items-center justify-between gap-3 text-sm"><Link href={scoped(`/analytics/videos/${video.video_id}`)} className="truncate text-white/80 transition hover:text-violet-200">{video.title}</Link><span className="shrink-0 text-white">{value(video)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className={`h-full rounded-full ${color === "violet" ? "bg-violet-400" : "bg-emerald-400"}`} style={{ width: `${(amount / max) * 100}%` }} /></div></div>; })}</div></div>;
 }
 
-function ActivitySection({ activity, recentActivity }: { activity: Array<{ date: string; views: number; sessions: number }>; recentActivity: ViewerSessionAnalytics[] }) {
-  return <div className="space-y-6"><ActivityChart activity={activity} /><div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">Recent viewer activity</h2><p className="mt-1 text-xs text-white/35">Latest recorded session activity</p></div><Clock3 size={17} className="text-cyan-300" /></div>{recentActivity.length === 0 ? <p className="mt-6 text-sm text-white/35">No recent activity.</p> : <div className="mt-5 divide-y divide-white/7">{recentActivity.map((session) => <div key={session.session_id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{session.video_title}</p><p className="mt-1 text-xs text-white/40">{scopeLabel(session.playback_metrics_scope)} · {formatDate(session.last_activity_at)}</p></div><div className="flex items-center gap-3 text-xs text-white/45"><span>{session.first_play_at ? "Played" : "Opened"}</span><span className="rounded-full border border-white/10 px-2 py-1 capitalize">{providerLabel(session.source_type)}</span></div></div>)}</div>}</div></div>;
+function ActivitySection({ activity, recentActivity, measuredSessions, totalSessions, completionRate }: { activity: Array<{ date: string; views: number; sessions: number }>; recentActivity: ViewerSessionAnalytics[]; measuredSessions: number; totalSessions: number; completionRate: number | null }) {
+  const measurementPercentage = totalSessions > 0 ? Math.round((measuredSessions / totalSessions) * 100) : 0;
+  return <div className="space-y-6"><ActivityChart activity={activity} /><div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]"><div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-center justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">Recent activity</p><h2 className="mt-1 text-base font-semibold text-white">Latest viewer sessions</h2></div><Clock3 size={17} className="text-cyan-300" /></div>{recentActivity.length === 0 ? <p className="mt-6 text-sm text-white/35">No recent activity.</p> : <div className="mt-5 divide-y divide-white/7">{recentActivity.map((session) => <div key={session.session_id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{session.video_title}</p><p className="mt-1 truncate text-xs text-white/40">{session.viewer_name || session.viewer_email || "Legacy viewer"} · {formatDate(session.last_activity_at)}</p></div><div className="flex items-center gap-3 text-xs text-white/45"><span>{session.first_play_at ? "Played" : "Opened"}</span><span className="rounded-full border border-white/10 px-2 py-1 capitalize">{providerLabel(session.source_type)}</span></div></div>)}</div>}</div><div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">Measurement health</p><h2 className="mt-1 text-base font-semibold text-white">Evidence quality</h2><div className="mt-6 space-y-5"><div><div className="flex items-center justify-between text-sm"><span className="text-white/55">Measured sessions</span><strong className="text-white">{measuredSessions} / {totalSessions}</strong></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${measurementPercentage}%` }} /></div></div><div className="flex items-center justify-between text-sm"><span className="text-white/55">90%+ completion rate</span><strong className="text-white">{completionRate === null ? "Not measured" : `${completionRate}%`}</strong></div><p className="text-xs leading-5 text-white/35">Provider limitations and missing transitions stay visible as unavailable; they are never treated as zero engagement.</p></div></div></div></div>;
 }
