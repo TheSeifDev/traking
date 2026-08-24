@@ -149,8 +149,9 @@ assert(clickupClient.includes("/api/v2/team") && clickupClient.includes("getClic
 section("UI scope and capability honesty");
 const shell = source("src/components/dashboard/DashboardShell.tsx");
 const overview = source("src/components/dashboard/DashboardOverview.tsx");
-const analyticsDashboard = source("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx");
-const viewerPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
+  const analyticsDashboard = source("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx");
+  const viewerPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
+  const userService = source("src/lib/users/service.ts");
 const membersManager = source("src/components/spaces/SpaceMembersManager.tsx");
 const spacesDirectory = source("src/components/spaces/SpacesDirectory.tsx");
 const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
@@ -185,6 +186,7 @@ assert(shell.includes("organizationMembersNavItem") && shell.includes('label: "M
 assert(shell.includes('if (href === "/organizations")') && shell.includes('!pathname.includes("/members")') && shell.includes('if (href.includes("/members"))'), "Members active state wins over generic Organizations matching for organization member routes");
 const organizationMemberProfilePage = source("app/(dashboard)/organizations/[organizationId]/members/[profileId]/page.tsx");
 assert(organizationMemberProfilePage.includes("getUser360") && organizationMemberProfilePage.includes('kind: "organization"') && organizationMemberProfilePage.includes("User360Dashboard"), "Organization member profiles use the protected organization-scoped User 360 route");
+assert(userService.includes("inferredDuration = video.duration ?? latestReliableEvent?.duration ?? null") && userService.includes("buildPlaybackHeatmap") && userService.includes("duration: inferredDuration"), "User 360 reuses provider-reported event duration when video metadata is absent");
 assert(organizationMembersManager.includes('member.profile.role === "owner"') && organizationMembersManager.includes('member.role === "admin" ? "ADMIN" : "MEMBER"') && organizationMembersManager.includes('roleClasses(role)'), "Organization Members manager displays canonical OWNER/ADMIN/MEMBER roles");
 assert(organizationMembersManager.includes("useEffect") && organizationMembersManager.includes("AbortController") && organizationMembersManager.includes("setTimeout"), "Organization member candidate search updates live with debouncing and cancels stale requests");
 assert(organizationMembersManager.includes("View profile") && organizationMembersManager.includes("profileHref") && organizationMembersManager.includes('role="link"'), "Organization member rows navigate to real profile details and expose an accessible clickable surface");
