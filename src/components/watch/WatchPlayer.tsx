@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Info, RotateCcw } from "lucide-react";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
+import type { VideoSourceType } from "@/src/types/video";
+import { getProviderAdapter, getYouTubeId } from "@/src/lib/playback/providers";
+import { UniversalTrackingEngine, type PlaybackSnapshot } from "@/src/lib/playback/tracking-engine";
 
 type YouTubeStateChangeEvent = { data: number };
 type YouTubeErrorEvent = { data?: number };
@@ -10,7 +13,6 @@ type YouTubeReadyEvent = { target: YouTubePlayer };
 type YouTubePlayer = {
   getCurrentTime: () => number;
   getDuration: () => number;
-  getPlayerState?: () => number;
   getPlaybackRate?: () => number;
   getVolume?: () => number;
   isMuted?: () => boolean;
@@ -40,20 +42,40 @@ type YouTubeApi = {
   };
 };
 
+type VimeoEventData = {
+  seconds?: number;
+  duration?: number;
+  playbackRate?: number;
+  volume?: number;
+  message?: string;
+  name?: string;
+};
+type VimeoPlayer = {
+  on: (event: string, callback: (data?: unknown) => void) => void;
+  off?: (event: string, callback?: (data?: unknown) => void) => void;
+  getCurrentTime: () => Promise<number>;
+  getDuration: () => Promise<number>;
+  getPlaybackRate: () => Promise<number>;
+  getVolume: () => Promise<number>;
+  getPaused?: () => Promise<boolean>;
+  isMuted?: () => Promise<boolean>;
+  destroy: () => Promise<void> | void;
+};
+type VimeoApi = { Player: new (element: HTMLElement | HTMLIFrameElement, options?: Record<string, unknown>) => VimeoPlayer };
+
 declare global {
   interface Window {
     YT?: YouTubeApi;
+    Vimeo?: VimeoApi;
     onYouTubeIframeAPIReady?: () => void;
   }
 }
 
 let youtubeApiPromise: Promise<YouTubeApi> | null = null;
-
 function loadYouTubeApi(): Promise<YouTubeApi> {
   if (typeof window === "undefined") return Promise.reject(new Error("YouTube API requires a browser"));
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (youtubeApiPromise) return youtubeApiPromise;
-
   youtubeApiPromise = new Promise<YouTubeApi>((resolve, reject) => {
     let settled = false;
     const finish = (error?: Error) => {
@@ -71,16 +93,12 @@ function loadYouTubeApi(): Promise<YouTubeApi> {
         reject(new Error("YouTube IFrame API did not initialize"));
       }
     };
-
     const previousReady = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       previousReady?.();
       finish();
     };
-
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[src="https://www.youtube.com/iframe_api"]',
-    );
+    const existingScript = document.querySelector<HTMLScriptElement>('script[src="https://www.youtube.com/iframe_api"]');
     if (!existingScript) {
       const script = document.createElement("script");
       script.src = "https://www.youtube.com/iframe_api";
@@ -88,46 +106,39 @@ function loadYouTubeApi(): Promise<YouTubeApi> {
       script.onerror = () => finish(new Error("Unable to load the YouTube IFrame API"));
       document.head.appendChild(script);
     }
-
     const pollId = window.setInterval(() => {
       if (window.YT?.Player) finish();
     }, 100);
-    const timeoutId = window.setTimeout(() => {
-      finish(new Error("Timed out loading the YouTube IFrame API"));
-    }, 15000);
+    const timeoutId = window.setTimeout(() => finish(new Error("Timed out loading the YouTube IFrame API")), 15000);
   });
-
   return youtubeApiPromise;
 }
 
-function extractYouTubeId(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname === "youtu.be" || parsed.hostname.endsWith(".youtu.be")) {
-      return parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+let vimeoApiPromise: Promise<VimeoApi> | null = null;
+function loadVimeoApi(): Promise<VimeoApi> {
+  if (typeof window === "undefined") return Promise.reject(new Error("Vimeo API requires a browser"));
+  if (window.Vimeo?.Player) return Promise.resolve(window.Vimeo);
+  if (vimeoApiPromise) return vimeoApiPromise;
+  vimeoApiPromise = new Promise<VimeoApi>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[src="https://player.vimeo.com/api/player.js"]');
+    const finish = () => window.Vimeo?.Player ? resolve(window.Vimeo) : reject(new Error("Vimeo Player API did not initialize"));
+    if (existingScript) {
+      existingScript.addEventListener("load", finish, { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Unable to load Vimeo Player API")), { once: true });
+      if (window.Vimeo?.Player) finish();
+      return;
     }
-    if (parsed.hostname.includes("youtube.com")) {
-      if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
-      if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/")[2] ?? null;
-      if (parsed.pathname.startsWith("/shorts/")) return parsed.pathname.split("/")[2] ?? null;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function extractVimeoId(url: string): string | null {
-  const match = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  return match ? match[1] : null;
-}
-
-function buildEmbedUrl(sourceType: string, sourceUrl: string): string {
-  if (sourceType === "vimeo") {
-    const id = extractVimeoId(sourceUrl);
-    if (id) return `https://player.vimeo.com/video/${id}?api=1`;
-  }
-  return sourceUrl;
+    const script = document.createElement("script");
+    script.src = "https://player.vimeo.com/api/player.js";
+    script.async = true;
+    script.onload = finish;
+    script.onerror = () => reject(new Error("Unable to load Vimeo Player API"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    vimeoApiPromise = null;
+    throw error;
+  });
+  return vimeoApiPromise;
 }
 
 function createClientEventId(): string {
@@ -135,80 +146,63 @@ function createClientEventId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-interface PlaybackSnapshot {
-  position: number;
-  duration: number | null;
+function asVimeoData(value: unknown): VimeoEventData {
+  return value && typeof value === "object" ? value as VimeoEventData : {};
 }
 
 interface WatchPlayerProps {
   watchLinkToken: string;
   title: string;
-  sourceType: string;
+  sourceType: VideoSourceType;
   sourceUrl: string;
   duration: number | null;
 }
 
-export default function WatchPlayer({
-  watchLinkToken,
-  title,
-  sourceType,
-  sourceUrl,
-  duration,
-}: WatchPlayerProps) {
+export default function WatchPlayer({ watchLinkToken, title, sourceType, sourceUrl, duration }: WatchPlayerProps) {
+  const adapter = getProviderAdapter(sourceType);
+  const isDirectUrl = adapter.playback_kind === "native_html5";
+  const isYouTube = adapter.playback_kind === "youtube_iframe_api";
+  const isVimeo = adapter.playback_kind === "vimeo_player_sdk";
+  const hasPlaybackTelemetry = adapter.capabilities.detailed_tracking;
+  const embedUrl = adapter.build_embed_url(sourceUrl);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const youtubeContainerRef = useRef<HTMLDivElement>(null);
+  const vimeoContainerRef = useRef<HTMLDivElement>(null);
   const youtubePlayerRef = useRef<YouTubePlayer | null>(null);
+  const vimeoPlayerRef = useRef<VimeoPlayer | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const sessionTokenRef = useRef<string | null>(null);
   const sessionStartRequestRef = useRef<Promise<boolean> | null>(null);
-  const playbackStartRequestRef = useRef<Promise<boolean> | null>(null);
   const sessionEndedRef = useRef(false);
-  const hasPlayedRef = useRef(false);
-  const startTimeRef = useRef<number | null>(null);
-  const watchTimeRef = useRef(0);
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const completionSentRef = useRef(false);
+  const sessionEngineRef = useRef<UniversalTrackingEngine | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sequenceNumberRef = useRef(0);
+  const pendingEventsRef = useRef<TrackingEventPayload[]>([]);
+  const eventFlushRequestRef = useRef<Promise<boolean> | null>(null);
+  const flushEventsRef = useRef<((keepalive?: boolean) => Promise<boolean>) | null>(null);
   const durationRef = useRef<number | null>(duration);
-  const lastDurationRef = useRef<number | null>(duration);
   const lastPositionRef = useRef<number | null>(null);
-  const pausedPositionRef = useRef<number | null>(null);
-  const furthestPositionRef = useRef(0);
-  const seekFromRef = useRef<number | null>(null);
+  const lastDurationRef = useRef<number | null>(duration);
   const lastPlaybackRateRef = useRef<number | null>(null);
   const lastVolumeRef = useRef<number | null>(null);
   const lastMutedRef = useRef<boolean | null>(null);
   const lastQualityRef = useRef<string | null>(null);
-  const bufferStartedAtRef = useRef<number | null>(null);
-  const pendingEventsRef = useRef<TrackingEventPayload[]>([]);
-  const eventFlushRequestRef = useRef<Promise<boolean> | null>(null);
-  const flushEventsRef = useRef<((keepalive?: boolean) => Promise<boolean>) | null>(null);
-  const sequenceNumberRef = useRef(0);
-  const [playerReady, setPlayerReady] = useState(sourceType !== "youtube");
+  const seekFromRef = useRef<number | null>(null);
+  const [playerReady, setPlayerReady] = useState(!isYouTube && !isVimeo);
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const isDirectUrl = sourceType === "direct_url";
-  const isYouTube = sourceType === "youtube";
-  const hasPlaybackTelemetry = isDirectUrl || isYouTube;
-  const embedUrl = isYouTube ? null : isDirectUrl ? null : buildEmbedUrl(sourceType, sourceUrl);
-
-  const readYouTubeSnapshot = useCallback((): PlaybackSnapshot | null => {
-    const player = youtubePlayerRef.current;
-    if (!player) return null;
-    const position = Number(player.getCurrentTime());
-    const rawDuration = Number(player.getDuration());
-    if (!Number.isFinite(position)) return null;
-    const safeDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : durationRef.current;
-    return { position: Math.max(0, position), duration: safeDuration };
-  }, []);
-
-  const updateSnapshot = useCallback((snapshot: PlaybackSnapshot) => {
-    lastPositionRef.current = snapshot.position;
-    furthestPositionRef.current = Math.max(furthestPositionRef.current, snapshot.position);
-    if (snapshot.duration && snapshot.duration > 0) {
-      durationRef.current = snapshot.duration;
-      lastDurationRef.current = snapshot.duration;
+  const updateSnapshot = useCallback((snapshot: PlaybackSnapshot): PlaybackSnapshot => {
+    const safeDuration = typeof snapshot.duration === "number" && Number.isFinite(snapshot.duration) && snapshot.duration > 0 ? snapshot.duration : durationRef.current;
+    const safePosition = typeof snapshot.position === "number" && Number.isFinite(snapshot.position) ? Math.max(0, snapshot.position) : 0;
+    const normalized = { position: safeDuration ? Math.min(safeDuration, safePosition) : safePosition, duration: safeDuration ?? null };
+    lastPositionRef.current = normalized.position;
+    if (normalized.duration) {
+      durationRef.current = normalized.duration;
+      lastDurationRef.current = normalized.duration;
     }
+    return normalized;
   }, []);
 
   const flushEvents = useCallback(async (keepalive = false): Promise<boolean> => {
@@ -216,7 +210,6 @@ export default function WatchPlayer({
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken || pendingEventsRef.current.length === 0) return true;
     if (eventFlushRequestRef.current) return eventFlushRequestRef.current;
-
     const batch = pendingEventsRef.current.splice(0, 50);
     const request = (async () => {
       try {
@@ -247,17 +240,10 @@ export default function WatchPlayer({
     return () => { flushEventsRef.current = null; };
   }, [flushEvents]);
 
-  const sendEvent = useCallback(async (
-    eventType: TrackingEventType,
-    snapshot: PlaybackSnapshot,
-    fromPosition?: number | null,
-    metadata?: Record<string, string | number | boolean | null>,
-    telemetryFields?: Pick<TrackingEventPayload, "playback_rate" | "from_rate" | "to_rate">,
-  ) => {
+  const sendEvent = useCallback((eventType: TrackingEventType, snapshot: PlaybackSnapshot, fromPosition?: number | null, metadata?: Record<string, string | number | boolean | null>, telemetryFields?: Pick<TrackingEventPayload, "playback_rate" | "from_rate" | "to_rate">) => {
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken || sessionEndedRef.current) return;
-    const nativeRate = sourceType === "direct_url" ? videoRef.current?.playbackRate ?? lastPlaybackRateRef.current : null;
     const event: TrackingEventPayload = {
       session_id: sessionId,
       session_token: sessionToken,
@@ -268,33 +254,21 @@ export default function WatchPlayer({
       client_event_id: createClientEventId(),
       sequence_number: sequenceNumberRef.current++,
       occurred_at: new Date().toISOString(),
-      playback_rate: telemetryFields?.playback_rate ?? nativeRate,
+      playback_rate: telemetryFields?.playback_rate ?? lastPlaybackRateRef.current,
       from_rate: telemetryFields?.from_rate,
       to_rate: telemetryFields?.to_rate,
       metadata,
     };
     pendingEventsRef.current.push(event);
-    if ((eventType !== "heartbeat" && eventType !== "playback_progress") || pendingEventsRef.current.length >= 5) void flushEvents();
-  }, [flushEvents, sourceType]);
-
-  const finishBuffer = useCallback((snapshot: PlaybackSnapshot) => {
-    const startedAt = bufferStartedAtRef.current;
-    if (startedAt === null || !sessionIdRef.current) return;
-    bufferStartedAtRef.current = null;
-    void sendEvent("buffering_ended", snapshot, null, { state: "end", buffer_duration_ms: Math.max(0, Math.round(Date.now() - startedAt)) });
-  }, [sendEvent]);
+    if (eventType !== "playback_progress" || pendingEventsRef.current.length >= 5) void flushEvents();
+  }, [flushEvents]);
 
   const startSession = useCallback(async (): Promise<boolean> => {
     if (sessionIdRef.current && sessionTokenRef.current) return true;
     if (sessionStartRequestRef.current) return sessionStartRequestRef.current;
-
     const request = (async () => {
       try {
-        const response = await fetch("/api/tracking/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ watch_link_token: watchLinkToken }),
-        });
+        const response = await fetch("/api/tracking/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ watch_link_token: watchLinkToken }) });
         const data = await response.json().catch(() => ({}));
         if (response.status === 401 || response.status === 403) {
           setError("Your viewer access has expired. Reopen this private link to continue watching.");
@@ -315,312 +289,156 @@ export default function WatchPlayer({
         sessionStartRequestRef.current = null;
       }
     })();
-
     sessionStartRequestRef.current = request;
     return request;
   }, [watchLinkToken]);
 
-  useEffect(() => {
-    if (!isDirectUrl) return;
-    const video = videoRef.current;
-    if (!video) return;
-    void startSession().then((started) => {
-      if (!started || sessionEndedRef.current) return;
-      void sendEvent("player_ready", {
-        position: 0,
-        duration: durationRef.current,
-      }, null, { provider_state: "ready", player_state: "idle" });
-    });
-  }, [isDirectUrl, sendEvent, startSession]);
-
-  const reportProviderError = useCallback((providerCode: number) => {
-    const sessionId = sessionIdRef.current;
-    const sessionToken = sessionTokenRef.current;
-    if (!sessionId || !sessionToken || !Number.isInteger(providerCode)) return;
-    const snapshot = isYouTube
-      ? readYouTubeSnapshot() ?? { position: lastPositionRef.current ?? 0, duration: durationRef.current }
-      : { position: videoRef.current?.currentTime ?? lastPositionRef.current ?? 0, duration: durationRef.current };
-    void sendEvent("player_error", snapshot, null, { error_code: providerCode, provider: sourceType, recoverable: false });
-    void fetch("/api/tracking/provider-error", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, source_type: sourceType, provider_code: providerCode }),
-      keepalive: true,
-    }).catch(() => undefined);
-  }, [isYouTube, readYouTubeSnapshot, sendEvent, sourceType]);
-
-  const accumulateWatchTime = useCallback((resume: boolean) => {
-    const playStartedAt = startTimeRef.current;
-    if (playStartedAt === null) return;
-    watchTimeRef.current += Math.max(0, (Date.now() - playStartedAt) / 1000);
-    startTimeRef.current = resume ? Date.now() : null;
-  }, []);
-
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
+  const stopProgressPolling = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
     }
   }, []);
 
-  const endSession = useCallback(async () => {
+  const readYouTubeSnapshot = useCallback((): PlaybackSnapshot | null => {
+    const player = youtubePlayerRef.current;
+    if (!player) return null;
+    const position = Number(player.getCurrentTime());
+    const rawDuration = Number(player.getDuration());
+    if (!Number.isFinite(position)) return null;
+    return updateSnapshot({ position, duration: Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : durationRef.current });
+  }, [updateSnapshot]);
+
+  const readDirectSnapshot = useCallback((): PlaybackSnapshot | null => {
+    const video = videoRef.current;
+    if (!video) return null;
+    return updateSnapshot({ position: video.currentTime, duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current });
+  }, [updateSnapshot]);
+
+  const readVimeoSnapshot = useCallback(async (data?: VimeoEventData): Promise<PlaybackSnapshot | null> => {
+    const player = vimeoPlayerRef.current;
+    if (!player) return null;
+    try {
+      const [position, rawDuration] = await Promise.all([
+        typeof data?.seconds === "number" ? Promise.resolve(data.seconds) : player.getCurrentTime(),
+        typeof data?.duration === "number" ? Promise.resolve(data.duration) : player.getDuration(),
+      ]);
+      return updateSnapshot({ position, duration: rawDuration });
+    } catch {
+      return null;
+    }
+  }, [updateSnapshot]);
+
+  const readCurrentSnapshot = useCallback((): PlaybackSnapshot | null => {
+    if (isYouTube) return readYouTubeSnapshot();
+    if (isDirectUrl) return readDirectSnapshot();
+    if (isVimeo && lastPositionRef.current !== null) return { position: lastPositionRef.current, duration: lastDurationRef.current };
+    return null;
+  }, [isDirectUrl, isVimeo, isYouTube, readDirectSnapshot, readYouTubeSnapshot]);
+
+  const finishTrackedSession = useCallback(async (snapshot: PlaybackSnapshot | null, completed: boolean, watchTimeSeconds: number) => {
     if (sessionEndedRef.current) return;
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken) return;
-
     sessionEndedRef.current = true;
-    stopHeartbeat();
-    const finalSnapshot = isYouTube
-      ? readYouTubeSnapshot()
-      : videoRef.current
-        ? {
-            position: Math.max(0, videoRef.current.currentTime),
-            duration: Number.isFinite(videoRef.current.duration) && videoRef.current.duration > 0
-              ? videoRef.current.duration
-              : durationRef.current,
-          }
-        : null;
-    if (finalSnapshot) updateSnapshot(finalSnapshot);
-    accumulateWatchTime(false);
-    const finalPosition = finalSnapshot?.position ?? lastPositionRef.current;
-    const finalDuration = finalSnapshot?.duration ?? lastDurationRef.current ?? durationRef.current;
-    const completion = completionSentRef.current ? 100 : 0;
+    stopProgressPolling();
+    const finalSnapshot = snapshot ? updateSnapshot(snapshot) : readCurrentSnapshot();
     await flushEvents(true);
     const body = JSON.stringify({
       session_id: sessionId,
       session_token: sessionToken,
-      watch_time_seconds: watchTimeRef.current,
-      completion_percentage: completion,
-      position: finalPosition,
-      duration: finalDuration,
-      final_event: {
-        client_event_id: createClientEventId(),
-        sequence_number: sequenceNumberRef.current++,
-        occurred_at: new Date().toISOString(),
-      },
+      watch_time_seconds: Math.max(0, watchTimeSeconds),
+      completion_percentage: completed ? 100 : 0,
+      position: finalSnapshot?.position ?? lastPositionRef.current,
+      duration: finalSnapshot?.duration ?? lastDurationRef.current,
+      final_event: { client_event_id: createClientEventId(), sequence_number: sequenceNumberRef.current++, occurred_at: new Date().toISOString() },
     });
-
     try {
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(
-          `/api/tracking/session/${sessionId}/end`,
-          new Blob([body], { type: "application/json" }),
-        );
-      } else {
-        await fetch(`/api/tracking/session/${sessionId}/end`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-          keepalive: true,
-        });
-      }
+      if (navigator.sendBeacon) navigator.sendBeacon(`/api/tracking/session/${sessionId}/end`, new Blob([body], { type: "application/json" }));
+      else await fetch(`/api/tracking/session/${sessionId}/end`, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
     } catch {
-      // Best-effort end-of-session delivery on page close.
+      // Best effort during page close.
     }
-  }, [accumulateWatchTime, flushEvents, isYouTube, readYouTubeSnapshot, stopHeartbeat, updateSnapshot]);
+  }, [flushEvents, readCurrentSnapshot, stopProgressPolling, updateSnapshot]);
 
-  const maybeRecordCompletion = useCallback((snapshot: PlaybackSnapshot) => {
-    if (completionSentRef.current || !snapshot.duration || snapshot.duration <= 0) return;
-    if ((snapshot.position / snapshot.duration) * 100 >= 95) {
-      completionSentRef.current = true;
-      void sendEvent("complete", snapshot);
+  const handleNormalized = useCallback(async (event: Parameters<UniversalTrackingEngine["handle"]>[0]): Promise<boolean> => {
+    const engine = sessionEngineRef.current;
+    if (!engine) return false;
+    return engine.handle(event);
+  }, []);
+
+  const pollYouTubeAuxiliaryState = useCallback((snapshot: PlaybackSnapshot) => {
+    const player = youtubePlayerRef.current;
+    if (!player) return;
+    const nextRate = player.getPlaybackRate?.();
+    if (typeof nextRate === "number" && Number.isFinite(nextRate) && nextRate > 0 && nextRate !== lastPlaybackRateRef.current) {
+      const previousRate = lastPlaybackRateRef.current;
+      lastPlaybackRateRef.current = nextRate;
+      void handleNormalized({ type: "rate_changed", snapshot, fromRate: previousRate, toRate: nextRate });
     }
-  }, [sendEvent]);
+    const nextVolume = player.getVolume?.();
+    if (typeof nextVolume === "number" && Number.isFinite(nextVolume) && nextVolume !== lastVolumeRef.current) {
+      const previousVolume = lastVolumeRef.current;
+      lastVolumeRef.current = nextVolume;
+      void handleNormalized({ type: "volume_changed", snapshot, fromVolume: previousVolume, toVolume: nextVolume });
+    }
+    const nextMuted = player.isMuted?.();
+    if (typeof nextMuted === "boolean" && nextMuted !== lastMutedRef.current) {
+      const previousMuted = lastMutedRef.current;
+      lastMutedRef.current = nextMuted;
+      void handleNormalized({ type: "mute_changed", snapshot, fromMuted: previousMuted, toMuted: nextMuted });
+    }
+    const nextQuality = player.getPlaybackQuality?.();
+    if (typeof nextQuality === "string" && nextQuality && nextQuality !== lastQualityRef.current) {
+      const previousQuality = lastQualityRef.current;
+      lastQualityRef.current = nextQuality;
+      void handleNormalized({ type: "quality_changed", snapshot, fromQuality: previousQuality, toQuality: nextQuality });
+    }
+  }, [handleNormalized]);
 
-  const startPlaybackSegment = useCallback(async (readSnapshot: () => PlaybackSnapshot | null): Promise<boolean> => {
-    if (startTimeRef.current !== null) return true;
-    if (playbackStartRequestRef.current) return playbackStartRequestRef.current;
-
-    const request = (async () => {
-      const initialSnapshot = readSnapshot();
-      if (!initialSnapshot) return false;
-      const sessionStarted = await startSession();
-      if (!sessionStarted) return false;
-
-      const pausedPosition = pausedPositionRef.current;
-      updateSnapshot(initialSnapshot);
-      startTimeRef.current = Date.now();
-      const eventType: TrackingEventType = hasPlayedRef.current ? "resume" : "play";
-      hasPlayedRef.current = true;
-      if (eventType === "resume" && pausedPosition !== null && Math.abs(initialSnapshot.position - pausedPosition) >= 8) {
-        void sendEvent("seek_completed", initialSnapshot, pausedPosition, { inferred: true, seek_from_seconds: pausedPosition, seek_to_seconds: initialSnapshot.position, seek_delta_seconds: initialSnapshot.position - pausedPosition });
+  const startProgressPolling = useCallback(() => {
+    if (progressTimerRef.current) return;
+    progressTimerRef.current = setInterval(() => {
+      if (isVimeo) {
+        void readVimeoSnapshot().then((snapshot) => snapshot && void handleNormalized({ type: "progress", snapshot, provider_state: "playing" }));
+        return;
       }
-      pausedPositionRef.current = null;
-      void sendEvent(eventType, initialSnapshot);
-      maybeRecordCompletion(initialSnapshot);
-
-      stopHeartbeat();
-      heartbeatIntervalRef.current = setInterval(() => {
-        const snapshot = readSnapshot();
-        if (!snapshot) return;
-        const previousPosition = lastPositionRef.current;
-        updateSnapshot(snapshot);
-        accumulateWatchTime(true);
-        if (isYouTube && previousPosition !== null && Math.abs(snapshot.position - previousPosition) >= 8) {
-          void sendEvent("seek_completed", snapshot, previousPosition, { inferred: true, detection: "position_discontinuity", seek_from_seconds: previousPosition, seek_to_seconds: snapshot.position, seek_delta_seconds: snapshot.position - previousPosition });
-        }
-        if (isYouTube) {
-          const player = youtubePlayerRef.current;
-          const nextRate = player?.getPlaybackRate?.();
-          if (typeof nextRate === "number" && Number.isFinite(nextRate) && nextRate > 0 && nextRate !== lastPlaybackRateRef.current) {
-            const previousRate = lastPlaybackRateRef.current;
-            lastPlaybackRateRef.current = nextRate;
-            void sendEvent("playback_rate_changed", snapshot, null, { previous_rate: previousRate, new_rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate });
-          }
-          const nextVolume = player?.getVolume?.();
-          if (typeof nextVolume === "number" && Number.isFinite(nextVolume) && nextVolume !== lastVolumeRef.current) {
-            const previousVolume = lastVolumeRef.current;
-            lastVolumeRef.current = nextVolume;
-            void sendEvent("volume_changed", snapshot, null, { previous_volume: previousVolume, new_volume: nextVolume });
-          }
-          const nextMuted = player?.isMuted?.();
-          if (typeof nextMuted === "boolean" && nextMuted !== lastMutedRef.current) {
-            const previousMuted = lastMutedRef.current;
-            lastMutedRef.current = nextMuted;
-            void sendEvent("mute_changed", snapshot, null, { previous_muted: previousMuted, new_muted: nextMuted });
-          }
-          const nextQuality = player?.getPlaybackQuality?.();
-          if (typeof nextQuality === "string" && nextQuality && nextQuality !== lastQualityRef.current) {
-            const previousQuality = lastQualityRef.current;
-            lastQualityRef.current = nextQuality;
-            void sendEvent("quality_changed", snapshot, null, { previous_quality: previousQuality, new_quality: nextQuality });
-          }
-        }
-        void sendEvent("playback_progress", snapshot, null, { sampling_interval_ms: 5000, player_state: "playing" });
-        maybeRecordCompletion(snapshot);
-      }, 5000);
-      return true;
-    })();
-
-    playbackStartRequestRef.current = request;
-    try {
-      return await request;
-    } finally {
-      playbackStartRequestRef.current = null;
-    }
-  }, [accumulateWatchTime, isYouTube, maybeRecordCompletion, sendEvent, startSession, stopHeartbeat, updateSnapshot]);
-
-  const handleDirectPlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const snapshot = {
-      position: Math.max(0, video.currentTime),
-      duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    };
-    finishBuffer(snapshot);
-    void startPlaybackSegment(() => snapshot).then((started) => {
-      if (!started) video.pause();
-    });
-  }, [finishBuffer, startPlaybackSegment]);
-
-  const handleDirectPause = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || !sessionIdRef.current || startTimeRef.current === null) return;
-    const snapshot = {
-      position: Math.max(0, video.currentTime),
-      duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    };
-    updateSnapshot(snapshot);
-    accumulateWatchTime(false);
-    stopHeartbeat();
-    pausedPositionRef.current = snapshot.position;
-    void sendEvent("pause", snapshot);
-  }, [accumulateWatchTime, sendEvent, stopHeartbeat, updateSnapshot]);
-
-  const handleDirectSeeking = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    seekFromRef.current = video.currentTime;
-    if (sessionIdRef.current && !sessionEndedRef.current) {
-      void sendEvent("seek_started", {
-        position: Math.max(0, video.currentTime),
-        duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-      }, null, { seek_from_seconds: video.currentTime, player_state: video.paused ? "paused" : "playing" });
-    }
-  }, [sendEvent]);
-
-  const handleDirectSeeked = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || !sessionIdRef.current || startTimeRef.current === null) return;
-    const snapshot = {
-      position: Math.max(0, video.currentTime),
-      duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    };
-    updateSnapshot(snapshot);
-    const seekFrom = seekFromRef.current;
-    void sendEvent("seek_completed", snapshot, seekFrom, { seek_from_seconds: seekFrom, seek_to_seconds: snapshot.position, seek_delta_seconds: seekFrom === null ? null : snapshot.position - seekFrom });
-    seekFromRef.current = null;
-  }, [sendEvent, updateSnapshot]);
-
-  const handleDirectTimeUpdate = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const snapshot = {
-      position: Math.max(0, video.currentTime),
-      duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    };
-    updateSnapshot(snapshot);
-    maybeRecordCompletion(snapshot);
-  }, [maybeRecordCompletion, updateSnapshot]);
-
-  const handleDirectEnded = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || !sessionIdRef.current) return;
-    completionSentRef.current = true;
-    const snapshot = {
-      position: Math.max(0, video.currentTime),
-      duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    };
-    updateSnapshot(snapshot);
-    void endSession();
-  }, [endSession, updateSnapshot]);
-
-  const handleYouTubeStateChange = useCallback((event: YouTubeStateChangeEvent) => {
-    const api = window.YT;
-    const snapshot = readYouTubeSnapshot();
-    if (!api || !snapshot) return;
-    if (event.data === api.PlayerState.PLAYING) {
-      finishBuffer(snapshot);
-      void startPlaybackSegment(readYouTubeSnapshot).then((started) => {
-        if (!started) youtubePlayerRef.current?.pauseVideo();
-      });
-      return;
-    }
-    if (event.data === api.PlayerState.PAUSED) {
-      if (!sessionIdRef.current) return;
-      updateSnapshot(snapshot);
-      pausedPositionRef.current = snapshot.position;
-      accumulateWatchTime(false);
-      stopHeartbeat();
-      void sendEvent("pause", snapshot);
-      return;
-    }
-    if (event.data === api.PlayerState.BUFFERING) {
-      if (sessionIdRef.current) {
-        if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now();
-        accumulateWatchTime(false);
-        stopHeartbeat();
-        void sendEvent("buffering_started", snapshot, null, { state: "start", provider_state: "buffering", player_state: "buffering" });
+      const snapshot = readCurrentSnapshot();
+      if (snapshot) {
+        void handleNormalized({ type: "progress", snapshot, provider_state: "playing" });
+        if (isYouTube) pollYouTubeAuxiliaryState(snapshot);
       }
-      return;
-    }
-    if (event.data === api.PlayerState.ENDED) {
-      if (!sessionIdRef.current) return;
-      completionSentRef.current = true;
-      updateSnapshot({ ...snapshot, position: snapshot.duration ?? snapshot.position });
-      void endSession();
-    }
-  }, [accumulateWatchTime, endSession, finishBuffer, readYouTubeSnapshot, sendEvent, startPlaybackSegment, stopHeartbeat, updateSnapshot]);
+    }, 1000);
+  }, [handleNormalized, isYouTube, isVimeo, pollYouTubeAuxiliaryState, readCurrentSnapshot, readVimeoSnapshot]);
+
+  const reportProviderError = useCallback((providerCode: number, snapshot: PlaybackSnapshot | null, metadata?: Record<string, string | number | boolean | null>) => {
+    const sessionId = sessionIdRef.current;
+    const sessionToken = sessionTokenRef.current;
+    if (!sessionId || !sessionToken || !Number.isInteger(providerCode)) return;
+    const safeSnapshot = snapshot ?? readCurrentSnapshot() ?? { position: lastPositionRef.current ?? 0, duration: lastDurationRef.current };
+    void handleNormalized({ type: "error", snapshot: safeSnapshot, providerCode, provider: sourceType });
+    void fetch("/api/tracking/provider-error", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, source_type: sourceType, provider_code: providerCode, metadata }), keepalive: true }).catch(() => undefined);
+  }, [handleNormalized, readCurrentSnapshot, sourceType]);
+
+  useEffect(() => {
+    if (!hasPlaybackTelemetry) return;
+    sessionEngineRef.current = new UniversalTrackingEngine({ ensureSession: startSession, sendEvent, endSession: finishTrackedSession }, 5000);
+    return () => {
+      stopProgressPolling();
+      const snapshot = readCurrentSnapshot();
+      void sessionEngineRef.current?.end(snapshot);
+      sessionEngineRef.current = null;
+    };
+  }, [finishTrackedSession, hasPlaybackTelemetry, readCurrentSnapshot, sendEvent, startSession, stopProgressPolling]);
 
   useEffect(() => {
     if (!isYouTube || !youtubeContainerRef.current) return;
     let cancelled = false;
     let player: YouTubePlayer | null = null;
-
     void loadYouTubeApi().then((api) => {
       if (cancelled || !youtubeContainerRef.current) return;
-      const videoId = extractYouTubeId(sourceUrl);
+      const videoId = getYouTubeId(sourceUrl);
       if (!videoId) {
         setError("This YouTube URL could not be embedded safely.");
         return;
@@ -638,154 +456,170 @@ export default function WatchPlayer({
           onReady: (readyEvent) => {
             youtubePlayerRef.current = readyEvent.target;
             const initialDuration = Number(readyEvent.target.getDuration());
-            if (Number.isFinite(initialDuration) && initialDuration > 0) {
-              durationRef.current = initialDuration;
-              lastDurationRef.current = initialDuration;
-            }
+            if (Number.isFinite(initialDuration) && initialDuration > 0) updateSnapshot({ position: 0, duration: initialDuration });
             lastPlaybackRateRef.current = readyEvent.target.getPlaybackRate?.() ?? null;
             lastVolumeRef.current = readyEvent.target.getVolume?.() ?? null;
             lastMutedRef.current = readyEvent.target.isMuted?.() ?? null;
             lastQualityRef.current = readyEvent.target.getPlaybackQuality?.() ?? null;
             setPlayerReady(true);
-            void startSession().then((started) => {
-              if (!started || sessionEndedRef.current) return;
-              const snapshot = readYouTubeSnapshot() ?? { position: 0, duration: durationRef.current };
-              void sendEvent("player_ready", snapshot, null, { provider_state: "ready", player_state: "unstarted" });
-              void sendEvent("metadata_loaded", snapshot, null, { provider_state: "metadata_loaded", player_state: "unstarted" });
-            });
           },
-          onStateChange: handleYouTubeStateChange,
+          onStateChange: (event: YouTubeStateChangeEvent) => {
+            const snapshot = readYouTubeSnapshot();
+            if (!snapshot) return;
+            if (event.data === api.PlayerState.PLAYING) {
+              void handleNormalized({ type: "play", snapshot, provider_state: "playing" }).then((started) => { if (started) startProgressPolling(); else youtubePlayerRef.current?.pauseVideo(); });
+            } else if (event.data === api.PlayerState.PAUSED) {
+              stopProgressPolling();
+              void handleNormalized({ type: "pause", snapshot });
+            } else if (event.data === api.PlayerState.BUFFERING) {
+              stopProgressPolling();
+              void handleNormalized({ type: "buffering_started", snapshot, provider_state: "buffering" });
+            } else if (event.data === api.PlayerState.ENDED) {
+              stopProgressPolling();
+              void handleNormalized({ type: "ended", snapshot });
+            }
+          },
           onError: (providerError) => {
+            const snapshot = readYouTubeSnapshot();
             setError("YouTube could not load this video inside TrackUp.");
-            reportProviderError(providerError?.data ?? 0);
-            void endSession();
+            reportProviderError(providerError?.data ?? 0, snapshot);
           },
         },
       });
     }).catch(() => {
       if (!cancelled) setError("Unable to load the YouTube player inside TrackUp.");
     });
-
     return () => {
       cancelled = true;
-      stopHeartbeat();
       player?.destroy();
       youtubePlayerRef.current = null;
     };
-  }, [endSession, handleYouTubeStateChange, isYouTube, readYouTubeSnapshot, reportProviderError, retryNonce, sendEvent, sourceUrl, startSession, stopHeartbeat, title]);
+  }, [handleNormalized, isYouTube, readYouTubeSnapshot, reportProviderError, retryNonce, sourceUrl, startProgressPolling, stopProgressPolling, title, updateSnapshot]);
 
   useEffect(() => {
+    if (!isVimeo || !vimeoContainerRef.current || !embedUrl) return;
+    let cancelled = false;
+    let player: VimeoPlayer | null = null;
+    void loadVimeoApi().then((api) => {
+      if (cancelled || !vimeoContainerRef.current) return;
+      const iframe = document.createElement("iframe");
+      iframe.src = embedUrl;
+      iframe.title = title;
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.allow = "autoplay; fullscreen; picture-in-picture";
+      iframe.allowFullscreen = true;
+      iframe.className = "h-full w-full";
+      vimeoContainerRef.current.replaceChildren(iframe);
+      player = new api.Player(iframe);
+      vimeoPlayerRef.current = player;
+      const snapshotFrom = (data?: unknown) => readVimeoSnapshot(asVimeoData(data));
+      player.on("loaded", (data) => { void snapshotFrom(data).then((snapshot) => { if (snapshot) setPlayerReady(true); }); });
+      player.on("durationchange", (data) => { void snapshotFrom(data); });
+      player.on("play", (data) => { void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "play", snapshot, provider_state: "playing" }).then((started) => { if (started) startProgressPolling(); })); });
+      player.on("pause", (data) => { stopProgressPolling(); void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "pause", snapshot })); });
+      player.on("seeking", (data) => { void snapshotFrom(data).then((snapshot) => { if (snapshot) { seekFromRef.current = lastPositionRef.current; void handleNormalized({ type: "seek_started", snapshot, fromPosition: seekFromRef.current }); } }); });
+      player.on("seeked", (data) => { const fromPosition = seekFromRef.current; void player?.getPaused?.().then((paused) => snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "seek_completed", snapshot, fromPosition, resumeAfterSeek: paused !== true }).then((started) => { if (started) startProgressPolling(); }))).catch(() => undefined); seekFromRef.current = null; });
+      player.on("timeupdate", (data) => { void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "progress", snapshot, provider_state: "playing" })); });
+      player.on("bufferstart", (data) => { stopProgressPolling(); void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "buffering_started", snapshot, provider_state: "buffering" })); });
+      player.on("bufferend", (data) => { void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "buffering_ended", snapshot }).then(() => { if (sessionEngineRef.current?.isPlaying) startProgressPolling(); })); });
+      player.on("playbackratechange", (data) => { const event = asVimeoData(data); if (typeof event.playbackRate === "number") void snapshotFrom(event).then((snapshot) => snapshot && handleNormalized({ type: "rate_changed", snapshot, fromRate: lastPlaybackRateRef.current, toRate: event.playbackRate as number })); });
+      player.on("volumechange", (data) => { const event = asVimeoData(data); if (typeof event.volume === "number") void snapshotFrom(event).then((snapshot) => snapshot && handleNormalized({ type: "volume_changed", snapshot, fromVolume: lastVolumeRef.current, toVolume: event.volume as number })); });
+      player.on("ended", (data) => { stopProgressPolling(); void snapshotFrom(data).then((snapshot) => snapshot && handleNormalized({ type: "ended", snapshot })); });
+      player.on("error", (data) => { const event = asVimeoData(data); setError("Vimeo could not load this video inside TrackUp."); void snapshotFrom(event).then((snapshot) => { reportProviderError(1, snapshot, { provider_message: event.message ?? event.name ?? "unknown" }); }); });
+    }).catch(() => { if (!cancelled) setError("Unable to load the Vimeo player inside TrackUp."); });
+    return () => {
+      cancelled = true;
+      stopProgressPolling();
+      void player?.destroy();
+      vimeoPlayerRef.current = null;
+    };
+  }, [embedUrl, handleNormalized, isVimeo, readVimeoSnapshot, reportProviderError, retryNonce, startProgressPolling, stopProgressPolling, title]);
+
+  useEffect(() => {
+    if (!hasPlaybackTelemetry) return;
     const onFullscreenChange = () => {
-      if (!sessionIdRef.current || sessionEndedRef.current) return;
-      const video = videoRef.current;
-      const snapshot = isYouTube
-        ? readYouTubeSnapshot()
-        : video
-          ? { position: video.currentTime, duration: durationRef.current }
-          : null;
-      if (!snapshot) return;
-      void sendEvent(document.fullscreenElement ? "fullscreen_entered" : "fullscreen_exited", snapshot, null, { fullscreen: Boolean(document.fullscreenElement) });
+      const snapshot = readCurrentSnapshot();
+      if (snapshot) void handleNormalized({ type: "fullscreen_changed", snapshot, fullscreen: Boolean(document.fullscreenElement) });
+    };
+    const onVisibilityChange = () => {
+      const snapshot = readCurrentSnapshot();
+      if (snapshot) void handleNormalized({ type: "visibility_changed", snapshot, visibility: document.visibilityState === "hidden" ? "hidden" : "visible" });
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, [isYouTube, readYouTubeSnapshot, sendEvent]);
-
-  useEffect(() => {
-    const onBeforeUnload = () => { void endSession(); };
-    const onVisibilityChange = () => {
-      if (!sessionIdRef.current || sessionEndedRef.current) return;
-      const snapshot = isYouTube
-        ? readYouTubeSnapshot()
-        : videoRef.current
-          ? { position: videoRef.current.currentTime, duration: durationRef.current }
-          : null;
-      if (snapshot) {
-        const visibilityEvent = document.visibilityState === "hidden" ? "visibility_hidden" : "visibility_visible";
-        void sendEvent(visibilityEvent, snapshot, null, { previous_visibility: document.visibilityState === "hidden" ? "visible" : "hidden", new_visibility: document.visibilityState });
-      }
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      void endSession();
     };
-  }, [endSession, isYouTube, readYouTubeSnapshot, sendEvent]);
+  }, [handleNormalized, hasPlaybackTelemetry, readCurrentSnapshot]);
 
-  const capabilityMessage = isDirectUrl
-    ? "Native HTML5 playback is available. TrackUp records play, pause, seek origin/destination, heartbeat, completion, duration, and end."
-    : isYouTube
-      ? "YouTube is controlled by the official IFrame Player API inside TrackUp. TrackUp records API state changes, current time, duration, progress heartbeats, detectable seek discontinuities, completion, and end."
-      : "This provider is embedded inside TrackUp, but it does not expose a reliable playback API here. TrackUp does not create fabricated sessions or playback metrics for this source.";
+  useEffect(() => {
+    if (!hasPlaybackTelemetry) return;
+    const onBeforeUnload = () => { void sessionEngineRef.current?.end(readCurrentSnapshot()); };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasPlaybackTelemetry, readCurrentSnapshot]);
+
+  const handleDirectPlay = useCallback(() => {
+    const snapshot = readDirectSnapshot();
+    if (!snapshot) return;
+    void handleNormalized({ type: "play", snapshot, provider_state: "playing" }).then((started) => { if (started) startProgressPolling(); else videoRef.current?.pause(); });
+  }, [handleNormalized, readDirectSnapshot, startProgressPolling]);
+  const handleDirectPause = useCallback(() => {
+    stopProgressPolling();
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "pause", snapshot });
+  }, [handleNormalized, readDirectSnapshot, stopProgressPolling]);
+  const handleDirectSeeking = useCallback(() => {
+    const snapshot = readDirectSnapshot();
+    if (snapshot) { seekFromRef.current = snapshot.position; void handleNormalized({ type: "seek_started", snapshot, fromPosition: snapshot.position }); }
+  }, [handleNormalized, readDirectSnapshot]);
+  const handleDirectSeeked = useCallback(() => {
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "seek_completed", snapshot, fromPosition: seekFromRef.current, resumeAfterSeek: videoRef.current ? !videoRef.current.paused : false }).then((started) => { if (started) startProgressPolling(); });
+    seekFromRef.current = null;
+  }, [handleNormalized, readDirectSnapshot, startProgressPolling]);
+  const handleDirectWaiting = useCallback(() => {
+    stopProgressPolling();
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "buffering_started", snapshot, provider_state: "waiting" });
+  }, [handleNormalized, readDirectSnapshot, stopProgressPolling]);
+  const handleDirectCanPlay = useCallback(() => {
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "buffering_ended", snapshot }).then(() => { if (sessionEngineRef.current?.isPlaying) startProgressPolling(); });
+  }, [handleNormalized, readDirectSnapshot, startProgressPolling]);
+  const handleDirectRate = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const nextRate = event.currentTarget.playbackRate;
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "rate_changed", snapshot, fromRate: lastPlaybackRateRef.current, toRate: nextRate });
+    lastPlaybackRateRef.current = nextRate;
+  }, [handleNormalized, readDirectSnapshot]);
+  const handleDirectVolume = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    const nextVolume = Math.round(video.volume * 100);
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "volume_changed", snapshot, fromVolume: lastVolumeRef.current, toVolume: nextVolume });
+    lastVolumeRef.current = nextVolume;
+    if (lastMutedRef.current !== video.muted && snapshot) void handleNormalized({ type: "mute_changed", snapshot, fromMuted: lastMutedRef.current, toMuted: video.muted });
+    lastMutedRef.current = video.muted;
+  }, [handleNormalized, readDirectSnapshot]);
+  const handleDirectEnded = useCallback(() => {
+    stopProgressPolling();
+    const snapshot = readDirectSnapshot();
+    if (snapshot) void handleNormalized({ type: "ended", snapshot });
+  }, [handleNormalized, readDirectSnapshot, stopProgressPolling]);
+
+  const capabilityMessage = adapter.playback_kind === "native_html5"
+    ? "TrackUp controls native HTML5 playback and records play, pause, seek origin/destination, sampled progress, buffering, rate, volume, fullscreen, visibility, completion, and end."
+    : adapter.playback_kind === "youtube_iframe_api"
+      ? "TrackUp controls YouTube through the official IFrame Player API and records only valid API state changes, sampled position/duration, detectable seeks, rate, volume, buffering, completion, and end."
+      : adapter.playback_kind === "vimeo_player_sdk"
+        ? "TrackUp controls Vimeo through the official Player SDK and records only valid SDK state changes, sampled position/duration, seeks, rate, volume, buffering, completion, and end."
+        : "This provider is embedded inside TrackUp, but it does not expose a reliable playback API here. TrackUp records no fabricated playback metrics or watched ranges for this source.";
 
   if (error) {
-    return (
-      <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-red-400/20 bg-[#120b22] px-6 text-center shadow-2xl shadow-black/25">
-        <AlertCircle size={25} className="text-red-300" />
-        <p className="text-sm text-red-100">{error}</p>
-
-        <button onClick={() => { setError(null); setPlayerReady(sourceType !== "youtube"); setRetryNonce((value) => value + 1); }} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/8 hover:text-white"><RotateCcw size={13} />Try again</button>
-      </div>
-    );
+    return <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-2xl border border-red-400/20 bg-[#120b22] px-6 text-center shadow-2xl shadow-black/25"><AlertCircle size={25} className="text-red-300" /><p className="text-sm text-red-100">{error}</p><button onClick={() => { setError(null); setPlayerReady(!isYouTube && !isVimeo); setRetryNonce((value) => value + 1); }} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/8 hover:text-white"><RotateCcw size={13} />Try again</button></div>;
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/25">
-        {isDirectUrl ? (
-          <video
-            ref={videoRef}
-            src={sourceUrl}
-            controls
-            className="h-full w-full"
-            onLoadedMetadata={(event) => {
-              const metadataDuration = event.currentTarget.duration;
-              if (Number.isFinite(metadataDuration) && metadataDuration > 0) {
-                durationRef.current = metadataDuration;
-                lastDurationRef.current = metadataDuration;
-              }
-              lastPlaybackRateRef.current = event.currentTarget.playbackRate;
-              lastVolumeRef.current = event.currentTarget.volume * 100;
-              lastMutedRef.current = event.currentTarget.muted;
-              const snapshot = { position: Math.max(0, event.currentTarget.currentTime), duration: Number.isFinite(metadataDuration) && metadataDuration > 0 ? metadataDuration : durationRef.current };
-              void startSession().then((started) => {
-                if (started) void sendEvent("metadata_loaded", snapshot, null, { provider_state: "metadata_loaded", player_state: event.currentTarget.paused ? "paused" : "playing" });
-              });
-            }}
-            onPlay={handleDirectPlay}
-            onPause={handleDirectPause}
-            onSeeking={handleDirectSeeking}
-            onSeeked={handleDirectSeeked}
-            onTimeUpdate={handleDirectTimeUpdate}
-            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) { if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now(); accumulateWatchTime(false); stopHeartbeat(); void sendEvent("buffering_started", { position: video.currentTime, duration: durationRef.current }, null, { state: "start", player_state: "waiting" }); } }}
-            onCanPlay={() => { const video = videoRef.current; if (video) finishBuffer({ position: video.currentTime, duration: durationRef.current }); }}
-            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) { const nextRate = event.currentTarget.playbackRate; const previousRate = lastPlaybackRateRef.current; lastPlaybackRateRef.current = nextRate; void sendEvent("playback_rate_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_rate: previousRate, new_rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate }); } }}
-            onVolumeChange={(event) => { const video = event.currentTarget; if (sessionIdRef.current) { const nextVolume = Math.round(video.volume * 100); const previousVolume = lastVolumeRef.current; lastVolumeRef.current = nextVolume; void sendEvent("volume_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_volume: previousVolume, new_volume: nextVolume }); const previousMuted = lastMutedRef.current; if (previousMuted !== video.muted) { lastMutedRef.current = video.muted; void sendEvent("mute_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_muted: previousMuted, new_muted: video.muted }); } } }}
-            onEnded={handleDirectEnded}
-            title={title}
-          />
-        ) : isYouTube ? (
-          <div ref={youtubeContainerRef} className="h-full w-full" aria-label={title} />
-        ) : embedUrl ? (
-          <iframe
-            src={embedUrl}
-            title={title}
-            className="h-full w-full"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/50">This video source cannot be embedded by TrackUp.</div>
-        )}
-        {hasPlaybackTelemetry && !playerReady && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60">
-            <span className="text-sm text-white/60">Preparing TrackUp player...</span>
-          </div>
-        )}
-      </div>
-      <p className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/45"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p>
-    </div>
-  );
+  return <div className="space-y-3"><div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/25">{isDirectUrl ? <video ref={videoRef} src={sourceUrl} controls className="h-full w-full" onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value) && value > 0) updateSnapshot({ position: event.currentTarget.currentTime, duration: value }); lastPlaybackRateRef.current = event.currentTarget.playbackRate; lastVolumeRef.current = Math.round(event.currentTarget.volume * 100); lastMutedRef.current = event.currentTarget.muted; setPlayerReady(true); }} onPlay={handleDirectPlay} onPause={handleDirectPause} onSeeking={handleDirectSeeking} onSeeked={handleDirectSeeked} onWaiting={handleDirectWaiting} onCanPlay={handleDirectCanPlay} onRateChange={handleDirectRate} onVolumeChange={handleDirectVolume} onEnded={handleDirectEnded} title={title} /> : isYouTube ? <div ref={youtubeContainerRef} className="h-full w-full" aria-label={title} /> : isVimeo ? <div ref={vimeoContainerRef} className="h-full w-full" aria-label={title} /> : embedUrl ? <iframe src={embedUrl} title={title} className="h-full w-full" referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/50">This video source cannot be embedded by TrackUp.</div>}{hasPlaybackTelemetry && !playerReady && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60"><span className="text-sm text-white/60">Preparing TrackUp player...</span></div>}</div><p className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3.5 py-3 text-xs leading-5 text-white/45"><Info size={14} className="mt-0.5 shrink-0 text-violet-300/70" />{capabilityMessage}</p></div>;
 }

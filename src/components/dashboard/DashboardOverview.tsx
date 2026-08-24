@@ -31,6 +31,7 @@ import {
 } from "recharts";
 import type { UserRole } from "@/src/types/auth";
 import type { Video, ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
+import { getProviderAdapter, getProviderLabel } from "@/src/lib/playback/providers";
 
 interface DashboardOverviewProps {
   user: { name: string | null; email: string; role: UserRole };
@@ -57,9 +58,7 @@ function formatDuration(seconds: number | null): string {
 }
 
 function formatProvider(sourceType: Video["source_type"]): string {
-  if (sourceType === "direct_url") return "Direct URL";
-  if (sourceType === "google_drive") return "Google Drive";
-  return sourceType.charAt(0).toUpperCase() + sourceType.slice(1);
+  return getProviderLabel(sourceType);
 }
 
 function formatRelative(value: string, now: number): string {
@@ -75,17 +74,6 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function youtubeThumbnail(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const id = parsed.hostname === "youtu.be"
-      ? parsed.pathname.slice(1)
-      : parsed.searchParams.get("v") ?? parsed.pathname.match(/\/embed\/([^/]+)/)?.[1] ?? null;
-    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null;
-  } catch {
-    return null;
-  }
-}
 
 function isActiveLink(link: NonNullable<Video["watch_links"]>[number], now: number): boolean {
   return !link.revoked_at && (!link.expires_at || new Date(link.expires_at).getTime() > now);
@@ -266,8 +254,9 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
 }
 
 function VideoThumb({ video, compact = false }: { video: Video; compact?: boolean }) {
-  const thumbnail = video.source_type === "youtube" ? youtubeThumbnail(video.source_url) : null;
-  return <span className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#171735] ${compact ? "h-11 w-14" : "h-12 w-16"}`}>{thumbnail ? <span aria-hidden="true" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${thumbnail})` }} /> : <VideoIcon size={compact ? 15 : 17} className="text-white/25" />}{video.source_type === "youtube" && <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 py-0.5 text-[8px] font-semibold uppercase text-white/80">YT</span>}</span>;
+  const provider = getProviderAdapter(video.source_type);
+  const thumbnail = provider.thumbnail_url(video.source_url);
+  return <span className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#171735] ${compact ? "h-11 w-14" : "h-12 w-16"}`}>{thumbnail ? <span aria-hidden="true" className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${thumbnail})` }} /> : <VideoIcon size={compact ? 15 : 17} className="text-white/25" />}{provider.source_type === "youtube" && <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 py-0.5 text-[8px] font-semibold uppercase text-white/80">YT</span>}</span>;
 }
 
 function ActivityRow({ session, now }: { session: ViewerSessionAnalytics; now: number }) {

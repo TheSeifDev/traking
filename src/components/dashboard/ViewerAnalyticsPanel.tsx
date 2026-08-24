@@ -38,6 +38,7 @@ function viewerLabel(session: ViewerSessionAnalytics): string {
 function scopeLabel(scope: PlaybackMetricsScope): string {
   if (scope === "direct_url_native_html5") return "Native HTML5";
   if (scope === "youtube_iframe_api") return "YouTube IFrame API";
+  if (scope === "vimeo_player_sdk") return "Vimeo Player SDK";
   return "Session only";
 }
 

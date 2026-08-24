@@ -3,6 +3,9 @@ import { isOwner } from "@/src/lib/auth/rbac";
 import type { AuthenticatedUser } from "@/src/types/auth";
 import type { Database } from "@/src/types/database";
 import { buildPlaybackHeatmap, mergeWatchedRanges } from "@/src/lib/analytics/ranges";
+import { hasReliablePlaybackTelemetry, isReliablePlaybackEvent } from "@/src/lib/videos/service";
+import { isValidSourceType } from "@/src/types/video";
+import { providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -242,11 +245,15 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
     const events = eventsBySession.get(session.id) ?? [];
     const firstPlay = events.find((event) => event.event_type === "play" || event.event_type === "resume");
     const lastEvent = events[events.length - 1];
-    const heatmap = buildPlaybackHeatmap(events.map((event) => ({ id: event.id, event_type: event.event_type, position: event.position, from_position: event.from_position, duration: event.duration, created_at: event.created_at, sequence_number: event.sequence_number, occurred_at: event.occurred_at })), video.duration, video.source_type === "youtube" || video.source_type === "direct_url");
-    const measured = heatmap.available || events.some((event) => event.duration !== null && event.duration > 0);
-    return { session_id: session.id, video_id: video.id, video_title: video.title, organization_id: video.organization_id, space_id: video.space_id, duration: video.duration, started_at: session.started_at, first_play_at: firstPlay?.occurred_at ?? firstPlay?.created_at ?? null, last_activity_at: lastEvent?.occurred_at ?? lastEvent?.received_at ?? session.last_seen_at, ended_at: session.ended_at, watch_time_seconds: measured ? Math.max(0, Number(session.watch_time_seconds ?? 0)) : null, completion_percentage: measured ? Math.max(0, Math.min(100, Number(session.completion_percentage ?? 0))) : null, last_position: measured ? (lastEvent?.position ?? null) : null, source_type: video.source_type, device_type: session.device_type, browser: session.browser, os: session.os, event_count: events.length, playback_events: events, heatmap };
+    const normalizedSourceType = isValidSourceType(video.source_type) ? video.source_type : null;
+    const reliableTelemetry = normalizedSourceType ? hasReliablePlaybackTelemetry(normalizedSourceType, events) : false;
+    const providerSupported = normalizedSourceType ? providerSupportsDetailedTelemetry(normalizedSourceType) : false;
+    const heatmap = buildPlaybackHeatmap(events.map((event) => ({ id: event.id, event_type: event.event_type, position: event.position, from_position: event.from_position, duration: event.duration, created_at: event.created_at, sequence_number: event.sequence_number, occurred_at: event.occurred_at })), video.duration, providerSupported);
+    const measured = reliableTelemetry;
+    const latestReliableEvent = events.slice().reverse().find(isReliablePlaybackEvent);
+    return { session_id: session.id, video_id: video.id, video_title: video.title, organization_id: video.organization_id, space_id: video.space_id, duration: video.duration, started_at: session.started_at, first_play_at: firstPlay?.occurred_at ?? firstPlay?.created_at ?? null, last_activity_at: lastEvent?.occurred_at ?? lastEvent?.received_at ?? session.last_seen_at, ended_at: session.ended_at, watch_time_seconds: measured ? Math.max(0, Number(session.watch_time_seconds ?? 0)) : null, completion_percentage: measured ? Math.max(0, Math.min(100, Number(session.completion_percentage ?? 0))) : null, last_position: measured ? (latestReliableEvent?.position ?? null) : null, source_type: video.source_type, device_type: session.device_type, browser: session.browser, os: session.os, event_count: events.length, playback_events: events, heatmap };
   });
-  const measuredSessions = resultSessions.filter((session) => session.watch_time_seconds !== null);
+    const measuredSessions = resultSessions.filter((session) => session.watch_time_seconds !== null && session.heatmap.availability !== "not_available_from_provider");
   const totalWatchTime = measuredSessions.length > 0 ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null;
   const lastActivity = resultSessions.slice().sort((a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime())[0]?.last_activity_at ?? null;
   const videosById = new Map<string, User360Result["videos"][number]>();
@@ -273,12 +280,12 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
         sessions: 1,
         pauses: events.filter((event) => event.event_type === "pause").length,
         resumes: events.filter((event) => event.event_type === "resume").length,
-        seeks: events.filter((event) => event.event_type === "seek").length,
-        speed_changes: events.filter((event) => event.event_type === "rate_change").length,
+        seeks: events.filter((event) => event.event_type === "seek" || event.event_type === "seek_completed").length,
+        speed_changes: events.filter((event) => event.event_type === "rate_change" || event.event_type === "playback_rate_changed").length,
         speed_values: rateValues,
         final_playback_rate: latestRate,
-        buffering_events: events.filter((event) => event.event_type === "buffer").length,
-        visibility_changes: events.filter((event) => event.event_type === "visibility_change").length,
+        buffering_events: events.filter((event) => event.event_type === "buffer" || event.event_type === "buffering_started" || event.event_type === "buffering_ended").length,
+        visibility_changes: events.filter((event) => event.event_type === "visibility_change" || event.event_type === "visibility_hidden" || event.event_type === "visibility_visible").length,
         last_position: session.last_position,
         watched_ranges: sessionRanges,
         heatmap_availability: session.heatmap.availability,
@@ -292,12 +299,12 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
       existing.sessions += 1;
       existing.pauses += events.filter((event) => event.event_type === "pause").length;
       existing.resumes += events.filter((event) => event.event_type === "resume").length;
-      existing.seeks += events.filter((event) => event.event_type === "seek").length;
-      existing.speed_changes += events.filter((event) => event.event_type === "rate_change").length;
+      existing.seeks += events.filter((event) => event.event_type === "seek" || event.event_type === "seek_completed").length;
+      existing.speed_changes += events.filter((event) => event.event_type === "rate_change" || event.event_type === "playback_rate_changed").length;
       existing.speed_values = [...new Set([...existing.speed_values, ...rateValues])].sort((left, right) => left - right);
       existing.final_playback_rate = latestRate ?? existing.final_playback_rate;
-      existing.buffering_events += events.filter((event) => event.event_type === "buffer").length;
-      existing.visibility_changes += events.filter((event) => event.event_type === "visibility_change").length;
+      existing.buffering_events += events.filter((event) => event.event_type === "buffer" || event.event_type === "buffering_started" || event.event_type === "buffering_ended").length;
+      existing.visibility_changes += events.filter((event) => event.event_type === "visibility_change" || event.event_type === "visibility_hidden" || event.event_type === "visibility_visible").length;
       existing.last_position = session.last_position ?? existing.last_position;
       existing.watched_ranges = mergeWatchedRanges([...existing.watched_ranges, ...sessionRanges], existing.duration);
       if (existing.heatmap_availability !== "measured" && session.heatmap.availability === "measured") existing.heatmap_availability = "measured";

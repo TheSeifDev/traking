@@ -11,6 +11,7 @@ import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
 import type { AnalyticsDataScope, VideoDataScope } from "@/src/lib/spaces/data-scope";
+import { providerScope, providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
 
 interface AnalyticsSessionRow {
   id: string;
@@ -69,7 +70,7 @@ function firstRelation(value: unknown): Record<string, unknown> | null {
 type AnalyticsVideoInfo = { id: string; space_id?: string | null; title: string; source_type: Video["source_type"]; duration: number | null };
 
 export function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
-  return sourceType === "direct_url" || sourceType === "youtube";
+  return providerSupportsDetailedTelemetry(sourceType);
 }
 
 const PLAYBACK_TELEMETRY_EVENTS: readonly WatchEventType[] = [
@@ -227,11 +228,7 @@ function buildViewerSessionAnalytics(
     .flatMap((session) => {
       const video = videosBySession.get(session.id);
       if (!video) return [];
-      const scope = video.source_type === "direct_url"
-        ? "direct_url_native_html5" as const
-        : video.source_type === "youtube"
-          ? "youtube_iframe_api" as const
-          : "session_only" as const;
+      const scope = providerScope(video.source_type);
       const viewerKey = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.id}`;
       const viewerSessions = (sessionsByViewer.get(viewerKey) ?? [])
         .slice()
@@ -375,13 +372,9 @@ export async function listVideos(scope: VideoDataScope): Promise<Video[]> {
         source_type: v.source_type as Video["source_type"],
         view_count: sessions.length,
         unique_viewer_count: uniqueViewerCount,
-        avg_completion:
-          v.source_type === "direct_url" && sessions.length > 0
-            ? Math.round(
-                sessions.reduce((sum: number, s) => sum + Number(s.completion_percentage), 0) /
-                  sessions.length
-              )
-            : null,
+        // Library listing deliberately does not infer completion from session columns;
+        // canonical analytics computes it only from reliable provider events.
+        avg_completion: null,
         clickup_tasks: v.video_clickup_tasks,
         watch_links: rawWatchLinks.map(({ watch_sessions: linkSessions = [], ...link }) => {
           const orderedSessions = [...linkSessions].sort(
@@ -730,11 +723,7 @@ export async function getVideoAnalytics(
 
     const totalViews = sessions.length;
     const uniqueViewers = new Set(sessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size;
-    const playbackMetricsScope = video.source_type === "direct_url"
-      ? "direct_url_native_html5" as const
-      : video.source_type === "youtube"
-        ? "youtube_iframe_api" as const
-        : "session_only" as const;
+    const playbackMetricsScope = providerScope(video.source_type);
     const videoInfo: AnalyticsVideoInfo = {
       id: video.id,
       title: video.title,
@@ -1009,7 +998,7 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
       };
       summary.total_views += 1;
       const normalizedSession = viewerSessions.find((item) => item.session_id === session.id);
-      if ((video.source_type === "direct_url" || video.source_type === "youtube") && measuredSessionIds.has(session.id)) {
+      if (measuredSessionIds.has(session.id)) {
         summary.measurable_watch_time_seconds = (summary.measurable_watch_time_seconds ?? 0) + (normalizedSession?.watch_time_seconds ?? 0);
       }
       videoSummaries.set(video.id, summary);

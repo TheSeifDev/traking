@@ -159,6 +159,7 @@ const organizationMembersManager = source("src/components/organizations/Organiza
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
 const trackingTypes = source("src/types/tracking.ts");
 const trackingPlayer = source("src/components/watch/WatchPlayer.tsx");
+const trackingEngine = source("src/lib/playback/tracking-engine.ts");
 const trackingRanges = source("src/lib/analytics/ranges.ts");
 const trackingServiceSource = source("src/lib/tracking/service.ts");
 const detailedTelemetryMigration = source("supabase/migrations/20260824000013_add_detailed_playback_events.sql");
@@ -191,7 +192,7 @@ assert(membersManager.includes("Organization role") && membersManager.includes("
 assert(trackingTypes.includes('"session_started"') && trackingTypes.includes('"seek_started"') && trackingTypes.includes('"seek_completed"') && trackingTypes.includes('"playback_progress"') && trackingTypes.includes('"player_error"'), "tracking event contract includes detailed lifecycle and provider telemetry types");
 assert(detailedTelemetryMigration.includes("ALTER TYPE public.watch_event_type") && detailedTelemetryMigration.includes("session_started") && detailedTelemetryMigration.includes("player_error") && detailedTelemetryMigration.includes("idx_watch_events_event_type") && !/\\bDROP\\s+(TABLE|COLUMN|TYPE)\\b/i.test(detailedTelemetryMigration), "detailed telemetry migration is additive and indexed");
 assert(trackingServiceSource.includes('event_type: "session_started"') && trackingServiceSource.includes('event_type: "session_ended"') && trackingServiceSource.includes("onConflict: \"session_id,client_event_id\""), "tracking service persists idempotent session lifecycle events");
-assert(trackingPlayer.includes('sendEvent("playback_progress"') && trackingPlayer.includes('sendEvent("seek_completed"') && trackingPlayer.includes('sendEvent("buffering_started"') && trackingPlayer.includes('sendEvent("player_error"'), "player persists detailed playback movement and error events");
+assert(trackingPlayer.includes("UniversalTrackingEngine") && trackingPlayer.includes("handleNormalized") && trackingEngine.includes('sendEvent("playback_progress"') && trackingEngine.includes('sendEvent("seek_completed"') && trackingEngine.includes('sendEvent("buffering_started"') && trackingEngine.includes('sendEvent("player_error"'), "provider adapters route detailed playback movement and error events through the universal engine");
 assert(trackingRanges.includes('case "playback_progress"') && trackingRanges.includes('case "seek_started"') && trackingRanges.includes('case "seek_completed"') && trackingRanges.includes('case "buffering_started"'), "range reconstruction handles progress, seek boundaries, and buffering without counting skipped gaps");
 assert(activeSpaceRoute.includes("withDashboardAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(activeSpaceService.includes('ALL_SPACES_PREFIX = "all:"') && activeSpaceService.includes('type: "all"') && activeSpaceService.includes("setAllSpacesPreference"), "All Spaces is represented by an explicit organization preference, not a fake Space UUID");

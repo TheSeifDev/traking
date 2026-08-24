@@ -62,6 +62,7 @@ async function runTests(): Promise<void> {
   const eventRoute = readFileSync("app/api/tracking/event/route.ts", "utf8");
   const endRoute = readFileSync("app/api/tracking/session/[sessionId]/end/route.ts", "utf8");
   const trackingService = readFileSync("src/lib/tracking/service.ts", "utf8");
+  const providerErrorRoute = readFileSync("app/api/tracking/provider-error/route.ts", "utf8");
   const watchPlayer = readFileSync("src/components/watch/WatchPlayer.tsx", "utf8");
 
   assert(capabilityMigration.includes("ADD COLUMN IF NOT EXISTS session_token TEXT"), "watch sessions add a private session token");
@@ -87,11 +88,13 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes("from_position: event.from_position !== null") && trackingService.includes("from_position: event.from_position"), "seek origin is stored in the dedicated from_position field");
   assert(trackingService.includes("hashViewerIdentity") && trackingService.includes('.select("id, viewer_identifier, viewer_profile_id")') && trackingService.includes("data.viewer_profile_id === viewerIdentity && data.viewer_identifier === await hashViewerIdentity(viewerIdentity)"), "tracking writes are bound to the exact authenticated profile identity and its stable hash");
   assert(trackingService.includes('.is("ended_at", null)'), "events and session end reject already-ended sessions");
-  assert(watchPlayer.includes("const accumulateWatchTime = useCallback((resume: boolean)"), "watch player accumulates elapsed play segments explicitly");
-  assert(watchPlayer.includes("startTimeRef.current = Date.now()") && watchPlayer.includes("const initialSnapshot = readSnapshot()") && watchPlayer.includes("startSession()"), "watch time does not start before playback begins");
-  assert(watchPlayer.includes("accumulateWatchTime(true)"), "heartbeat flushes and resumes the active play segment");
-  assert(watchPlayer.includes("accumulateWatchTime(false)") && watchPlayer.includes("void sendEvent(\"pause\""), "pause flushes the active play segment");
-  assert(watchPlayer.includes('eventType === "resume" ? "resume" : "play"') || watchPlayer.includes('const eventType: TrackingEventType = hasPlayedRef.current ? "resume" : "play"'), "player distinguishes initial play from resumed playback");
+  assert(providerErrorRoute.includes("isValidSourceType") && trackingService.includes("video.source_type !== sourceType"), "provider error reports are registry-validated and bound to the session video");
+  const trackingEngine = readFileSync("src/lib/playback/tracking-engine.ts", "utf8");
+  assert(trackingEngine.includes("private activeSince: number | null = null") && trackingEngine.includes("private watchTimeSeconds = 0"), "tracking engine accumulates elapsed play segments explicitly");
+  assert(trackingEngine.includes("private async ensureActualSession()") && trackingEngine.includes("case \"play\""), "watch time does not start before actual playback begins");
+  assert(trackingEngine.includes("this.startActiveClock()") && trackingEngine.includes("this.stopActiveClock()"), "engine starts and stops active play segments at provider transitions");
+  assert(trackingEngine.includes("case \"pause\"") && trackingEngine.includes("this.sink.sendEvent(\"pause\""), "pause flushes the active play segment");
+  assert(trackingEngine.includes('const eventType: TrackingEventType = this.hasPlayed ? "resume" : "play"'), "player distinguishes initial play from resumed playback");
   assert(watchPlayer.includes("from_position"), "watch player sends seek origin data");
   assert(watchPlayer.includes("session_token: sessionToken"), "watch player forwards the capability to tracking APIs");
   assert(watchPlayer.includes('data.session_token !== "string"'), "watch player requires the capability before readiness");
@@ -161,7 +164,7 @@ async function runTests(): Promise<void> {
   assert(watchPage.includes("getCurrentUser") && watchPage.includes("LoginRequired") && !watchPage.includes("ViewerIdentityGate") && !watchPage.includes("viewer_identity"), "viewer requires ClickUp-authenticated TrackUp identity");
   assert(watchLinkService.includes("viewer_profile_id") && watchLinkService.includes("viewer_identifier ?? session.id") && !watchLinkService.includes("viewer_identity_id"), "analytics summaries preserve profile identity and legacy anonymous fallback");
   assert(videoList.includes('video.playback_metrics_available && video.avg_completion !== null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
-  assert(videoList.includes("img.youtube.com/vi/") && videoList.includes("getLinkState") && videoList.includes("Active"), "video library derives thumbnails, link status, and the single active-link state from real fields");
+  assert(videoList.includes("getProviderAdapter") && videoList.includes("thumbnail_url") && videoList.includes("getLinkState") && videoList.includes("Active"), "video library derives provider thumbnails, link status, and the single active-link state from real fields");
   assert(videosApi.includes("getWorkspaceAnalytics") && videosApi.includes("summary") && videosApi.includes("total_viewers"), "video API returns real library summary data alongside videos");
   assert(videoList.includes("providerFilter") && videoList.includes("statusFilter") && videoList.includes("sortBy") && videoList.includes("Search videos, descriptions, providers"), "video library provides real search, provider/status filters, and sorting");
   assert(videoList.includes("Most viewed") && videoList.includes("Alphabetical") && videoList.includes("Copy link") && videoList.includes("Open viewer") && videoList.includes("Revoke"), "video cards expose the required real management actions");
@@ -207,11 +210,12 @@ async function runTests(): Promise<void> {
   const videoDetailPage = readFileSync("app/(dashboard)/videos/[id]/page.tsx", "utf8");
   const videoAnalyticsDashboard = readFileSync("src/components/dashboard/VideoAnalyticsDashboard.tsx", "utf8");
   const viewerAnalyticsPanel = readFileSync("src/components/dashboard/ViewerAnalyticsPanel.tsx", "utf8");
-  assert(analyticsService.includes("playback_metrics_scope") && analyticsService.includes('sourceType === "direct_url" || sourceType === "youtube"'), "analytics scope playback metrics to direct URLs and YouTube API telemetry");
+  const providerRegistry = readFileSync("src/lib/playback/providers.ts", "utf8");
+  assert(analyticsService.includes("providerSupportsDetailedTelemetry") && analyticsService.includes("providerScope") && providerRegistry.includes("vimeo_player_sdk"), "analytics scope playback metrics through the provider registry");
   assert(analyticsService.includes("isValidTelemetryEvent") && analyticsService.includes("has_playback_telemetry"), "analytics requires stored valid telemetry before marking a session measured");
   assert(viewerAnalyticsPanel.includes("has_playback_telemetry") && !viewerAnalyticsPanel.includes("YouTube IFrame API measured"), "viewer UI separates provider capability from recorded telemetry");
   assert(analyticsService.includes("avg_completion_percentage: null") && analyticsService.includes("playback_metrics_available: false"), "analytics return unavailable instead of invented provider completion");
-  assert(analyticsService.includes('v.source_type === "direct_url" && sessions.length > 0'), "video list completion is native-provider scoped");
+  assert(analyticsService.includes("avg_completion: null") && analyticsService.includes("canonical analytics computes it only from reliable provider events"), "video list does not infer completion without event evidence");
   assert(workspaceAnalyticsDashboard.includes("Views over time") && workspaceAnalyticsDashboard.includes("Top videos by watch time") && workspaceAnalyticsDashboard.includes("Date range"), "workspace analytics dashboard communicates overview charts and filters");
   assert(dashboardPage.includes("DashboardOverview") && dashboardOverview.includes("Sessions over time") && dashboardOverview.includes("Top videos") && dashboardOverview.includes("Recent viewer activity") && dashboardOverview.includes("Quick actions"), "dashboard has clear workspace-level information architecture");
   assert(dashboardOverview.includes("activity.length === 0") && dashboardOverview.includes("No activity in this range") && dashboardOverview.includes("Not measurable") && dashboardOverview.includes("Provider telemetry unavailable"), "dashboard renders truthful no-data and telemetry states");

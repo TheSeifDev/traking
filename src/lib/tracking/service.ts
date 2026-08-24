@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
+import type { VideoSourceType } from "@/src/types/video";
 import { writeOwnerLog } from "@/src/lib/observability/logger";
 
 export interface ViewerClientMetadata {
@@ -30,7 +31,7 @@ export interface ResolvedWatchLink {
   video_id: string;
   space_id: string | null;
   title: string;
-  source_type: string;
+  source_type: VideoSourceType;
   source_url: string;
   duration: number | null;
 }
@@ -353,11 +354,22 @@ export async function recordProviderError(
   sessionId: string,
   sessionToken: string,
   viewerIdentity: string,
-  sourceType: "youtube" | "direct_url",
+  sourceType: VideoSourceType,
   providerCode: number,
 ): Promise<boolean> {
   if (!Number.isInteger(providerCode) || providerCode < 1 || providerCode > 999) return false;
   if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
+  try {
+    const supabase = createAdminClient();
+    const { data: session } = await supabase.from("watch_sessions").select("watch_link_id").eq("id", sessionId).eq("session_token", sessionToken).maybeSingle();
+    if (!session) return false;
+    const { data: link } = await supabase.from("watch_links").select("video_id").eq("id", session.watch_link_id).maybeSingle();
+    if (!link) return false;
+    const { data: video } = await supabase.from("videos").select("source_type").eq("id", link.video_id).maybeSingle();
+    if (!video || video.source_type !== sourceType) return false;
+  } catch {
+    return false;
+  }
   return writeOwnerLog({
     level: "WARN",
     category: "PROVIDER",

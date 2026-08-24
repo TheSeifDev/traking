@@ -12,6 +12,7 @@ import { resolveWatchLink } from "@/src/lib/tracking/service";
 import { authorizeSpaceMember } from "@/src/lib/spaces/access";
 import { getCurrentUser } from "@/src/lib/auth/session";
 import WatchPlayer from "@/src/components/watch/WatchPlayer";
+import { getProviderAdapter } from "@/src/lib/playback/providers";
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -65,9 +66,9 @@ export default async function WatchPage({ params }: Props) {
     notFound();
   }
 
-  const sourceLabel = resolved.source_type.replace("_", " ");
-  const isDirectUrl = resolved.source_type === "direct_url";
-  const hasPlaybackTelemetry = isDirectUrl || resolved.source_type === "youtube";
+  const provider = getProviderAdapter(resolved.source_type);
+  const sourceLabel = provider.label;
+  const hasPlaybackTelemetry = provider.capabilities.detailed_tracking;
 
   return (
     <main className="min-h-screen bg-[#070720] px-4 py-8 text-white sm:px-6 lg:py-12">
@@ -86,7 +87,7 @@ export default async function WatchPage({ params }: Props) {
             <span className="w-fit rounded-full border border-violet-400/15 bg-violet-500/10 px-2.5 py-1 text-xs capitalize text-violet-200">{sourceLabel}</span>
           </div>
           <WatchPlayer watchLinkToken={token} title={resolved.title} sourceType={resolved.source_type} sourceUrl={resolved.source_url} duration={resolved.duration} />
-          <div className="mt-6 flex flex-col gap-2 border-t border-white/8 pt-4 text-xs leading-5 text-white/35 sm:flex-row sm:items-center sm:justify-between"><span>{hasPlaybackTelemetry ? "Your playback session is registered securely by TrackUp." : "This provider does not expose reliable playback callbacks, so TrackUp does not record fabricated session metrics."}</span><span>{isDirectUrl ? "Native playback telemetry is supported." : resolved.source_type === "youtube" ? "YouTube IFrame telemetry is supported when valid player events are stored." : "Playback metrics are unavailable for this provider."}</span></div>
+          <div className="mt-6 flex flex-col gap-2 border-t border-white/8 pt-4 text-xs leading-5 text-white/35 sm:flex-row sm:items-center sm:justify-between"><span>{hasPlaybackTelemetry ? "Your playback session is registered securely by TrackUp after actual playback begins." : "This provider does not expose reliable playback callbacks, so TrackUp does not record fabricated sessions or playback metrics."}</span><span>{hasPlaybackTelemetry ? `${provider.label} ${provider.playback_metrics_scope.replaceAll("_", " ")} telemetry is supported when valid player events are stored.` : "Playback position, duration, watched ranges, and completion are unavailable for this provider."}</span></div>
         </section>
 
         <p className="mt-5 text-center text-xs text-white/25">Shared through TrackUp · This page does not send viewers to the source provider.</p>

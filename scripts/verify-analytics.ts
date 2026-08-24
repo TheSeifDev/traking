@@ -3,6 +3,8 @@ import { buildPlaybackHeatmap, mergeWatchedRanges, reconstructWatchedRanges } fr
 import type { WatchEventSummary } from "../src/types/video";
 import { groupTimelineItems } from "../src/components/analytics/GroupedSessionTimeline";
 import { hasReliablePlaybackTelemetry, isReliablePlaybackEvent } from "../src/lib/videos/service";
+import { getProviderAdapter, providerSupportsDetailedTelemetry } from "../src/lib/playback/providers";
+import { UniversalTrackingEngine } from "../src/lib/playback/tracking-engine";
 
 let checks = 0;
 
@@ -138,4 +140,44 @@ equal(hasReliablePlaybackTelemetry("youtube", [
 ]), false);
 equal(hasReliablePlaybackTelemetry("google_drive", reliableEvidence), false);
 
-console.log(`Analytics Verification: ${checks}/${checks} passed`);
+equal(providerSupportsDetailedTelemetry("direct_url"), true);
+equal(providerSupportsDetailedTelemetry("youtube"), true);
+equal(providerSupportsDetailedTelemetry("vimeo"), true);
+equal(providerSupportsDetailedTelemetry("google_drive"), false);
+equal(providerSupportsDetailedTelemetry("telegram"), false);
+equal(getProviderAdapter("vimeo").build_embed_url("https://vimeo.com/123456"), "https://player.vimeo.com/video/123456?api=1&title=0&byline=0&portrait=0");
+equal(getProviderAdapter("google_drive").build_embed_url("https://drive.google.com/file/d/drive-id/view"), "https://drive.google.com/file/d/drive-id/preview");
+equal(getProviderAdapter("youtube").thumbnail_url("https://youtu.be/abc12345678"), "https://img.youtube.com/vi/abc12345678/hqdefault.jpg");
+equal(getProviderAdapter("vimeo").thumbnail_url("https://vimeo.com/123456"), null);
+equal(getProviderAdapter("telegram").thumbnail_url("https://t.me/example/1"), null);
+
+async function runEngineChecks(): Promise<void> {
+  const engineEvents: string[] = [];
+  let ensureSessionCalls = 0;
+  const endArguments: { completed: boolean; watchTimeSeconds: number } = { completed: false, watchTimeSeconds: -1 };
+  const engine = new UniversalTrackingEngine({
+    ensureSession: async () => { ensureSessionCalls += 1; return true; },
+    sendEvent: (eventType) => { engineEvents.push(eventType); },
+    endSession: async (_snapshot, completed, watchTimeSeconds) => { endArguments.completed = completed; endArguments.watchTimeSeconds = watchTimeSeconds; },
+  }, 0);
+  await engine.handle({ type: "ready", snapshot: { position: 0, duration: 120 } });
+  equal(ensureSessionCalls, 0);
+  await engine.handle({ type: "play", snapshot: { position: 0, duration: 120 } });
+  await engine.handle({ type: "progress", snapshot: { position: 20, duration: 120 } });
+  await engine.handle({ type: "pause", snapshot: { position: 20, duration: 120 } });
+  await engine.handle({ type: "seek_started", snapshot: { position: 20, duration: 120 }, fromPosition: 20 });
+  await engine.handle({ type: "seek_completed", snapshot: { position: 90, duration: 120 }, fromPosition: 20, resumeAfterSeek: true });
+  await engine.handle({ type: "progress", snapshot: { position: 110, duration: 120 } });
+  await engine.handle({ type: "ended", snapshot: { position: 120, duration: 120 } });
+  equal(ensureSessionCalls, 1);
+  deepEqual(engineEvents, ["play", "playback_progress", "pause", "seek_started", "seek_completed", "playback_progress", "complete"]);
+  equal(endArguments.completed, true);
+  assert.ok(endArguments.watchTimeSeconds >= 0);
+}
+
+runEngineChecks()
+  .then(() => console.log(`Analytics Verification: ${checks}/${checks} passed`))
+  .catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

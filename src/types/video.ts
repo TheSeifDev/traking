@@ -150,7 +150,7 @@ export interface UpdateVideoInput {
 }
 
 // Analytics types
-export type PlaybackMetricsScope = "direct_url_native_html5" | "youtube_iframe_api" | "session_only";
+export type PlaybackMetricsScope = "direct_url_native_html5" | "youtube_iframe_api" | "vimeo_player_sdk" | "session_only";
 
 export interface WatchEventSummary {
   id: string;
