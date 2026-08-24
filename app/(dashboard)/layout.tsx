@@ -28,6 +28,7 @@ export default async function DashboardLayout({
       activeOrganizationId={activeSpace.organization?.id ?? null}
       activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}
       activeSpacePreferenceInvalid={activeSpace.activeSpacePreferenceInvalid}
+      activeSpaceContext={activeSpace.context}
     >
       {children}
     </DashboardShell>

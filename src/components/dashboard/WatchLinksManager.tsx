@@ -201,7 +201,8 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
 }
 
 function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, onLinksChange }: { video: Video; now: number; canManage: boolean; appOrigin: string; spaceId?: string | null; onLinksChange: (links: WatchLink[]) => void }) {
-  const scopedQuery = spaceId ? `?space_id=${encodeURIComponent(spaceId)}` : "";
+  const effectiveSpaceId = spaceId ?? video.space_id ?? null;
+  const scopedQuery = effectiveSpaceId ? `?space_id=${encodeURIComponent(effectiveSpaceId)}` : "";
   const youtubeId = video.source_type === "youtube" ? getYouTubeId(video.source_url) : null;
   const links = video.watch_links ?? [];
   const activeLink = activeLinkFor(video, now);
@@ -213,7 +214,7 @@ function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, onLinksCha
 
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035] shadow-[0_18px_65px_rgba(0,0,0,0.14)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-300/20 hover:bg-white/[0.045]">
-      <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
+      <Link href={effectiveSpaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="relative block aspect-video min-w-0 shrink-0 overflow-hidden bg-[#171735]" aria-label={`Open ${video.title} details`}>
         {youtubeId ? <div role="img" aria-label={`Thumbnail for ${video.title}`} className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg)` }}><div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" /></div> : <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-500/10 to-cyan-500/5 text-white/20"><VideoIcon size={42} /></div>}
         <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
           <span className={`max-w-[48%] truncate rounded-lg border px-2 py-1 text-[10px] font-semibold ${SOURCE_STYLES[video.source_type]}`}>{providerLabel}</span>
@@ -224,10 +225,10 @@ function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, onLinksCha
       <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="block line-clamp-2 min-h-12 break-words text-lg font-semibold leading-6 tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
+            <Link href={effectiveSpaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} className="block line-clamp-2 min-h-12 break-words text-lg font-semibold leading-6 tracking-tight text-white transition hover:text-violet-200">{video.title}</Link>
             <p className="mt-2 flex min-w-0 items-center gap-1.5 truncate text-xs text-white/35"><CalendarDays size={13} className="shrink-0" />Added {formatDate(video.created_at)}</p>
           </div>
-          <Link href={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
+          <Link href={effectiveSpaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} aria-label={`Open ${video.title} details`} className="shrink-0 rounded-lg p-1.5 text-white/30 transition hover:bg-white/[0.06] hover:text-white"><ArrowUpRight size={17} /></Link>
         </div>
 
         <div className="mt-5 grid grid-cols-3 divide-x divide-white/8 border-y border-white/8 py-3 text-center">
@@ -237,7 +238,7 @@ function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, onLinksCha
         </div>
 
         <div className="mt-5 min-w-0">
-            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} spaceId={spaceId} detailsHref={spaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} onLinksChange={onLinksChange} />
+            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} spaceId={effectiveSpaceId} detailsHref={effectiveSpaceId ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} onLinksChange={onLinksChange} />
         </div>
       </div>
     </article>

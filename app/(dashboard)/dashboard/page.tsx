@@ -1,10 +1,13 @@
-﻿import Link from "next/link";
-import { Link2, Space as SpaceIcon, Video as VideoIcon } from "lucide-react";
+﻿import { Link2, Space as SpaceIcon, Video as VideoIcon } from "lucide-react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import DashboardOverview from "@/src/components/dashboard/DashboardOverview";
 import type { Video, WorkspaceAnalytics } from "@/src/types/video";
+
+type PageProps = { searchParams?: Promise<{ space_id?: string; organization_id?: string }> };
 
 const emptyAnalytics: WorkspaceAnalytics = {
   total_videos: 0,
@@ -23,18 +26,42 @@ const emptyAnalytics: WorkspaceAnalytics = {
   viewer_sessions: [],
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: PageProps) {
   const user = await guardAuth();
-  const resolution = await resolveActiveSpaceForUser(user);
+  const params = await searchParams;
+  const resolution = await resolveActiveSpaceForUser(user, {
+    requestedSpaceId: params?.space_id?.trim() || null,
+    requestedOrganizationId: params?.organization_id?.trim() || null,
+  });
 
-  if (resolution.requiresSelection) {
-    return <MultipleSpacesState />;
+  if (resolution.requestedSpaceInvalid || resolution.requestedOrganizationInvalid) redirect("/spaces?error=forbidden");
+  if (resolution.requiresSelection) return <MultipleSpacesState />;
+
+  if (resolution.context.type === "all") {
+    const organization = resolution.organization;
+    if (!organization?.clickup_workspace_id) return <SetupState />;
+    const spaceIds = resolution.spaces
+      .filter((space) => space.organization_id === organization.id)
+      .map((space) => space.id);
+    let analytics = emptyAnalytics;
+    let videos: Video[] = [];
+    let error: string | null = null;
+    try {
+      const [loadedAnalytics, loadedVideos] = await Promise.all([
+        getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, spaceIds),
+        listVideos(organization.clickup_workspace_id, undefined, spaceIds),
+      ]);
+      analytics = loadedAnalytics;
+      videos = loadedVideos;
+      if (loadedVideos.length > 0 && loadedAnalytics.total_videos === 0) error = "workspace_analytics_unavailable";
+    } catch {
+      error = "workspace_data_unavailable";
+    }
+    return <DashboardOverview user={{ name: user.name, email: user.email, role: user.role }} analytics={analytics} videos={videos} error={error} spaceId={null} organizationId={organization.id} scopeType="all" canManage={false} />;
   }
+
   const space = resolution.space;
-  if (!space || !space.clickup_workspace_id) {
-    return <SetupState />;
-  }
-
+  if (!space || !space.clickup_workspace_id) return <SetupState />;
   const canManage = space.is_platform_owner || space.membership_role === "admin";
   let analytics = emptyAnalytics;
   let videos: Video[] = [];
@@ -51,7 +78,7 @@ export default async function DashboardPage() {
     error = "workspace_data_unavailable";
   }
 
-  return <DashboardOverview user={{ name: user.name, email: user.email, role: user.role }} analytics={analytics} videos={videos} error={error} spaceId={space.id} canManage={canManage} />;
+  return <DashboardOverview user={{ name: user.name, email: user.email, role: user.role }} analytics={analytics} videos={videos} error={error} spaceId={space.id} organizationId={space.organization_id} scopeType="specific" canManage={canManage} />;
 }
 
 function SetupState() {

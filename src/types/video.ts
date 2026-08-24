@@ -32,6 +32,7 @@ export interface Workspace {
 export interface Video {
   id: string;
   workspace_id: string;
+  space_id?: string | null;
   created_by: string | null;
   title: string;
   description: string | null;
@@ -206,6 +207,7 @@ export interface ViewerSessionAnalytics {
   viewer_status?: "identified" | "anonymous";
   viewer_is_active?: boolean | null;
   video_id: string;
+  space_id?: string | null;
   video_title: string;
   source_type: VideoSourceType;
   session_number: number;
@@ -265,6 +267,7 @@ export interface AnalyticsActivityPoint {
 
 export interface AnalyticsVideoSummary {
   video_id: string;
+  space_id?: string | null;
   title: string;
   source_type: VideoSourceType;
   total_views: number;

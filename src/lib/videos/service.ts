@@ -65,7 +65,7 @@ function firstRelation(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
 
-type AnalyticsVideoInfo = { id: string; title: string; source_type: Video["source_type"]; duration: number | null };
+type AnalyticsVideoInfo = { id: string; space_id?: string | null; title: string; source_type: Video["source_type"]; duration: number | null };
 
 function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
   return sourceType === "direct_url" || sourceType === "youtube";
@@ -239,6 +239,7 @@ function buildViewerSessionAnalytics(
         viewer_status: profile ? "identified" as const : "anonymous" as const,
         viewer_is_active: profile?.is_active ?? null,
         video_id: video.id,
+        space_id: video.space_id ?? null,
         video_title: video.title,
         source_type: video.source_type,
         session_number: sessionNumber,
@@ -267,7 +268,7 @@ function buildViewerSessionAnalytics(
 /**
  * Lists all videos for a workspace, with view counts.
  */
-export async function listVideos(workspaceId: string, spaceId?: string): Promise<Video[]> {
+export async function listVideos(workspaceId: string, spaceId?: string, spaceIds?: string[]): Promise<Video[]> {
   try {
     const supabase = createAdminClient();
     let videoQuery = supabase
@@ -287,6 +288,11 @@ export async function listVideos(workspaceId: string, spaceId?: string): Promise
       `)
       .eq("workspace_id", workspaceId);
     if (spaceId) videoQuery = videoQuery.eq("space_id", spaceId);
+    else if (spaceIds) {
+      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
+      if (scopedSpaceIds.length === 0) return [];
+      videoQuery = videoQuery.in("space_id", scopedSpaceIds);
+    }
     const { data, error } = await videoQuery.order("created_at", { ascending: false });
 
     if (error) {
@@ -784,7 +790,7 @@ export async function associateClickUpTask(
 /**
  * Workspace-level analytics summary.
  */
-export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: string, viewerProfileId?: string): Promise<WorkspaceAnalytics> {
+export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: string, viewerProfileId?: string, spaceIds?: string[]): Promise<WorkspaceAnalytics> {
   const empty: WorkspaceAnalytics = {
     total_videos: 0,
     total_views: 0,
@@ -810,6 +816,11 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId);
     if (spaceId) videoCountQuery = videoCountQuery.eq("space_id", spaceId);
+    else if (spaceIds) {
+      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
+      if (scopedSpaceIds.length === 0) return empty;
+      videoCountQuery = videoCountQuery.in("space_id", scopedSpaceIds);
+    }
     const { count: videoCount, error: videoCountError } = await videoCountQuery;
     if (videoCountError) return empty;
 
@@ -835,6 +846,11 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
       `)
       .eq("watch_links.videos.workspace_id", workspaceId);
     if (spaceId) sessionsQuery = sessionsQuery.eq("watch_links.videos.space_id", spaceId);
+    else if (spaceIds) {
+      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
+      if (scopedSpaceIds.length === 0) return empty;
+      sessionsQuery = sessionsQuery.in("watch_links.videos.space_id", scopedSpaceIds);
+    }
     if (viewerProfileId) sessionsQuery = sessionsQuery.eq("viewer_profile_id", viewerProfileId);
     const { data: rawSessions, error: sessionsError } = await sessionsQuery
       .order("started_at", { ascending: false })
@@ -856,6 +872,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
       workspaceSessions.push(row);
       sessionVideos.set(row.id, {
         id: relatedVideo.id,
+        space_id: typeof relatedVideo.space_id === "string" ? relatedVideo.space_id : null,
         title: relatedVideo.title,
         source_type: relatedVideo.source_type,
         duration: typeof relatedVideo.duration === "number" ? relatedVideo.duration : null,
@@ -905,6 +922,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
 
     const videoSummaries = new Map<string, {
       video_id: string;
+      space_id: string | null;
       title: string;
       source_type: Video["source_type"];
       total_views: number;
@@ -915,6 +933,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
       if (!video) continue;
       const summary = videoSummaries.get(video.id) ?? {
         video_id: video.id,
+        space_id: video.space_id ?? null,
         title: video.title,
         source_type: video.source_type,
         total_views: 0,

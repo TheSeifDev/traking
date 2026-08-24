@@ -6,7 +6,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
-import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
+import { getAccessibleSpaces, resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
+import { authorizeAllSpacesForUser } from "@/src/lib/spaces/active-space";
 import { getWorkspaceAnalytics, listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType, type Video, type WorkspaceAnalytics } from "@/src/types/video";
 
@@ -45,6 +46,28 @@ const emptySummary = { total_videos: 0, active_links: 0, total_sessions: 0, tota
 
 export const GET = withAuth(async (request: NextRequest, user) => {
   try {
+    const organizationId = request.nextUrl.searchParams.get("organization_id")?.trim() || null;
+    if (organizationId) {
+      const organization = await authorizeAllSpacesForUser(organizationId, user);
+      if (!organization.clickup_workspace_id) return NextResponse.json({ videos: [], summary: emptySummary, organization: { id: organization.id, name: organization.name }, active_space_scope: "all", space_connected: false });
+      const authorizedSpaceIds = (await getAccessibleSpaces(user))
+        .filter((space) => space.organization_id === organization.id)
+        .map((space) => space.id);
+      const [rawVideos, analytics] = await Promise.all([
+        listVideos(organization.clickup_workspace_id, undefined, authorizedSpaceIds),
+        getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, authorizedSpaceIds),
+      ]);
+      const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analytics.total_videos === rawVideos.length);
+      const now = Date.now();
+      const activeLinks = videos.reduce((total, video) => total + (video.watch_links?.some((link) => !link.revoked_at && (!link.expires_at || new Date(link.expires_at).getTime() > now)) ? 1 : 0), 0);
+      return NextResponse.json({
+        videos,
+        organization: { id: organization.id, name: organization.name },
+        active_space_scope: "all",
+        space_connected: true,
+        summary: { total_videos: videos.length, active_links: activeLinks, total_sessions: analytics.total_sessions, total_viewers: analytics.unique_viewers },
+      });
+    }
     const access = await resolveSpaceForUser(request, user);
     if (!access.space.clickup_workspace_id) {
       return NextResponse.json({ videos: [], summary: emptySummary, space_connected: false });

@@ -5,15 +5,26 @@ import { getAppUrl } from "@/src/lib/app-url";
 import { listVideos } from "@/src/lib/videos/service";
 import WatchLinksManager from "@/src/components/dashboard/WatchLinksManager";
 
-type PageProps = { searchParams?: Promise<{ space_id?: string }> };
+type PageProps = { searchParams?: Promise<{ space_id?: string; organization_id?: string }> };
 
 export default async function WatchLinksPage({ searchParams }: PageProps) {
   const user = await guardAuth();
   const params = await searchParams;
-  const requestedSpaceId = params?.space_id?.trim() || null;
-  const resolution = await resolveActiveSpaceForUser(user, { requestedSpaceId });
-  if (resolution.requestedSpaceInvalid) redirect("/spaces?error=forbidden");
+  const resolution = await resolveActiveSpaceForUser(user, {
+    requestedSpaceId: params?.space_id?.trim() || null,
+    requestedOrganizationId: params?.organization_id?.trim() || null,
+  });
+  if (resolution.requestedSpaceInvalid || resolution.requestedOrganizationInvalid) redirect("/spaces?error=forbidden");
   if (resolution.requiresSelection) redirect("/spaces?error=select_space");
+
+  if (resolution.context.type === "all") {
+    const organization = resolution.organization;
+    if (!organization?.clickup_workspace_id) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
+    const spaceIds = resolution.spaces.filter((space) => space.organization_id === organization.id).map((space) => space.id);
+    const videos = await listVideos(organization.clickup_workspace_id, undefined, spaceIds);
+    return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} spaceCanManage={false} />;
+  }
+
   if (!resolution.access) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} />;
   const access = resolution.access;
   const canManage = access.is_platform_owner || access.membership?.role === "admin";

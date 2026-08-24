@@ -7,6 +7,7 @@ import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2,
 import type { UserRole } from "@/src/types/auth";
 import { useEffect } from "react";
 import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
+import type { ActiveSpaceContext } from "@/src/lib/spaces/active-space";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
 import { getSpaceDisplayName, isSelectableChildSpace } from "@/src/lib/spaces/labels";
 
@@ -20,6 +21,7 @@ interface DashboardShellProps {
   activeOrganizationId?: string | null;
   activeSpaceNeedsPersistence?: boolean;
   activeSpacePreferenceInvalid?: boolean;
+  activeSpaceContext?: ActiveSpaceContext;
 }
 
 const navItems = [
@@ -44,6 +46,7 @@ export default function DashboardShell({
   activeOrganizationId = null,
   activeSpaceNeedsPersistence = false,
   activeSpacePreferenceInvalid = false,
+  activeSpaceContext = { type: "none", organizationId: null },
 }: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -70,27 +73,58 @@ export default function DashboardShell({
   ];
 
   useEffect(() => {
-    if (activeSpacePreferenceInvalid && !activeSpaceId) {
-      void fetch("/api/spaces/active", { method: "DELETE" });
-      return;
-    }
-    if ((activeSpaceNeedsPersistence || activeSpacePreferenceInvalid) && activeSpaceId) {
+    if (!activeSpaceNeedsPersistence && !activeSpacePreferenceInvalid) return;
+    const request = activeSpaceContext.type === "all" && activeOrganizationId
+      ? { scope: "all", organization_id: activeOrganizationId }
+      : activeSpaceId
+        ? { scope: "specific", space_id: activeSpaceId }
+        : null;
+    if (request) {
       void fetch("/api/spaces/active", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ space_id: activeSpaceId }),
+        body: JSON.stringify(request),
       });
+    } else {
+      void fetch("/api/spaces/active", { method: "DELETE" });
     }
-  }, [activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
+  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
 
-  function selectOrganization(nextId: string) {
+  async function selectOrganization(nextId: string) {
     if (!nextId || nextId === selectedOrganizationId) return;
-    router.push(`/dashboard?organization_id=${encodeURIComponent(nextId)}`);
+    try {
+      if (user.role === "owner") {
+        await fetch("/api/spaces/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "all", organization_id: nextId }),
+        });
+      } else {
+        const nextSpaces = spaces.filter((space) => space.organization_id === nextId && isSelectableChildSpace(space, organizations.find((organization) => organization.id === nextId)?.name));
+        const currentSpace = activeSpaceId ? nextSpaces.find((space) => space.id === activeSpaceId) : null;
+        if (currentSpace) {
+          // Keep a valid active Space when it belongs to the newly selected Organization.
+        } else if (nextSpaces.length === 1) {
+          await fetch("/api/spaces/active", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scope: "specific", space_id: nextSpaces[0]?.id }),
+          });
+        } else {
+          await fetch("/api/spaces/active", { method: "DELETE" });
+        }
+      }
+    } finally {
+      router.push(`/dashboard?organization_id=${encodeURIComponent(nextId)}`);
+    }
   }
 
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     if (href === "/spaces") return selectedOrganizationId ? `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}` : href;
+    if (!selectedSpaceId && activeSpaceContext.type === "all" && selectedOrganizationId && ["/dashboard", "/videos", "/analytics", "/watch-links"].includes(href)) {
+      return `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}`;
+    }
     if (!selectedSpaceId) return href;
     return `${href}?space_id=${encodeURIComponent(selectedSpaceId)}`;
   };
@@ -102,7 +136,9 @@ export default function DashboardShell({
 
   const organizationContext = selectedOrganization?.name ?? workspace?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
-  const displayedSpaceContext = spaceContext ?? (selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space");
+  const displayedSpaceContext = activeSpaceContext.type === "all"
+    ? "All Spaces"
+    : spaceContext ?? (selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space");
 
   return (
     <>

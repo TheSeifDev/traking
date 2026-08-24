@@ -1,22 +1,36 @@
 ﻿"use server";
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import WorkspaceAnalyticsDashboard from "@/src/components/dashboard/WorkspaceAnalyticsDashboard";
 import PersonalSpaceAnalytics from "@/src/components/spaces/PersonalSpaceAnalytics";
-import Link from "next/link";
 
-type PageProps = { searchParams?: Promise<{ space_id?: string }> };
+type PageProps = { searchParams?: Promise<{ space_id?: string; organization_id?: string }> };
 
 export default async function AnalyticsPage({ searchParams }: PageProps) {
   const user = await guardAuth();
   const params = await searchParams;
-  const requestedSpaceId = params?.space_id?.trim() || null;
-  const resolution = await resolveActiveSpaceForUser(user, { requestedSpaceId });
-  if (resolution.requestedSpaceInvalid) redirect("/spaces?error=forbidden");
+  const resolution = await resolveActiveSpaceForUser(user, {
+    requestedSpaceId: params?.space_id?.trim() || null,
+    requestedOrganizationId: params?.organization_id?.trim() || null,
+  });
+  if (resolution.requestedSpaceInvalid || resolution.requestedOrganizationInvalid) redirect("/spaces?error=forbidden");
   if (resolution.requiresSelection) redirect("/spaces?error=select_space");
+
+  if (resolution.context.type === "all") {
+    const organization = resolution.organization;
+    if (!organization?.clickup_workspace_id) return <AnalyticsEmptyState title="Connect a ClickUp Workspace" detail="Connect the selected Organization before reading its analytics." />;
+    const spaceIds = resolution.spaces.filter((space) => space.organization_id === organization.id).map((space) => space.id);
+    const [analytics, videos] = await Promise.all([
+      getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, spaceIds),
+      listVideos(organization.clickup_workspace_id, undefined, spaceIds),
+    ]);
+    return <div className="p-6 lg:p-8"><WorkspaceAnalyticsDashboard organizationId={organization.id} scopeType="all" spaceId={null} analytics={analytics} videos={videos} /></div>;
+  }
+
   if (!resolution.access) return <AnalyticsEmptyState title="No accessible Space" detail="Join a Space before opening private analytics." />;
   const access = resolution.access;
   const canManage = access.is_platform_owner || access.membership?.role === "admin";
@@ -31,7 +45,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
     getWorkspaceAnalytics(access.space.clickup_workspace_id, access.space.id),
     listVideos(access.space.clickup_workspace_id, access.space.id),
   ]);
-  return <div className="p-6 lg:p-8"><WorkspaceAnalyticsDashboard spaceId={access.space.id} analytics={analytics} videos={videos} /></div>;
+  return <div className="p-6 lg:p-8"><WorkspaceAnalyticsDashboard scopeType="specific" spaceId={access.space.id} organizationId={access.space.organization_id} analytics={analytics} videos={videos} /></div>;
 }
 
 function AnalyticsEmptyState({ title, detail, href }: { title: string; detail: string; href?: string }) {

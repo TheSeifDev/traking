@@ -54,6 +54,9 @@ export default function ViewerAnalyticsPanel({
 }: ViewerAnalyticsPanelProps) {
   const [query, setQuery] = useState("");
   const scoped = (path: string) => spaceId ? `${path}?space_id=${encodeURIComponent(spaceId)}` : path;
+  const scopedForSession = (path: string, session: ViewerSessionAnalytics) => session.space_id
+    ? `${path}?space_id=${encodeURIComponent(session.space_id)}`
+    : scoped(path);
   const visibleSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sessions;
@@ -119,8 +122,8 @@ export default function ViewerAnalyticsPanel({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`w-fit rounded-full border px-2 py-1 text-[10px] ${statusClass}`}>{telemetryLabel(session)}</span>
-                    <Link href={scoped(`/analytics/videos/${session.video_id}/sessions/${session.session_id}`)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View session</Link>
-                    {(session.viewer_profile_id || session.viewer_identifier) && <Link href={scoped(`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identifier ?? "")}`)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
+                    <Link href={scopedForSession(`/analytics/videos/${session.video_id}/sessions/${session.session_id}`, session)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View session</Link>
+                    {(session.viewer_profile_id || session.viewer_identifier) && <Link href={scopedForSession(`/analytics/videos/${session.video_id}/viewers/${encodeURIComponent(session.viewer_profile_id ?? session.viewer_identifier ?? "")}`, session)} className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-medium text-white/65 transition hover:border-violet-300/30 hover:text-white">View viewer</Link>}
                   </div>
                 </div>
 
