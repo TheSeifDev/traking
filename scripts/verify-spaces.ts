@@ -144,6 +144,7 @@ const spacesDirectory = source("src/components/spaces/SpacesDirectory.tsx");
 const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
 const organizationDashboard = source("src/components/organizations/OrganizationDashboard.tsx");
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
+const ownerPage = source("app/owner/page.tsx");
 assert(shell.includes("useSearchParams") && shell.includes("organization_id") && shell.includes("selectableSpaces") && shell.includes("isSelectableChildSpace") && shell.includes("Select Organization") && shell.includes("Select Space") && shell.includes("AccessibleOrganization"), "dashboard shell separates Organization context from an authorized child Space selector");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel spaceId"), "analytics drilldowns retain Space context");
@@ -153,6 +154,7 @@ assert(spacesDirectory.includes("isLegacyOrganizationContainerSpace") && spacesD
 assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");
 assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organizationDashboard.includes("getSafeSpaceDisplayName"), "Organization dashboard renders child Space names directly");
 assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");
+assert(ownerPage.includes("getAccessibleOrganizations") && ownerPage.includes("listSpacesForUser") && ownerPage.includes("organizations={organizations}") && ownerPage.includes("spaces={spaces}"), "Owner shell receives separate Organization and authorized Space context");
 
 console.log(`\n${"=".repeat(56)}`);
 console.log(`TrackUp Spaces: ${passed}/${passed + failed} tests passed`);
