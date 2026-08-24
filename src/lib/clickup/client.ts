@@ -34,6 +34,13 @@ export interface ClickUpTeamForSync {
   members?: unknown;
 }
 
+export interface ClickUpSpaceForSync {
+  id: string;
+  name: string;
+  private: boolean | null;
+  members?: unknown;
+}
+
 export async function getClickUpTeamForSync(profileId: string, workspaceId: string, clickupTeamId: string): Promise<ClickUpTeamForSync | null> {
   const token = await getClickUpTokenForWorkspace(profileId, workspaceId);
   if (!token) return null;
@@ -58,6 +65,30 @@ export async function getClickUpTeamForSync(profileId: string, workspaceId: stri
     const name = typeof team.name === "string" ? team.name.trim() : "";
     if (!id || !name) return null;
     return { id, name, members: team.members };
+  } catch {
+    return null;
+  }
+}
+
+export async function getClickUpSpacesForSync(profileId: string, workspaceId: string, clickupTeamId: string): Promise<ClickUpSpaceForSync[] | null> {
+  const token = await getClickUpTokenForWorkspace(profileId, workspaceId);
+  if (!token) return null;
+  try {
+    const response = await fetch(`https://api.clickup.com/api/v2/team/${encodeURIComponent(clickupTeamId)}/space?archived=false`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object" || !Array.isArray((data as { spaces?: unknown }).spaces)) return null;
+    return ((data as { spaces: unknown[] }).spaces).slice(0, 500).flatMap((raw) => {
+      if (!raw || typeof raw !== "object") return [];
+      const space = raw as Record<string, unknown>;
+      const id = typeof space.id === "string" || typeof space.id === "number" ? String(space.id).trim() : "";
+      const name = typeof space.name === "string" ? space.name.trim() : "";
+      if (!id || !name) return [];
+      return [{ id, name: name.slice(0, 160), private: typeof space.private === "boolean" ? space.private : null, members: space.members }];
+    });
   } catch {
     return null;
   }

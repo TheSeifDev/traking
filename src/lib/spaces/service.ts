@@ -13,7 +13,7 @@ type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
 type SpaceInsert = Database["public"]["Tables"]["spaces"]["Insert"];
 type MembershipRow = Database["public"]["Tables"]["space_members"]["Row"];
 
-const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
 
 type ProfileSummary = {
   id: string;

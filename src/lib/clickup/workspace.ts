@@ -84,6 +84,22 @@ export async function upsertClickUpConnections(
   return persisted;
 }
 
+export async function getClickUpConnectionProfileForWorkspace(workspaceId: string): Promise<string | null> {
+  if (!workspaceId) return null;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("clickup_connections")
+      .select("profile_id")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return error || !data ? null : data.profile_id;
+  } catch {
+    return null;
+  }
+}
+
 export async function getClickUpTokenForWorkspace(profileId: string, workspaceId: string): Promise<string | null> {
   if (!profileId || !workspaceId) return null;
   try {

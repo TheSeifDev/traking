@@ -211,6 +211,9 @@ export interface Database {
           name: string;
           slug: string;
           clickup_workspace_id: string | null;
+          clickup_sync_status: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at: string | null;
+          clickup_sync_error: string | null;
           created_by: string | null;
           settings: Json;
           archived_at: string | null;
@@ -222,6 +225,9 @@ export interface Database {
           name: string;
           slug: string;
           clickup_workspace_id?: string | null;
+          clickup_sync_status?: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at?: string | null;
+          clickup_sync_error?: string | null;
           created_by?: string | null;
           settings?: Json;
           archived_at?: string | null;
@@ -233,6 +239,9 @@ export interface Database {
           name?: string;
           slug?: string;
           clickup_workspace_id?: string | null;
+          clickup_sync_status?: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at?: string | null;
+          clickup_sync_error?: string | null;
           created_by?: string | null;
           settings?: Json;
           archived_at?: string | null;
@@ -307,6 +316,10 @@ export interface Database {
           name: string;
           slug: string;
           clickup_workspace_id: string | null;
+          clickup_space_id: string | null;
+          clickup_sync_status: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at: string | null;
+          clickup_sync_error: string | null;
           created_by: string | null;
           settings: Json;
           archived_at: string | null;
@@ -319,6 +332,10 @@ export interface Database {
           name: string;
           slug: string;
           clickup_workspace_id?: string | null;
+          clickup_space_id?: string | null;
+          clickup_sync_status?: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at?: string | null;
+          clickup_sync_error?: string | null;
           created_by?: string | null;
           settings?: Json;
           archived_at?: string | null;
@@ -331,6 +348,10 @@ export interface Database {
           name?: string;
           slug?: string;
           clickup_workspace_id?: string | null;
+          clickup_space_id?: string | null;
+          clickup_sync_status?: "never" | "running" | "success" | "partial" | "failed";
+          clickup_last_synced_at?: string | null;
+          clickup_sync_error?: string | null;
           created_by?: string | null;
           settings?: Json;
           archived_at?: string | null;
@@ -412,6 +433,51 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      cron_executions: {
+        Row: {
+          id: string;
+          job_name: string;
+          schedule: string;
+          execution_key: string;
+          started_at: string;
+          finished_at: string | null;
+          status: "started" | "succeeded" | "failed";
+          http_status: number | null;
+          latency_ms: number | null;
+          health_status: "healthy" | "degraded" | "unknown" | null;
+          error_code: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_name: string;
+          schedule: string;
+          execution_key: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status: "started" | "succeeded" | "failed";
+          http_status?: number | null;
+          latency_ms?: number | null;
+          health_status?: "healthy" | "degraded" | "unknown" | null;
+          error_code?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_name?: string;
+          schedule?: string;
+          execution_key?: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: "started" | "succeeded" | "failed";
+          http_status?: number | null;
+          latency_ms?: number | null;
+          health_status?: "healthy" | "degraded" | "unknown" | null;
+          error_code?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       workspaces: {
         Row: {

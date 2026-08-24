@@ -77,15 +77,20 @@ assert.match(controlRoomService, /MAX_SESSIONS = 5000/);
 assert.match(controlRoomService, /from\(\"organizations\"\)/);
 assert.match(controlRoomService, /from\(\"spaces\"\)/);
 assert.match(controlRoomService, /organization_name/);
-assert.match(controlRoomService, /execution_status: \"not_observed\"/);
+assert.match(controlRoomService, /execution_status: \"observed\" \| \"not_observed\"/);
+assert.match(controlRoomService, /previous_sessions/);
+assert.match(controlRoomService, /tracking_events_today/);
+assert.match(controlRoomService, /getCronExecutionSnapshot/);
 assert.doesNotMatch(controlRoomService, /session_token|access_token|authorization|cookie/i);
-pass("Control Room service uses bounded persisted queries and keeps Organization, Space, and unobserved cron execution distinct");
+pass("Control Room service uses bounded persisted queries, period comparisons, real event KPIs, and explicit cron evidence");
 
 const controlRoomUi = read("src/components/owner/OwnerControlRoomPanel.tsx");
 for (const section of ["Command Center", "Organizations", "Spaces", "Users", "Videos", "Playback Intelligence", "Activity / Audit", "Security", "Jobs / Cron", "System Health", "API / Provider", "Database", "Incidents", "Feature Flags", "Configuration"]) assert.match(controlRoomUi, new RegExp(section.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")));
 assert.match(controlRoomUi, /metaKey \|\| event\.ctrlKey/);
 assert.match(controlRoomUi, /getSafeSpaceDisplayName/);
-assert.match(controlRoomUi, /Execution.*Not observed/);
+assert.match(controlRoomUi, /Execution.*Observed.*Not observed/);
+assert.match(controlRoomUi, /Preview sync/);
+assert.match(controlRoomUi, /Apply sync/);
 assert.match(controlRoomUi, /No aggregate uptime claim/);
 assert.match(controlRoomUi, /No persisted feature-flag registry/);
 pass("Control Room UI exposes operational sections, keyboard search, safe hierarchy labels, and honest unavailable states");
@@ -103,6 +108,26 @@ assert.match(analyticsService, /buildPlaybackHeatmap/);
 assert.match(analyticsService, /sequence_number/);
 assert.match(analyticsService, /from_position/);
 pass("session inspector is contractually attached to existing event ordering/range logic");
+
+const hierarchyMigration = read("supabase/migrations/20260824000010_add_clickup_space_and_cron_evidence.sql");
+assert.match(hierarchyMigration, /clickup_space_id/);
+assert.match(hierarchyMigration, /cron_executions/);
+assert.match(hierarchyMigration, /execution_key/);
+assert.match(hierarchyMigration, /UNIQUE \(job_name, execution_key\)/);
+assert.match(hierarchyMigration, /No direct cron execution reads/);
+pass("hierarchy and cron evidence migration is additive, bounded, idempotent, and deny-by-default");
+
+const clickupSyncRoute = read("app/api/owner/clickup/sync/route.ts");
+assert.match(clickupSyncRoute, /withRole\(USER_ROLES\.OWNER/);
+assert.match(clickupSyncRoute, /mode === \"preview\"/);
+assert.match(clickupSyncRoute, /mode === \"apply\"/);
+assert.doesNotMatch(clickupSyncRoute, /access_token|request\.headers|getCookie/i);
+pass("Owner ClickUp sync route supports read-only preview and protected apply without exposing provider credentials");
+
+const clickupClient = read("src/lib/clickup/client.ts");
+assert.match(clickupClient, /api\/v2\/team\/\$\{encodeURIComponent\(clickupTeamId\)\}\/space/);
+assert.match(clickupClient, /private/);
+pass("ClickUp client reads explicit Spaces and preserves public/private roster evidence boundaries");
 
 const migration = read("supabase/migrations/20260824000006_create_owner_logs.sql");
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.owner_logs/);

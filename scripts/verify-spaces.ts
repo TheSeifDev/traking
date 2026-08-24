@@ -44,6 +44,8 @@ assert(migration.includes("ENABLE ROW LEVEL SECURITY") && migration.includes("No
 assert(migration.includes("idx_spaces_clickup_workspace") && migration.includes("idx_space_members_space_status") && migration.includes("idx_videos_space"), "Space and resource lookup indexes exist");
 assert(migration.includes("INSERT INTO public.spaces") && migration.includes("INSERT INTO public.space_members") && migration.includes("UPDATE public.videos AS v"), "workspace, membership, and video backfill is deterministic");
 assert(migration.includes("ON CONFLICT (clickup_workspace_id) DO NOTHING") && migration.includes("ON CONFLICT (space_id, profile_id) DO NOTHING"), "backfill reruns are idempotent on unique keys");
+const controlRoomMigration = source("supabase/migrations/20260824000010_add_clickup_space_and_cron_evidence.sql");
+assert(controlRoomMigration.includes("clickup_space_id") && controlRoomMigration.includes("cron_executions") && controlRoomMigration.includes("UNIQUE (job_name, execution_key)"), "Control Room hierarchy and cron evidence migration is additive and idempotent");
 assert(organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organizations") && organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organization_members"), "Organization hierarchy is additive");
 assert(organizationMigration.includes("ADD COLUMN IF NOT EXISTS organization_id UUID") && organizationMigration.includes("spaces_organization_id_fkey"), "Space-to-Organization relationship is additive and constrained");
 assert(organizationMigration.includes("ALTER COLUMN organization_id SET NOT NULL") && organizationMigration.includes("INSERT INTO public.organization_members"), "existing Spaces are deterministically backfilled into Organization memberships");
@@ -117,14 +119,14 @@ section("Conservative ClickUp synchronization");
 const sync = source("src/lib/clickup/sync.ts");
 const callback = source("app/api/auth/clickup/callback/route.ts");
 const clickupClient = source("src/lib/clickup/client.ts");
-assert(sync.includes("return { identities, complete: false }"), "ClickUp member responses are never assumed authoritative-complete");
+assert(sync.includes("available: false") && sync.includes("available: true"), "ClickUp member responses are never assumed authoritative-complete");
 assert(!sync.includes('status: \"suspended\"') && !sync.includes('status: "removed"'), "sync does not silently suspend/remove absent members");
-assert(sync.includes("existingMembership?.role") && sync.includes("source = existingMembership?.source"), "sync preserves existing membership role and manual source");
+assert(sync.includes("existing?.source ?? \"clickup\"") && sync.includes("existing?.joined_at ?? now"), "sync preserves existing membership source and join timestamp");
 assert(!sync.includes('from("profiles").insert') && !sync.includes('from("profiles").upsert'), "sync never fabricates TrackUp profiles from ClickUp payloads");
-assert(sync.includes("findLinkedSpace") && sync.includes("clickup_workspace_id") && !sync.includes("ensureSpaceForWorkspace") && !sync.includes(".insert({ name: team.name"), "ClickUp sync never turns an unlinked Workspace into a TrackUp Space");
+assert(sync.includes("getClickUpSpacesForSync") && sync.includes("clickup_space_id") && sync.includes("organization_id: organizationId") && !sync.includes("findLinkedSpace"), "ClickUp sync maps provider Spaces under an existing Organization and never treats Workspace as a Space");
 assert(callback.includes("getAuthorizedTeams") && callback.includes("upsertClickUpConnections") && callback.includes("syncClickUpAuthorizedTeams"), "OAuth callback persists all authorized teams and invokes safe sync after provisioning");
 assert(callback.includes("createSignedSessionCookie") && callback.includes("new URL(destination, request.url)"), "OAuth session and return redirect architecture remains intact");
-assert(clickupClient.includes("/api/v2/team") && clickupClient.includes("getClickUpTokenForWorkspace") && !clickupClient.includes("console.log(token"), "manual sync uses stored server token only and never logs it");
+assert(clickupClient.includes("/api/v2/team") && clickupClient.includes("getClickUpTokenForWorkspace") && clickupClient.includes("/space?archived=false") && !clickupClient.includes("console.log(token"), "manual sync uses stored server token only, reads explicit Spaces, and never logs it");
 
 section("UI scope and capability honesty");
 const shell = source("src/components/dashboard/DashboardShell.tsx");

@@ -11,9 +11,9 @@ type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
 type SpaceMemberRow = Database["public"]["Tables"]["space_members"]["Row"];
 
 const MAX_ACCESSIBLE_SPACES = 100;
-const ORGANIZATION_FIELDS = "id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+const ORGANIZATION_FIELDS = "id, name, slug, clickup_workspace_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
 const ORGANIZATION_MEMBER_FIELDS = "id, organization_id, profile_id, role, status, joined_at, created_at, updated_at";
-const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
 
 function toOrganization(row: OrganizationRow): Organization {
   const settings = row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)

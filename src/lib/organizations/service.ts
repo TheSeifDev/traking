@@ -9,7 +9,7 @@ const MAX_ORGANIZATIONS = 100;
 const MAX_ORGANIZATION_SPACES = 100;
 const MAX_ORGANIZATION_MEMBERS = 500;
 
-const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
 const MEMBER_FIELDS = "id, organization_id, profile_id, role, status, joined_at, created_at, updated_at";
 
 type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
