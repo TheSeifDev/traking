@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
 import { getAccessibleSpaces, resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { authorizeAllSpacesForUser } from "@/src/lib/spaces/active-space";
+import { isSelectableChildSpace } from "@/src/lib/spaces/labels";
 import { getWorkspaceAnalytics, listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType, type Video, type WorkspaceAnalytics } from "@/src/types/video";
 
@@ -52,6 +53,7 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       if (!organization.clickup_workspace_id) return NextResponse.json({ videos: [], summary: emptySummary, organization: { id: organization.id, name: organization.name }, active_space_scope: "all", space_connected: false });
       const authorizedSpaceIds = (await getAccessibleSpaces(user))
         .filter((space) => space.organization_id === organization.id)
+        .filter((space) => isSelectableChildSpace(space, organization.name))
         .map((space) => space.id);
       const [rawVideos, analytics] = await Promise.all([
         listVideos(organization.clickup_workspace_id, undefined, authorizedSpaceIds),
