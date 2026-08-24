@@ -23,7 +23,7 @@ type YouTubeApi = {
   Player: new (
     element: HTMLElement,
     options: {
-      videoId: string;
+      videoId?: string;
       playerVars?: Record<string, number | string>;
       events: {
         onReady: (event: YouTubeReadyEvent) => void;
@@ -625,14 +625,15 @@ export default function WatchPlayer({
         setError("This YouTube URL could not be embedded safely.");
         return;
       }
-      player = new api.Player(youtubeContainerRef.current, {
-        videoId,
-        playerVars: {
-          rel: 0,
-          playsinline: 1,
-          origin: window.location.origin,
-          widget_referrer: window.location.origin,
-        },
+      const iframe = document.createElement("iframe");
+      iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.origin)}`;
+      iframe.title = title;
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+      iframe.allowFullscreen = true;
+      iframe.className = "h-full w-full";
+      youtubeContainerRef.current.replaceChildren(iframe);
+      player = new api.Player(iframe, {
         events: {
           onReady: (readyEvent) => {
             youtubePlayerRef.current = readyEvent.target;
@@ -661,8 +662,6 @@ export default function WatchPlayer({
           },
         },
       });
-      const iframe = youtubeContainerRef.current.querySelector<HTMLIFrameElement>("iframe");
-      iframe?.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
     }).catch(() => {
       if (!cancelled) setError("Unable to load the YouTube player inside TrackUp.");
     });
@@ -673,7 +672,7 @@ export default function WatchPlayer({
       player?.destroy();
       youtubePlayerRef.current = null;
     };
-  }, [endSession, handleYouTubeStateChange, isYouTube, readYouTubeSnapshot, reportProviderError, retryNonce, sendEvent, sourceUrl, startSession, stopHeartbeat]);
+  }, [endSession, handleYouTubeStateChange, isYouTube, readYouTubeSnapshot, reportProviderError, retryNonce, sendEvent, sourceUrl, startSession, stopHeartbeat, title]);
 
   useEffect(() => {
     const onFullscreenChange = () => {

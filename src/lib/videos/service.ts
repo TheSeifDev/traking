@@ -225,9 +225,11 @@ function buildViewerSessionAnalytics(
         to_rate: event.to_rate,
         metadata: event.metadata,
       }));
-      const telemetryEventCount = sessionEvents.filter(isValidTelemetryEvent).length;
-      const hasPlaybackTelemetry = supportsPlaybackMetrics(video.source_type) && telemetryEventCount > 0;
-      const firstPlay = sessionEvents.find((event) => event.event_type === "play" || event.event_type === "resume");
+      const validTelemetryEvents = sessionEvents.filter(isValidTelemetryEvent);
+      const telemetryEventCount = validTelemetryEvents.length;
+      const hasPlaybackStart = sessionEvents.some((event) => (event.event_type === "play" || event.event_type === "resume") && Number.isFinite(event.position) && event.position >= 0);
+      const hasPlaybackTelemetry = supportsPlaybackMetrics(video.source_type) && hasPlaybackStart && telemetryEventCount > 0;
+      const firstPlay = sessionEvents.find((event) => (event.event_type === "play" || event.event_type === "resume") && Number.isFinite(event.position) && event.position >= 0);
       const latestEvent = sessionEvents[sessionEvents.length - 1];
       const latestTelemetryEvent = sessionEvents.slice().reverse().find(isValidTelemetryEvent);
       const latestDurationEvent = sessionEvents.slice().reverse().find((event) => isValidTelemetryEvent(event));
