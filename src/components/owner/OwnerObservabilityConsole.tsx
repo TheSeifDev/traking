@@ -113,19 +113,19 @@ export default function OwnerObservabilityConsole() {
 
         {error && <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span>Some Control Room data is unavailable: {error}. No synthetic data is shown.</span></div>}
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
-          <aside className="rounded-3xl border border-white/8 bg-white/[0.025] p-3 lg:sticky lg:top-6">
-            <div className="px-3 pb-3"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Control Room</p><p className="mt-1 text-xs leading-5 text-white/40">One primary navigation</p></div>
-            <nav aria-label="Owner Control Room sections" className="grid grid-cols-2 gap-1 sm:grid-cols-4 lg:block lg:space-y-4">
-              {CONTROL_ROOM_NAV_GROUPS.map((group) => <div key={group.label}><p className="col-span-2 px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/25 lg:pt-0">{group.label}</p><div className="space-y-1">{group.items.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={section === id ? "page" : undefined} onClick={() => selectSection(id)} className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-medium transition ${section === id ? "bg-violet-500/15 text-violet-200 ring-1 ring-violet-300/15" : "text-white/45 hover:bg-white/5 hover:text-white"}`}><Icon size={14} className="shrink-0" />{label}</button>)}</div></div>)}
-            </nav>
-          </aside>
-
-          <main className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">{CONTROL_ROOM_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.id === section)?.label}</p><p className="mt-1 text-xs text-white/40">Scope and filters appear inside the selected operational view.</p></div><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] text-white/35">Owner scope</span></div>
-            {section === "sessions" ? <SessionsPanel sessions={state.sessions} total={state.sessionsTotal} filter={sessionFilter} setFilter={setSessionFilter} onApply={() => void loadSessions()} onOpen={openInspector} selected={state.selectedSession} inspectorLoading={inspectorLoading} loading={loading} /> : <OwnerControlRoomPanel key={`${section}-${refreshKey}`} initialSection={section} />}
-          </main>
+        <div className="mt-6 overflow-x-auto rounded-3xl border border-white/8 bg-white/[0.025]">
+          <nav aria-label="Owner Control Room sections" className="flex min-w-max flex-wrap gap-3 p-3 sm:p-4">
+            {CONTROL_ROOM_NAV_GROUPS.map((group) => <div key={group.label} className="flex items-center gap-1.5">
+              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/25">{group.label}</span>
+              <div className="flex gap-1">{group.items.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={section === id ? "page" : undefined} onClick={() => selectSection(id)} className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 py-2 text-left text-[11px] font-medium transition ${section === id ? "bg-violet-500/15 text-violet-200 ring-1 ring-violet-300/15" : "text-white/45 hover:bg-white/5 hover:text-white"}`}><Icon size={14} className="shrink-0" />{label}</button>)}</div>
+            </div>)}
+          </nav>
         </div>
+
+        <main className="mt-6 min-w-0">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">{CONTROL_ROOM_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.id === section)?.label}</p><p className="mt-1 text-xs text-white/40">Scope and filters appear inside the selected operational view.</p></div><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] text-white/35">Owner scope</span></div>
+          {section === "sessions" ? <SessionsPanel sessions={state.sessions} total={state.sessionsTotal} filter={sessionFilter} setFilter={setSessionFilter} onApply={() => void loadSessions()} onOpen={openInspector} selected={state.selectedSession} inspectorLoading={inspectorLoading} loading={loading} /> : <OwnerControlRoomPanel key={`${section}-${refreshKey}`} initialSection={section} onSectionChange={selectSection} />}
+        </main>
       </div>
     </section>
   );

@@ -70,8 +70,9 @@ function statusClass(status: string): string {
   return "border-red-300/20 bg-red-400/10 text-red-200";
 }
 
-export default function OwnerControlRoomPanel({ initialSection = "command" }: { initialSection?: ControlRoomSection }) {
+export default function OwnerControlRoomPanel({ initialSection = "command", onSectionChange }: { initialSection?: ControlRoomSection; onSectionChange?: (section: ControlRoomSection) => void }) {
   const [section, setSection] = useState<ControlRoomSection>(initialSection);
+  const navigateToSection = onSectionChange ?? setSection;
   const [range, setRange] = useState("7d");
   const [query, setQuery] = useState("");
   const [provider, setProvider] = useState("");
@@ -148,7 +149,7 @@ export default function OwnerControlRoomPanel({ initialSection = "command" }: { 
     {error && <div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100"><AlertTriangle size={15} />{error}. No synthetic fallback data is shown.</div>}
     {loading && !data ? <div className="flex min-h-52 items-center justify-center rounded-3xl border border-white/8 bg-white/[0.03] text-xs text-white/40"><RefreshCw size={16} className="mr-2 animate-spin" />Loading bounded persisted Control Room data…</div> : data ? <>
       <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] text-white/35"><span>Scope: {selectedOrganization?.name ?? "All Organizations"}{spaceId ? ` · ${data.spaces.find((space) => space.id === spaceId)?.name ?? "Space"}` : ""} · {data.range}</span><span>Last updated {relative(data.generated_at)} · server window starts {formatDate(data.range_start)}</span></div>
-      {section === "command" && <CommandCenter data={data} metrics={metrics} setSection={setSection} />}
+      {section === "command" && <CommandCenter data={data} metrics={metrics} setSection={navigateToSection} />}
       {section === "organizations" && <OrganizationsPanel data={data} />}
       {section === "spaces" && <SpacesPanel data={data} />}
       {section === "users" && <UsersPanel data={data} />}

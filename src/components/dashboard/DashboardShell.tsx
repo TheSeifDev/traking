@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { useEffect } from "react";
@@ -49,6 +49,7 @@ export default function DashboardShell({
   activeSpaceContext = { type: "none", organizationId: null },
 }: DashboardShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
@@ -57,6 +58,10 @@ export default function DashboardShell({
     ?? (activeOrganizationId && organizations.some((organization) => organization.id === activeOrganizationId) ? activeOrganizationId : null)
     ?? (requestedOrganizationId && organizations.some((organization) => organization.id === requestedOrganizationId) ? requestedOrganizationId : organizations[0]?.id ?? "");
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? null;
+  const hasOrganizationSelector = organizations.length > 1;
+  const selectOrganization = (organizationId: string) => {
+    router.push(`/dashboard?organization_id=${encodeURIComponent(organizationId)}`);
+  };
   const selectableSpaces = spaces.filter((space) => space.organization_id === selectedOrganizationId)
     .filter((space) => isSelectableChildSpace(space, selectedOrganization?.name));
   const persistedSpace = selectableSpaces.find((space) => space.id === activeSpaceId) ?? null;
@@ -128,7 +133,7 @@ export default function DashboardShell({
             {organizationContext && (
               <div className="min-w-0 px-1 py-1">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Organization</span>
-                <p className="truncate text-sm font-medium text-white/80" title={organizationContext}>{organizationContext}</p>
+                {hasOrganizationSelector ? <select aria-label="Select Organization" value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="block w-full min-w-0 rounded-lg border border-white/10 bg-[#0b0b28] px-2 py-1.5 text-sm font-medium text-white/80 outline-none focus:border-violet-300/50">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <p className="truncate text-sm font-medium text-white/80" title={organizationContext}>{organizationContext}</p>}
               </div>
             )}
 
@@ -164,10 +169,10 @@ export default function DashboardShell({
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
-            <Link href={scopedHref("/dashboard")} className="flex min-w-0 items-center gap-2.5" aria-label="TrackUp dashboard">
-              <Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 shrink-0 object-contain" />
-              <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span><span className="block max-w-28 truncate text-[10px] text-white/35" title={organizationContext ?? undefined}>{organizationContext ?? "No Organization"}</span><span className="block max-w-28 truncate text-[10px] text-violet-200/55" title={displayedSpaceContext}>{displayedSpaceContext}</span></div>
-            </Link>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Link href={scopedHref("/dashboard")} className="shrink-0" aria-label="TrackUp dashboard"><Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 object-contain" /></Link>
+              <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{hasOrganizationSelector ? <select aria-label="Select Organization" value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="block max-w-32 truncate rounded border border-white/10 bg-[#0b0b28] px-1 text-[10px] text-white/70 outline-none focus:border-violet-300/50">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <span className="block max-w-28 truncate text-[10px] text-white/35" title={organizationContext ?? undefined}>{organizationContext ?? "No Organization"}</span>}<span className="block max-w-28 truncate text-[10px] text-violet-200/55" title={displayedSpaceContext}>{displayedSpaceContext}</span></div>
+            </div>
             <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.map(({ label, href, icon: Icon }) => <Link key={href} href={scopedHref(href)} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs transition-colors ${isActive(href) ? "bg-violet-500/15 text-violet-300" : "text-white/45 hover:bg-white/5 hover:text-white"}`} aria-label={label}><Icon size={16} /><span className="hidden min-[430px]:inline">{label}</span></Link>)}
             </nav>

@@ -89,10 +89,16 @@ const observabilityConsole = read("src/components/owner/OwnerObservabilityConsol
 for (const section of ["Command Center", "Organizations", "Spaces", "Users", "Videos", "Playback Intelligence", "Activity / Audit", "Security", "Jobs / Cron", "System Health", "API / Provider", "Database", "Incidents", "Feature Flags", "Configuration"]) assert.match(controlRoomUi, new RegExp(section.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")));
 for (const group of ["Operations", "Observability", "Platform", "System"]) assert.match(controlRoomUi, new RegExp(group));
 assert.match(controlRoomUi, /CONTROL_ROOM_NAV_GROUPS/);
+assert.match(controlRoomUi, /onSectionChange/);
+assert.match(observabilityConsole, /onSectionChange={selectSection}/);
+const ownerNavigationInstances = observabilityConsole.match(/aria-label="Owner Control Room sections"/g) ?? [];
+assert.equal(ownerNavigationInstances.length, 1);
 assert.match(observabilityConsole, /aria-label="Owner Control Room sections"/);
-assert.match(observabilityConsole, /lg:grid-cols-\[15rem_minmax\(0,1fr\)\]/);
+assert.match(observabilityConsole, /overflow-x-auto rounded-3xl/);
+assert.match(observabilityConsole, /min-w-max flex-wrap/);
+assert.doesNotMatch(observabilityConsole, /lg:grid-cols-\[15rem_minmax\(0,1fr\)\]/);
+assert.doesNotMatch(observabilityConsole, /<aside[^>]*Control Room/);
 assert.doesNotMatch(observabilityConsole, /Legacy overview|Legacy logs|System detail/);
-assert.doesNotMatch(observabilityConsole, /overflow-x-auto rounded-2xl/);
 assert.match(controlRoomUi, /metaKey \|\| event\.ctrlKey/);
 assert.match(controlRoomUi, /getSafeSpaceDisplayName/);
 assert.match(controlRoomUi, /Execution.*Observed.*Not observed/);
