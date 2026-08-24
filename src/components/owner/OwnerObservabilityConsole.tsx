@@ -5,11 +5,13 @@ import { Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3, Database, Eye
 import type { WorkspaceAnalytics } from "@/src/types/video";
 import { AnalyticsMetricGrid, HeatmapPanel, formatAnalyticsDate, formatAnalyticsDuration, formatAnalyticsPosition, telemetryClass, telemetryCopy } from "@/src/components/dashboard/AnalyticsDetail";
 import GroupedSessionTimeline from "@/src/components/analytics/GroupedSessionTimeline";
+import OwnerControlRoomPanel from "@/src/components/owner/OwnerControlRoomPanel";
 import type { OwnerSessionDetail, OwnerSessionListItem } from "@/src/lib/observability/service";
 import type { SafeOwnerLog, ObservabilityCategory, ObservabilityLevel } from "@/src/lib/observability/logger";
 
 type LiveState = "LIVE" | "RECONNECTING";
-type ConsoleTab = "overview" | "sessions" | "logs" | "system";
+type ControlRoomTab = "command" | "organizations" | "spaces" | "users" | "videos" | "activity" | "security" | "jobs" | "incidents";
+type ConsoleTab = "overview" | "sessions" | "logs" | "system" | ControlRoomTab;
 
 type OwnerRecentActivity = {
   session_id: string;
@@ -56,12 +58,16 @@ function displayViewer(session: { viewer_name?: string | null; viewer_email?: st
   return session.viewer_name?.trim() || session.viewer_email?.trim() || (session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer");
 }
 
+function isControlRoomTab(value: ConsoleTab): value is ControlRoomTab {
+  return value === "command" || value === "organizations" || value === "spaces" || value === "users" || value === "videos" || value === "activity" || value === "security" || value === "jobs" || value === "incidents";
+}
+
 function badgeForState(state: string | undefined): string {
   return telemetryClass(state === "measured" || state === "unsupported" || state === "missing" ? state : "missing");
 }
 
 export default function OwnerObservabilityConsole() {
-  const [tab, setTab] = useState<ConsoleTab>("overview");
+  const [tab, setTab] = useState<ConsoleTab>("command");
   const [liveState, setLiveState] = useState<LiveState>("RECONNECTING");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,11 @@ export default function OwnerObservabilityConsole() {
   const loadConsole = useCallback(async (background = false) => {
     if (!background) setLoading(true);
     setLiveState("RECONNECTING");
+    if (isControlRoomTab(tab)) {
+      setLoading(false);
+      setLiveState("LIVE");
+      return;
+    }
     try {
       const sessionQuery = sessionFilter.trim() ? `&video_id=${encodeURIComponent(sessionFilter.trim())}` : "";
       const logQuery = `${logCategory ? `&category=${encodeURIComponent(logCategory)}` : ""}${logLevel ? `&level=${encodeURIComponent(logLevel)}` : ""}`;
@@ -92,7 +103,7 @@ export default function OwnerObservabilityConsole() {
     } finally {
       if (!background) setLoading(false);
     }
-  }, [logCategory, logLevel, sessionFilter]);
+  }, [logCategory, logLevel, sessionFilter, tab]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadConsole(), 0);
@@ -133,10 +144,19 @@ export default function OwnerObservabilityConsole() {
   }, [state.overview]);
 
   const tabs: Array<{ id: ConsoleTab; label: string; icon: typeof Activity }> = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "command", label: "Command Center", icon: BarChart3 },
+    { id: "organizations", label: "Organizations", icon: Users },
+    { id: "spaces", label: "Spaces", icon: Server },
+    { id: "users", label: "Users", icon: Users },
+    { id: "videos", label: "Videos", icon: Eye },
     { id: "sessions", label: "Sessions", icon: Activity },
-    { id: "logs", label: "Activity logs", icon: FileWarning },
-    { id: "system", label: "System", icon: Server },
+    { id: "activity", label: "Activity / Audit", icon: FileWarning },
+    { id: "security", label: "Security", icon: ShieldCheck },
+    { id: "jobs", label: "Jobs / Cron", icon: RefreshCw },
+    { id: "incidents", label: "Incidents", icon: AlertTriangle },
+    { id: "overview", label: "Legacy overview", icon: BarChart3 },
+    { id: "logs", label: "Legacy logs", icon: FileWarning },
+    { id: "system", label: "System detail", icon: Server },
   ];
 
   return (
@@ -160,7 +180,7 @@ export default function OwnerObservabilityConsole() {
           {tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium transition sm:px-4 ${tab === id ? "bg-violet-500/15 text-violet-200" : "text-white/45 hover:bg-white/5 hover:text-white"}`}><Icon size={15} />{label}</button>)}
         </nav>
 
-        {loading && !state.overview ? <div className="mt-8 flex min-h-52 items-center justify-center rounded-3xl border border-white/8 bg-white/[0.03] text-sm text-white/40"><RefreshCw size={18} className="mr-3 animate-spin" />Loading persisted observability…</div> : tab === "overview" ? <OverviewPanel overview={state.overview} metrics={metrics} /> : tab === "sessions" ? <SessionsPanel sessions={state.sessions} total={state.sessionsTotal} filter={sessionFilter} setFilter={setSessionFilter} onApply={() => void loadConsole()} onOpen={openInspector} selected={state.selectedSession} inspectorLoading={inspectorLoading} /> : tab === "logs" ? <LogsPanel logs={state.logs} category={logCategory} level={logLevel} setCategory={setLogCategory} setLevel={setLogLevel} onApply={() => void loadConsole()} /> : <SystemPanel system={state.system} />}
+        {loading && !state.overview && !isControlRoomTab(tab) ? <div className="mt-8 flex min-h-52 items-center justify-center rounded-3xl border border-white/8 bg-white/[0.03] text-sm text-white/40"><RefreshCw size={18} className="mr-3 animate-spin" />Loading persisted observability…</div> : isControlRoomTab(tab) ? <OwnerControlRoomPanel initialSection={tab} /> : tab === "overview" ? <OverviewPanel overview={state.overview} metrics={metrics} /> : tab === "sessions" ? <SessionsPanel sessions={state.sessions} total={state.sessionsTotal} filter={sessionFilter} setFilter={setSessionFilter} onApply={() => void loadConsole()} onOpen={openInspector} selected={state.selectedSession} inspectorLoading={inspectorLoading} /> : tab === "logs" ? <LogsPanel logs={state.logs} category={logCategory} level={logLevel} setCategory={setLogCategory} setLevel={setLogLevel} onApply={() => void loadConsole()} /> : <SystemPanel system={state.system} />}
       </div>
     </section>
   );

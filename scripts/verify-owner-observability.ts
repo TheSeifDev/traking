@@ -48,6 +48,7 @@ const ownerRoutes = [
   "app/api/owner/observability/sessions/route.ts",
   "app/api/owner/observability/sessions/[sessionId]/route.ts",
   "app/api/owner/observability/system/route.ts",
+  "app/api/owner/control-room/route.ts",
 ];
 for (const file of ownerRoutes) {
   const source = read(file);
@@ -63,6 +64,22 @@ assert.match(authWrapper, /unauthenticated/);
 assert.match(authWrapper, /inactive_account/);
 assert.match(authWrapper, /forbidden/);
 pass("unauthenticated, inactive, and forbidden API states remain server-mapped");
+
+const controlRoomRoute = read("app/api/owner/control-room/route.ts");
+assert.match(controlRoomRoute, /withRole\(USER_ROLES\.OWNER/);
+assert.match(controlRoomRoute, /range|organization_id|space_id|provider/);
+assert.doesNotMatch(controlRoomRoute, /request\.json|sql|session_token|access_token|authorization/i);
+pass("Control Room endpoint is owner-only, filterable, and does not accept request-controlled SQL or secrets");
+
+const controlRoomService = read("src/lib/observability/control-room.ts");
+assert.match(controlRoomService, /MAX_ORGANIZATIONS = 500/);
+assert.match(controlRoomService, /MAX_SESSIONS = 5000/);
+assert.match(controlRoomService, /from\(\"organizations\"\)/);
+assert.match(controlRoomService, /from\(\"spaces\"\)/);
+assert.match(controlRoomService, /organization_name/);
+assert.match(controlRoomService, /execution_status: \"not_observed\"/);
+assert.doesNotMatch(controlRoomService, /session_token|access_token|authorization|cookie/i);
+pass("Control Room service uses bounded persisted queries and keeps Organization, Space, and unobserved cron execution distinct");
 
 const observabilityService = read("src/lib/observability/service.ts");
 assert.match(observabilityService, /getWorkspaceAnalytics/);
