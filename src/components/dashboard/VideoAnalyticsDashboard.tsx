@@ -68,21 +68,74 @@ function getYouTubeId(sourceUrl: string): string | null {
   }
 }
 
-function measuredProgress(session: ViewerSessionAnalytics): number | null {
-  if (session.last_position === null || session.last_duration === null || session.last_duration <= 0) return null;
-  return Math.min(100, Math.max(0, Math.round((session.last_position / session.last_duration) * 100)));
+type SessionProgression = {
+  session: ViewerSessionAnalytics;
+  duration: number;
+  watchedSeconds: number;
+  reachedPosition: number;
+  reachedPercentage: number;
+  ranges: Array<{ start: number; end: number }>;
+  sessionLabel: string;
+  viewerLabel: string;
+};
+
+function buildSessionProgression(session: ViewerSessionAnalytics, fallbackDuration: number | null): SessionProgression | null {
+  const heatmap = session.heatmap;
+  const duration = heatmap?.duration_seconds ?? session.last_duration ?? fallbackDuration;
+  if (!heatmap?.available || !duration || duration <= 0 || heatmap.ranges.length === 0) return null;
+  const ranges = heatmap.ranges.filter((range) => range.end > range.start);
+  if (ranges.length === 0) return null;
+  const reachedPosition = Math.max(...ranges.map((range) => range.end));
+  const watchedSeconds = ranges.reduce((total, range) => total + Math.max(0, range.end - range.start), 0);
+  return {
+    session,
+    duration,
+    watchedSeconds,
+    reachedPosition,
+    reachedPercentage: Math.min(100, Math.max(0, Math.round((reachedPosition / duration) * 100))),
+    ranges,
+    sessionLabel: `Session ${session.session_number} · ${session.session_id.slice(0, 8)}`,
+    viewerLabel: session.viewer_name?.trim() || session.viewer_email?.trim() || (session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer"),
+  };
+}
+
+function formatPosition(seconds: number): string {
+  const safe = Math.max(0, Math.round(seconds));
+  if (safe < 60) return `${safe}s`;
+  return `${Math.floor(safe / 60)}m ${safe % 60}s`;
+}
+
+type TrackingTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ payload?: { session?: string; viewer?: string; progress?: number; watched?: number } }>;
+};
+
+function TrackingTooltip({ active, payload }: TrackingTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+  return <div className="rounded-xl border border-white/10 bg-[#11132d]/95 px-3 py-2.5 text-xs text-white shadow-xl shadow-black/30 backdrop-blur-md"><p className="font-semibold text-white">{point.session ?? "Session"}</p><p className="mt-1 text-white/65">{point.viewer ?? "Viewer"}</p><p className="mt-2 text-emerald-200">Reached: {point.progress ?? 0}%</p><p className="mt-0.5 text-white/50">Watched time: {point.watched ?? 0}s</p></div>;
+}
+
+function SessionProgressRow({ entry }: { entry: SessionProgression }) {
+  return <article className="rounded-2xl border border-white/8 bg-black/10 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{entry.sessionLabel}</p><p className="mt-1 truncate text-xs text-white/45">{entry.viewerLabel} · {formatDate(entry.session.started_at)}</p></div><div className="shrink-0 text-left text-xs sm:text-right"><p className="font-semibold text-emerald-200">Reached {entry.reachedPercentage}%</p><p className="mt-1 text-white/40">Watched {formatDuration(entry.watchedSeconds)}</p></div></div><div className="mt-4"><div className="relative h-7 overflow-hidden rounded-lg border border-white/8 bg-white/[0.035]" aria-label={`${entry.sessionLabel} watched timeline`}><div className="absolute inset-y-1 left-0 rounded-md bg-emerald-400/20" style={{ width: `${Math.min(100, Math.max(0, (entry.reachedPosition / entry.duration) * 100))}%` }} />{entry.ranges.map((range) => <span key={`${range.start}-${range.end}`} className="absolute inset-y-1 rounded-md bg-linear-to-r from-emerald-400 to-cyan-300 shadow-[0_0_12px_rgba(52,211,153,0.18)]" style={{ left: `${Math.min(100, Math.max(0, (range.start / entry.duration) * 100))}%`, width: `${Math.max(0.5, Math.min(100, ((range.end - range.start) / entry.duration) * 100))}%` }} />)}<span className="absolute inset-y-0 w-0.5 bg-white" style={{ left: `calc(${Math.min(100, Math.max(0, (entry.reachedPosition / entry.duration) * 100))}% - 1px)` }} aria-hidden="true" /></div><div className="mt-2 flex justify-between text-[10px] text-white/30"><span>0:00</span><span>{formatPosition(entry.reachedPosition)} reached</span><span>{formatDuration(entry.duration)}</span></div></div></article>;
 }
 
 export default function VideoAnalyticsDashboard({ video, analytics }: VideoAnalyticsDashboardProps) {
   const [section, setSection] = useState<Section>("overview");
   const measuredSessions = analytics.viewer_sessions.filter((session) => session.has_playback_telemetry);
-  const progressSessions = analytics.viewer_sessions.filter((session) => session.has_playback_telemetry && measuredProgress(session) !== null);
+  const progressionSessions = useMemo(() => analytics.viewer_sessions.flatMap((session) => {
+    const progression = buildSessionProgression(session, video.duration);
+    return progression ? [progression] : [];
+  }), [analytics.viewer_sessions, video.duration]);
   const youtubeId = video.source_type === "youtube" ? getYouTubeId(video.source_url) : null;
-  const latestProgress = progressSessions.length > 0 ? Math.max(...progressSessions.map((session) => measuredProgress(session) ?? 0)) : null;
-  const chartData = useMemo(() => progressSessions.slice(0, 12).reverse().map((session, index) => ({
-    session: `S${index + 1}`,
-    progress: measuredProgress(session) ?? 0,
-  })), [progressSessions]);
+  const furthestProgress = progressionSessions.length > 0 ? Math.max(...progressionSessions.map((entry) => entry.reachedPercentage)) : null;
+  const chartData = useMemo(() => progressionSessions.slice(0, 12).reverse().map((entry) => ({
+    session: entry.sessionLabel,
+    progress: entry.reachedPercentage,
+    viewer: entry.viewerLabel,
+    watched: Math.round(entry.watchedSeconds),
+  })), [progressionSessions]);
 
   const stats = [
     { label: "Total views", value: analytics.total_views.toLocaleString(), note: "Recorded sessions", icon: Eye, color: "text-violet-300" },
@@ -127,7 +180,7 @@ export default function VideoAnalyticsDashboard({ video, analytics }: VideoAnaly
       </nav>
 
       {section === "viewers" ? <ViewerAnalyticsPanel sessions={analytics.viewer_sessions} title="Viewer and session details" description="Every row is a real session. New sessions may show the authenticated profile identity; legacy sessions remain hashed or anonymous. Playback fields are available only for native HTML5 or YouTube IFrame API telemetry." /> : section === "activity" ? <ActivityTimeline sessions={analytics.viewer_sessions} /> : <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><h2 className="text-base font-semibold text-white">Measured playback progress</h2><p className="mt-1 text-xs leading-5 text-white/35">Latest reliable position divided by provider-reported duration per measured session.</p></div><PlayCircle size={18} className="text-emerald-300" /></div>{progressSessions.length === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center"><p className="text-sm text-white/40">Not measured yet</p><p className="mt-2 text-xs leading-5 text-white/30">A viewer must start playback before TrackUp can store current position and duration.</p></div> : <><div className="mt-6 flex items-end gap-4"><p className="text-5xl font-semibold tracking-tight text-white">{latestProgress}%</p><p className="pb-1 text-xs text-white/40">furthest reliable position<br />across {progressSessions.length} session{progressSessions.length === 1 ? "" : "s"}</p></div><div className="mt-5 h-3 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${latestProgress}%` }} /></div><div className="mt-6 h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ left: -18, right: 8, top: 8, bottom: 0 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="session" tick={{ fill: "#ffffff55", fontSize: 10 }} tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: "#ffffff55", fontSize: 10 }} tickLine={false} axisLine={false} width={38} /><Tooltip formatter={(value) => [`${value}%`, "Position reached"]} contentStyle={{ background: "#16121f", border: "1px solid #ffffff1c", borderRadius: 12, color: "white" }} /><Bar dataKey="progress" fill="#34d399" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div></>}</div>
+        <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="text-base font-semibold text-white">Session playback progression</h2><p className="mt-1 max-w-xl text-xs leading-5 text-white/35">Each row and bar uses persisted watched ranges reconstructed from ordered playback events. Reaching a position is separate from watch time and completion.</p></div><PlayCircle size={18} className="shrink-0 text-emerald-300" /></div>{progressionSessions.length === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-white/10 p-8 text-center"><p className="text-sm text-white/40">Not measured yet</p><p className="mt-2 text-xs leading-5 text-white/30">A reliable ordered playback sequence with duration is required before TrackUp draws session progression.</p></div> : <><div className="mt-6 flex items-end gap-4"><p className="text-5xl font-semibold tracking-tight text-white">{furthestProgress}%</p><p className="pb-1 text-xs text-white/40">furthest reliable position<br />across {progressionSessions.length} measured session{progressionSessions.length === 1 ? "" : "s"}</p></div><div className="mt-5 h-3 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-linear-to-r from-emerald-500 to-cyan-400" style={{ width: `${furthestProgress ?? 0}%` }} /></div><div className="mt-6 h-60"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ left: -18, right: 8, top: 8, bottom: 18 }}><CartesianGrid stroke="#ffffff14" vertical={false} /><XAxis dataKey="session" angle={-18} textAnchor="end" height={54} tick={{ fill: "#ffffff55", fontSize: 9 }} tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: "#ffffff55", fontSize: 10 }} tickLine={false} axisLine={false} width={38} /><Tooltip content={<TrackingTooltip />} cursor={{ fill: "#ffffff08", stroke: "none" }} wrapperStyle={{ outline: "none" }} /><Bar dataKey="progress" name="Reached" fill="#34d399" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div><div className="mt-6 space-y-3"><div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.15em] text-white/30"><span>Session timeline</span><span>Reached / watched</span></div>{progressionSessions.slice(0, 12).map((entry) => <SessionProgressRow key={entry.session.session_id} entry={entry} />)}</div></>}</div>
         <div className="space-y-6"><div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5"><h2 className="text-base font-semibold text-white">Measurement scope</h2><div className="mt-5 space-y-4"><div className="flex items-center justify-between text-sm"><span className="text-white/45">Provider</span><span className="capitalize text-white/80">{providerLabel(video.source_type)}</span></div><div className="flex items-center justify-between text-sm"><span className="text-white/45">Provider capability</span><span className="text-white/80">{scopeLabel(analytics.playback_metrics_scope)}</span></div><div className="flex items-center justify-between text-sm"><span className="text-white/45">Telemetry sessions</span><span className="text-white/80">{measuredSessions.length} / {analytics.total_sessions}</span></div><div className="flex items-center justify-between text-sm"><span className="text-white/45">Measured average</span><span className="text-white/80">{formatDuration(analytics.avg_watch_time_seconds)}</span></div></div></div><HeatmapPanel heatmap={analytics.heatmap} /></div>
       </div>}
     </div>
