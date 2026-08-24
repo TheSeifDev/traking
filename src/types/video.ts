@@ -249,6 +249,57 @@ export interface ViewerSessionAnalytics {
   heatmap?: PlaybackHeatmap;
 }
 
+export interface ViewerVideoAnalytics {
+  video_id: string;
+  video_title: string;
+  source_type: VideoSourceType;
+  source_url: string | null;
+  duration: number | null;
+  total_sessions: number;
+  measured_sessions: number;
+  session_only_sessions: number;
+  total_watch_time_seconds: number | null;
+  unique_coverage_seconds: number | null;
+  avg_watch_time_seconds: number | null;
+  avg_completion_percentage: number | null;
+  best_completion_percentage: number | null;
+  last_position: number | null;
+  first_watched_at: string | null;
+  last_watched_at: string | null;
+  total_events: number;
+  play_count: number;
+  pause_count: number;
+  resume_count: number;
+  seek_count: number;
+  buffering_count: number;
+  completion_count: number;
+  ended_count: number;
+  progress_event_count: number;
+  error_count: number;
+  rewatch_count: number;
+  watched_ranges: WatchedRange[];
+  heatmap: PlaybackHeatmap;
+  telemetry_state: TelemetryState;
+  sessions: ViewerSessionAnalytics[];
+}
+
+export interface ViewerAnalytics {
+  viewer: AnalyticsViewerSummary;
+  videos: ViewerVideoAnalytics[];
+  sessions: ViewerSessionAnalytics[];
+  summary: {
+    total_sessions: number;
+    videos_watched: number;
+    total_watch_time_seconds: number | null;
+    average_completion_percentage: number | null;
+    first_seen_at: string | null;
+    last_seen_at: string | null;
+    device_type: string | null;
+    browser: string | null;
+    os: string | null;
+  };
+}
+
 export interface VideoAnalytics {
   video_id: string;
   total_views: number;

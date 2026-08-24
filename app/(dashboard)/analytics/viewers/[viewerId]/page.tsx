@@ -2,17 +2,19 @@ import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
-import { getViewerVideoAnalytics } from "@/src/lib/videos/service";
-import ViewerVideoAnalyticsDashboard from "@/src/components/dashboard/ViewerVideoAnalyticsDashboard";
+import { getViewerAnalytics } from "@/src/lib/videos/service";
+import ViewerAnalyticsDashboard from "@/src/components/dashboard/ViewerAnalyticsDashboard";
 import { EmptyAnalytics } from "@/src/components/dashboard/AnalyticsDetail";
 
 interface Props {
-  params: Promise<{ id: string; viewerId: string }>;
-  searchParams?: Promise<{ space_id?: string; organization_id?: string }>;
+  params: Promise<{ viewerId: string }>;
+  searchParams?: Promise<{ space_id?: string; organization_id?: string; tab?: string }>;
 }
 
-export default async function ViewerVideoAnalyticsPage({ params, searchParams }: Props) {
-  const { id: videoId, viewerId: encodedViewerId } = await params;
+const allowedTabs = new Set(["overview", "videos", "sessions", "timeline", "heatmap", "activity"]);
+
+export default async function ViewerAnalyticsPage({ params, searchParams }: Props) {
+  const { viewerId: encodedViewerId } = await params;
   const user = await guardAuth();
   const query = await searchParams;
   const requestedSpaceId = query?.space_id?.trim() || null;
@@ -31,12 +33,14 @@ export default async function ViewerVideoAnalyticsPage({ params, searchParams }:
   if (!scope || !canManage) return <EmptyAnalytics title="Viewer analytics access required" body="Viewer analytics are restricted to the platform owner and active Space admins." />;
 
   const viewerId = decodeURIComponent(encodedViewerId);
-  const analytics = await getViewerVideoAnalytics(viewerId, videoId, scope);
-  if (!analytics) return <EmptyAnalytics title="Viewer/video analytics unavailable" body="This viewer and video pair is not present in the selected authorized Organization or Space." />;
+  const analytics = await getViewerAnalytics(viewerId, scope);
+  if (!analytics) return <EmptyAnalytics title="Viewer analytics unavailable" body="This viewer has no persisted activity in the selected authorized Organization or Space." />;
 
   const scopeQuery = organizationScope
     ? `?organization_id=${encodeURIComponent(resolution.organization?.id ?? "")}`
     : `?space_id=${encodeURIComponent(spaceScope?.spaceId ?? "")}`;
-  const viewerHref = `/analytics/viewers/${encodeURIComponent(viewerId)}${scopeQuery}`;
-  return <ViewerVideoAnalyticsDashboard viewer={analytics.viewer} video={analytics.video} scopeQuery={scopeQuery} backHref={viewerHref} />;
+  const backHref = `/analytics${scopeQuery}`;
+  const initialTab = query?.tab && allowedTabs.has(query.tab) ? query.tab as "overview" | "videos" | "sessions" | "timeline" | "heatmap" | "activity" : "videos";
+
+  return <ViewerAnalyticsDashboard data={analytics} scopeQuery={scopeQuery} backHref={backHref} initialTab={initialTab} />;
 }

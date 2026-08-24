@@ -6,7 +6,7 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary, type WatchEventType } from "@/src/types/video";
+import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type ViewerAnalytics, type ViewerVideoAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary, type WatchEventType } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
@@ -1040,6 +1040,205 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
   } catch {
     return empty;
   }
+}
+
+type ViewerVideoSourceInfo = AnalyticsVideoInfo & { source_url: string | null };
+
+export async function getViewerAnalytics(
+  viewerId: string,
+  scope: VideoDataScope,
+  videoId?: string,
+): Promise<ViewerAnalytics | null> {
+  if (!viewerId) return null;
+  try {
+    const supabase = createAdminClient();
+    let allowedSpaceIds: Set<string> | null = null;
+    if (scope.type === "organization") {
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .maybeSingle();
+      if (organizationError || !organization) return null;
+      const { data: spaces, error: spacesError } = await supabase
+        .from("spaces")
+        .select("id")
+        .eq("organization_id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .is("archived_at", null)
+        .limit(500);
+      if (spacesError) return null;
+      allowedSpaceIds = new Set((spaces ?? []).map((space) => space.id));
+    } else {
+      allowedSpaceIds = new Set([scope.spaceId]);
+    }
+
+    let sessionsQuery = supabase
+      .from("watch_sessions")
+      .select(`
+        id,
+        watch_link_id,
+        viewer_identifier,
+        viewer_profile_id,
+        device_type,
+        browser,
+        os,
+        started_at,
+        last_seen_at,
+        ended_at,
+        watch_time_seconds,
+        completion_percentage,
+        watch_links!inner(
+          video_id,
+          videos!inner(id, title, source_url, workspace_id, space_id, source_type, duration)
+        )
+      `)
+      .eq("watch_links.videos.workspace_id", scope.workspaceId);
+    if (viewerId.match(/^[0-9a-f-]{36}$/i)) sessionsQuery = sessionsQuery.eq("viewer_profile_id", viewerId);
+    else sessionsQuery = sessionsQuery.eq("viewer_identifier", viewerId);
+    if (videoId) sessionsQuery = sessionsQuery.eq("watch_links.video_id", videoId);
+
+    const { data: rawSessions, error: sessionsError } = await sessionsQuery
+      .order("started_at", { ascending: false })
+      .limit(2000);
+    if (sessionsError) return null;
+
+    const viewerSessionsRows: AnalyticsSessionRow[] = [];
+    const sessionVideos = new Map<string, ViewerVideoSourceInfo>();
+    for (const raw of (rawSessions ?? []) as unknown[]) {
+      if (!raw || typeof raw !== "object") continue;
+      const row = raw as AnalyticsSessionRow;
+      const link = firstRelation(row.watch_links);
+      const relatedVideo = firstRelation(link?.videos);
+      if (
+        typeof relatedVideo?.id !== "string" ||
+        typeof relatedVideo.title !== "string" ||
+        !isValidSourceType(relatedVideo.source_type) ||
+        typeof relatedVideo.space_id !== "string" ||
+        !allowedSpaceIds?.has(relatedVideo.space_id)
+      ) continue;
+      viewerSessionsRows.push(row);
+      sessionVideos.set(row.id, {
+        id: relatedVideo.id,
+        space_id: relatedVideo.space_id,
+        title: relatedVideo.title,
+        source_type: relatedVideo.source_type,
+        duration: typeof relatedVideo.duration === "number" ? relatedVideo.duration : null,
+        source_url: typeof relatedVideo.source_url === "string" ? relatedVideo.source_url : null,
+      });
+    }
+    if (viewerSessionsRows.length === 0) return null;
+    await attachSessionProfiles(supabase, viewerSessionsRows);
+
+    const sessionIds = viewerSessionsRows.map((session) => session.id);
+    const { data: rawEvents, error: eventsError } = await supabase
+      .from("watch_events")
+      .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, playback_rate, from_rate, to_rate, metadata, received_at, created_at")
+      .in("session_id", sessionIds)
+      .order("created_at", { ascending: true })
+      .limit(10000);
+    if (eventsError) return null;
+
+    const viewerSessions = buildViewerSessionAnalytics(
+      viewerSessionsRows,
+      (rawEvents ?? []) as unknown as AnalyticsEventRow[],
+      new Map(Array.from(sessionVideos.entries()).map(([id, video]) => [id, video])),
+    );
+    if (viewerSessions.length === 0) return null;
+    const viewer = buildViewerSummaries(viewerSessions).find((item) => item.viewer_id === viewerId) ?? buildViewerSummaries(viewerSessions)[0];
+    if (!viewer) return null;
+
+    const sessionsByVideo = new Map<string, VideoAnalytics["viewer_sessions"]>();
+    for (const session of viewerSessions) sessionsByVideo.set(session.video_id, [...(sessionsByVideo.get(session.video_id) ?? []), session]);
+    const videos: ViewerVideoAnalytics[] = Array.from(sessionsByVideo.entries()).flatMap(([videoId, sessions]) => {
+      const video = sessionVideos.get(videoId);
+      if (!video) return [];
+      const measuredSessions = sessions.filter((session) => session.has_playback_telemetry);
+      const watchTimes = measuredSessions.map(effectiveWatchTime).filter((value): value is number => value !== null);
+      const completions = measuredSessions.map((session) => session.completion_percentage).filter((value): value is number => value !== null);
+      const duration = video.duration ?? sessions.map((session) => session.last_duration).find((value): value is number => value !== null) ?? null;
+      const heatmap = aggregateHeatmaps(
+        sessions.map((session) => session.heatmap).filter((value): value is PlaybackHeatmap => Boolean(value)),
+        duration,
+        supportsPlaybackMetrics(video.source_type),
+      );
+      const allEvents = sessions.flatMap((session) => session.playback_events);
+      const latest = sessions.slice().sort((a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime())[0];
+      const telemetryState = measuredSessions.length > 0
+        ? "measured"
+        : sessions.every((session) => session.telemetry_state === "unsupported")
+          ? "unsupported"
+          : "missing";
+      return [{
+        video_id: video.id,
+        video_title: video.title,
+        source_type: video.source_type,
+        source_url: video.source_url,
+        duration,
+        total_sessions: sessions.length,
+        measured_sessions: measuredSessions.length,
+        session_only_sessions: sessions.filter((session) => session.telemetry_state === "unsupported").length,
+        total_watch_time_seconds: watchTimes.length > 0 ? watchTimes.reduce((sum, value) => sum + value, 0) : null,
+        unique_coverage_seconds: heatmap.available ? heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0) : null,
+        avg_watch_time_seconds: watchTimes.length > 0 ? Math.round(watchTimes.reduce((sum, value) => sum + value, 0) / watchTimes.length) : null,
+        avg_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null,
+        best_completion_percentage: completions.length > 0 ? Math.max(...completions) : null,
+        last_position: latest?.last_position ?? null,
+        first_watched_at: sessions.reduce((earliest, session) => !earliest || session.started_at < earliest ? session.started_at : earliest, null as string | null),
+        last_watched_at: latest?.last_activity_at ?? null,
+        total_events: allEvents.length,
+        play_count: allEvents.filter((event) => event.event_type === "play").length,
+        pause_count: allEvents.filter((event) => event.event_type === "pause").length,
+        resume_count: allEvents.filter((event) => event.event_type === "resume").length,
+        seek_count: allEvents.filter((event) => event.event_type === "seek" || event.event_type === "seek_completed").length,
+        buffering_count: allEvents.filter((event) => event.event_type === "buffer" || event.event_type === "buffering_started" || event.event_type === "buffering_ended").length,
+        completion_count: allEvents.filter((event) => event.event_type === "complete").length,
+        ended_count: allEvents.filter((event) => event.event_type === "ended" || event.event_type === "session_ended").length,
+        progress_event_count: allEvents.filter((event) => event.event_type === "heartbeat" || event.event_type === "playback_progress").length,
+        error_count: allEvents.filter((event) => event.event_type === "player_error").length,
+        rewatch_count: Math.max(0, sessions.length - 1),
+        watched_ranges: heatmap.ranges,
+        heatmap,
+        telemetry_state: telemetryState,
+        sessions,
+      }];
+    });
+
+    const orderedSessions = viewerSessions.slice().sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
+    const measuredSessions = viewerSessions.filter((session) => session.has_playback_telemetry);
+    const watchTimes = measuredSessions.map(effectiveWatchTime).filter((value): value is number => value !== null);
+    const completions = measuredSessions.map((session) => session.completion_percentage).filter((value): value is number => value !== null);
+    const latest = viewerSessions.slice().sort((a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime())[0];
+    return {
+      viewer,
+      videos: videos.sort((a, b) => new Date(b.last_watched_at ?? 0).getTime() - new Date(a.last_watched_at ?? 0).getTime()),
+      sessions: viewerSessions,
+      summary: {
+        total_sessions: viewerSessions.length,
+        videos_watched: videos.length,
+        total_watch_time_seconds: watchTimes.length > 0 ? watchTimes.reduce((sum, value) => sum + value, 0) : null,
+        average_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null,
+        first_seen_at: orderedSessions[0]?.started_at ?? null,
+        last_seen_at: latest?.last_activity_at ?? null,
+        device_type: latest?.device_type ?? null,
+        browser: latest?.browser ?? null,
+        os: latest?.os ?? null,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getViewerVideoAnalytics(
+  viewerId: string,
+  videoId: string,
+  scope: VideoDataScope,
+): Promise<{ viewer: AnalyticsViewerSummary; video: ViewerVideoAnalytics } | null> {
+  const analytics = await getViewerAnalytics(viewerId, scope, videoId);
+  const video = analytics?.videos.find((item) => item.video_id === videoId);
+  return analytics && video ? { viewer: analytics.viewer, video } : null;
 }
 
 export async function getVideoViewerAnalytics(

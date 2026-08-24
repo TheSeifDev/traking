@@ -113,7 +113,10 @@ async function runTests(): Promise<void> {
   assert(watchPlayer.includes("pendingEventsRef") && watchPlayer.includes("sequenceNumberRef") && watchPlayer.includes("flushEvents") && watchPlayer.includes("client_event_id"), "player batches ordered idempotent events");
   assert(analyticsRanges.includes("reconstructWatchedRanges") && analyticsRanges.includes("aggregateHeatmaps") && analyticsRanges.includes("not_available_from_provider"), "range aggregation has deterministic and honest availability states");
   assert(viewerAnalyticsRoute.includes("withDashboardAuth") && viewerAnalyticsRoute.includes("resolveSpaceAdminForUser") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withDashboardAuth") && sessionAnalyticsRoute.includes("resolveSpaceAdminForUser") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce authenticated Space-admin scope");
-  assert(videoAnalyticsPage.includes("HeatmapPanel") && viewerAnalyticsPage.includes("ViewerIdentityCard") && sessionAnalyticsPage.includes("SessionTimeline"), "scoped analytics pages render the new detail hierarchy");
+  const viewerFirstAnalyticsPage = readFileSync("app/(dashboard)/analytics/viewers/[viewerId]/page.tsx", "utf8");
+  const viewerAnalyticsDashboard = readFileSync("src/components/dashboard/ViewerAnalyticsDashboard.tsx", "utf8");
+  const viewerVideoAnalyticsDashboard = readFileSync("src/components/dashboard/ViewerVideoAnalyticsDashboard.tsx", "utf8");
+  assert(videoAnalyticsPage.includes("HeatmapPanel") && viewerAnalyticsPage.includes("ViewerVideoAnalyticsDashboard") && sessionAnalyticsPage.includes("SessionTimeline") && viewerFirstAnalyticsPage.includes("getViewerAnalytics") && viewerAnalyticsDashboard.includes("Videos watched by this viewer") && viewerVideoAnalyticsDashboard.includes("Event timeline"), "scoped analytics pages render the new viewer/video/session detail hierarchy");
 
   section("Watch-link lifecycle and owner mutation checks");
   const revocationMigration = readFileSync("supabase/migrations/20260822000005_add_watch_link_revocation.sql", "utf8");
