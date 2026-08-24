@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, BarChart3, Building2, Clock3, ExternalLink, FileSearch, RefreshCw, Search, Server, ShieldAlert, Users, Video, Zap } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, Building2, Clock3, ExternalLink, Eye, FileSearch, RefreshCw, Search, Server, ShieldAlert, Users, Video, Zap } from "lucide-react";
 import type { ControlRoomData } from "@/src/lib/observability/control-room";
 import { getSafeSpaceDisplayName, hasOrganizationSpaceLabelCollision } from "@/src/lib/spaces/labels";
 
@@ -14,22 +14,35 @@ function isControlRoomData(value: unknown): value is ControlRoomData {
   return typeof metrics === "object" && metrics !== null && Array.isArray(value.organizations) && Array.isArray(value.spaces) && Array.isArray(value.users) && Array.isArray(value.videos) && Array.isArray(value.recent_activity) && Array.isArray(value.incidents);
 }
 
-const sections: Array<{ id: ControlRoomSection; label: string }> = [
-  { id: "command", label: "Command Center" },
-  { id: "organizations", label: "Organizations" },
-  { id: "spaces", label: "Spaces" },
-  { id: "users", label: "Users" },
-  { id: "videos", label: "Videos" },
-  { id: "playback", label: "Playback Intelligence" },
-  { id: "activity", label: "Activity / Audit" },
-  { id: "security", label: "Security" },
-  { id: "jobs", label: "Jobs / Cron" },
-  { id: "health", label: "System Health" },
-  { id: "api", label: "API / Provider" },
-  { id: "database", label: "Database" },
-  { id: "incidents", label: "Incidents" },
-  { id: "flags", label: "Feature Flags" },
-  { id: "configuration", label: "Configuration" },
+export type ControlRoomNavigationId = ControlRoomSection | "sessions";
+
+type NavigationItem = { id: ControlRoomNavigationId; label: string; icon: typeof Activity };
+
+export const CONTROL_ROOM_NAV_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
+  { label: "Operations", items: [
+    { id: "command", label: "Command Center", icon: BarChart3 },
+    { id: "organizations", label: "Organizations", icon: Building2 },
+    { id: "spaces", label: "Spaces", icon: Server },
+    { id: "users", label: "Users", icon: Users },
+    { id: "videos", label: "Videos", icon: Video },
+  ] },
+  { label: "Observability", items: [
+    { id: "playback", label: "Playback Intelligence", icon: Activity },
+    { id: "sessions", label: "Sessions", icon: Eye },
+    { id: "activity", label: "Activity / Audit", icon: FileSearch },
+    { id: "incidents", label: "Incidents", icon: AlertTriangle },
+  ] },
+  { label: "Platform", items: [
+    { id: "security", label: "Security", icon: ShieldAlert },
+    { id: "health", label: "System Health", icon: Clock3 },
+    { id: "api", label: "API / Provider", icon: ExternalLink },
+    { id: "jobs", label: "Jobs / Cron", icon: RefreshCw },
+  ] },
+  { label: "System", items: [
+    { id: "database", label: "Database", icon: Server },
+    { id: "flags", label: "Feature Flags", icon: Zap },
+    { id: "configuration", label: "Configuration", icon: FileSearch },
+  ] },
 ];
 
 function formatSeconds(value: number | null): string {
@@ -81,6 +94,7 @@ export default function OwnerControlRoomPanel({ initialSection = "command" }: { 
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok || typeof payload !== "object" || payload === null || !("data" in payload) || !isControlRoomData(payload.data)) throw new Error("control_room_unavailable");
       setData(payload.data);
+      if (!organizationId && payload.data.organizations[0]) setOrganizationId(payload.data.organizations[0].id);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "control_room_unavailable");
@@ -121,15 +135,16 @@ export default function OwnerControlRoomPanel({ initialSection = "command" }: { 
   ] as const : [];
 
   return <section className="mt-6 space-y-5">
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3 lg:flex-row lg:items-center">
-      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/8 bg-black/10 px-3 py-2"><Search size={15} className="shrink-0 text-white/30" /><input ref={searchRef} aria-label="Control Room global search" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void load(); }} placeholder="Search user, email, organization, space, video, session or log" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/25" /></div>
-      <select value={range} onChange={(event) => setRange(event.target.value)} className="rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="1h">Last 1 hour</option><option value="24h">Last 24 hours</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All persisted time</option></select>
-      <select value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); setSpaceId(""); }} className="max-w-52 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All Organizations</option>{data?.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select>
-      <select value={spaceId} onChange={(event) => setSpaceId(event.target.value)} className="max-w-52 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All Spaces</option>{filteredSpaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select>
-      <select value={provider} onChange={(event) => setProvider(event.target.value)} className="rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All providers</option><option value="youtube">YouTube</option><option value="google_drive">Google Drive</option><option value="telegram">Telegram</option><option value="direct_url">Direct URL</option></select>
-      <button type="button" onClick={() => void load()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 hover:border-violet-300/30 hover:text-white"><RefreshCw size={14} className={loading ? "animate-spin" : ""} />Refresh</button>
+    <div className="rounded-3xl border border-white/8 bg-white/[0.025] p-4 sm:p-5">
+      <div className="flex flex-col gap-1"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Scope and filters</p><p className="text-xs text-white/40">Control Room defaults to the first authorized Organization, All Spaces, Last 7 days, and all providers.</p></div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1fr)_auto_auto_auto_auto]">
+        <div className="flex min-w-0 items-center gap-2 rounded-xl border border-white/8 bg-black/10 px-3 py-2"><Search size={15} className="shrink-0 text-white/30" /><input ref={searchRef} aria-label="Control Room global search" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void load(); }} placeholder="Search users, spaces, videos, sessions, or logs" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-white/25" /></div>
+        <select aria-label="Control Room period" value={range} onChange={(event) => setRange(event.target.value)} className="min-h-10 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="1h">Last 1 hour</option><option value="24h">Last 24 hours</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All persisted time</option></select>
+        <select aria-label="Control Room Organization" value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); setSpaceId(""); }} className="min-h-10 min-w-0 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All Organizations</option>{data?.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select>
+        <select aria-label="Control Room Space" value={spaceId} onChange={(event) => setSpaceId(event.target.value)} className="min-h-10 min-w-0 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All Spaces</option>{filteredSpaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}</select>
+        <div className="flex min-w-0 gap-2"><select aria-label="Control Room provider" value={provider} onChange={(event) => setProvider(event.target.value)} className="min-h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0b0b28] px-3 py-2 text-xs text-white/70"><option value="">All providers</option><option value="youtube">YouTube</option><option value="google_drive">Google Drive</option><option value="telegram">Telegram</option><option value="direct_url">Direct URL</option></select><button type="button" onClick={() => void load()} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/70 hover:border-violet-300/30 hover:text-white"><RefreshCw size={14} className={loading ? "animate-spin" : ""} /><span className="sr-only sm:not-sr-only">Refresh</span></button></div>
+      </div>
     </div>
-    <div className="flex gap-1 overflow-x-auto rounded-2xl border border-white/8 bg-white/[0.025] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{sections.map((item) => <button key={item.id} type="button" onClick={() => setSection(item.id)} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-medium ${section === item.id ? "bg-violet-500/15 text-violet-200" : "text-white/45 hover:bg-white/5 hover:text-white"}`}>{item.label}</button>)}</div>
     {error && <div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100"><AlertTriangle size={15} />{error}. No synthetic fallback data is shown.</div>}
     {loading && !data ? <div className="flex min-h-52 items-center justify-center rounded-3xl border border-white/8 bg-white/[0.03] text-xs text-white/40"><RefreshCw size={16} className="mr-2 animate-spin" />Loading bounded persisted Control Room data…</div> : data ? <>
       <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] text-white/35"><span>Scope: {selectedOrganization?.name ?? "All Organizations"}{spaceId ? ` · ${data.spaces.find((space) => space.id === spaceId)?.name ?? "Space"}` : ""} · {data.range}</span><span>Last updated {relative(data.generated_at)} · server window starts {formatDate(data.range_start)}</span></div>

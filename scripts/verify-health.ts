@@ -88,11 +88,11 @@ assert.match(observability, /database_latency_ms/);
 assert.match(observability, /database_error/);
 pass("Owner Observability reuses the shared health probe and exposes bounded status metadata");
 
-const ownerConsole = read("src/components/owner/OwnerObservabilityConsole.tsx");
+const ownerConsole = read("src/components/owner/OwnerControlRoomPanel.tsx");
 assert.match(ownerConsole, /database_status/);
 assert.match(ownerConsole, /database_latency_ms/);
-assert.match(ownerConsole, /Database \{databaseLabel\.toLowerCase\(\)\}/);
-assert.match(ownerConsole, /never writes tracking, session, or analytics data/);
+assert.match(ownerConsole, /Database \$\{databaseLabel\.toLowerCase\(\)\}/);
+assert.match(ownerConsole, /does not write tracking, sessions, analytics/);
 pass("Owner Console displays real database status and latency without claiming scheduler evidence");
 
 void verifyRuntimeFailurePaths()
