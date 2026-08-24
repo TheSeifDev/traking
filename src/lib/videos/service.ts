@@ -38,7 +38,11 @@ interface AnalyticsEventRow {
   client_event_id: string | null;
   sequence_number: number | null;
   occurred_at: string | null;
+  playback_rate: number | null;
+  from_rate: number | null;
+  to_rate: number | null;
   metadata: Record<string, string | number | boolean | null>;
+  received_at: string;
   created_at: string;
 }
 
@@ -165,7 +169,9 @@ function buildViewerSessionAnalytics(
 
   const eventTime = (event: AnalyticsEventRow): number => {
     const occurred = event.occurred_at ? new Date(event.occurred_at).getTime() : Number.NaN;
-    return Number.isFinite(occurred) ? occurred : new Date(event.created_at).getTime();
+    if (Number.isFinite(occurred)) return occurred;
+    const received = new Date(event.received_at).getTime();
+    return Number.isFinite(received) ? received : new Date(event.created_at).getTime();
   };
   const sortEvents = (eventList: AnalyticsEventRow[]) => eventList.slice().sort((a, b) => {
     if (a.sequence_number !== null && a.sequence_number !== undefined && b.sequence_number !== null && b.sequence_number !== undefined && a.sequence_number !== b.sequence_number) return a.sequence_number - b.sequence_number;
@@ -198,6 +204,10 @@ function buildViewerSessionAnalytics(
         created_at: event.created_at,
         sequence_number: event.sequence_number,
         occurred_at: event.occurred_at,
+        received_at: event.received_at,
+        playback_rate: event.playback_rate,
+        from_rate: event.from_rate,
+        to_rate: event.to_rate,
         metadata: event.metadata,
       }));
       const telemetryEventCount = sessionEvents.filter(isValidTelemetryEvent).length;
@@ -638,7 +648,7 @@ export async function getVideoAnalytics(
     if (sessionIds.length > 0) {
       const { data: rawEvents, error: eventsError } = await supabase
         .from("watch_events")
-        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, metadata, created_at")
+        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, playback_rate, from_rate, to_rate, metadata, received_at, created_at")
         .in("session_id", sessionIds)
         .order("created_at", { ascending: true })
         .limit(5000);
@@ -858,7 +868,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
     if (sessionIds.length > 0) {
       const { data: rawEvents, error: eventsError } = await supabase
         .from("watch_events")
-        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, metadata, created_at")
+        .select("id, session_id, event_type, position, duration, from_position, client_event_id, sequence_number, occurred_at, playback_rate, from_rate, to_rate, metadata, received_at, created_at")
         .in("session_id", sessionIds)
         .order("created_at", { ascending: true })
         .limit(10000);

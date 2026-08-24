@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getWorkspaceAnalytics } from "@/src/lib/videos/service";
+import { checkDatabaseHealth } from "@/src/lib/health/db";
 import { sanitizeOwnerMetadata, type SafeOwnerLog, type ObservabilityCategory, type ObservabilityLevel } from "./logger";
 import type { ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
 
@@ -210,14 +211,15 @@ export async function listOwnerLogs(filters: OwnerLogFilters = {}) {
 }
 
 export async function getOwnerSystemState() {
-  const supabase = createAdminClient();
-  const checkedAt = new Date().toISOString();
-  const { error } = await supabase.from("profiles").select("id", { count: "exact", head: true });
+  const health = await checkDatabaseHealth();
   return {
-    checked_at: checkedAt,
+    checked_at: health.checked_at,
     environment: process.env.VERCEL_ENV ?? (process.env.NODE_ENV === "production" ? "production" : "development"),
     deployment_sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? null,
     region: process.env.VERCEL_REGION ?? null,
-    database: error ? "error" as const : "connected" as const,
+    database: health.status === "healthy" ? "connected" as const : "error" as const,
+    database_status: health.status,
+    database_latency_ms: health.latency_ms,
+    database_error: health.error,
   };
 }

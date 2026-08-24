@@ -53,7 +53,12 @@ export interface TrackingEventPayload {
   sequence_number?: number | null;
   /** Provider event time, separate from server receipt time. */
   occurred_at?: string | null;
-  /** Non-PII provider metadata such as visibility or playback rate. */
+  /** Actual provider playback rate at event time. */
+  playback_rate?: number | null;
+  /** Actual previous/new rates for rate_change events. */
+  from_rate?: number | null;
+  to_rate?: number | null;
+  /** Non-PII provider metadata such as visibility or buffering state. */
   metadata?: Record<string, string | number | boolean | null>;
 }
 

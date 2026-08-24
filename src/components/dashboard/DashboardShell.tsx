@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import type { AccessibleSpace } from "@/src/types/space";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
@@ -17,6 +17,7 @@ interface DashboardShellProps {
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Organizations", href: "/organizations", icon: Building2 },
   { label: "Spaces", href: "/spaces", icon: LayoutDashboard },
   { label: "Videos", href: "/videos", icon: Video },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
@@ -40,7 +41,7 @@ export default function DashboardShell({ children, user, workspace, spaces = [] 
     ...(user.role === "owner" ? [ownerNavItem] : []),
   ];
   const scopedHref = (href: string) => {
-    if (!activeSpaceId || href === "/spaces" || href === "/owner" || href.startsWith("/spaces/")) return href;
+    if (!activeSpaceId || href === "/spaces" || href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     return `${href}?space_id=${encodeURIComponent(activeSpaceId)}`;
   };
 

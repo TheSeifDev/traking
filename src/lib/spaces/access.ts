@@ -2,13 +2,29 @@ import { AuthError, requireAuth } from "@/src/lib/auth/session";
 import { isOwner } from "@/src/lib/auth/rbac";
 import type { AuthenticatedUser } from "@/src/types/auth";
 import type { Database } from "@/src/types/database";
-import type { AccessibleSpace, Space, SpaceAccess, SpaceMember, SpaceRole } from "@/src/types/space";
+import type { AccessibleOrganization, AccessibleSpace, Organization, OrganizationAccess, OrganizationMember, Space, SpaceAccess, SpaceMember, SpaceRole } from "@/src/types/space";
 import { createAdminClient } from "@/utils/supabase/admin";
 
+type OrganizationRow = Database["public"]["Tables"]["organizations"]["Row"];
+type OrganizationMemberRow = Database["public"]["Tables"]["organization_members"]["Row"];
 type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
 type SpaceMemberRow = Database["public"]["Tables"]["space_members"]["Row"];
 
 const MAX_ACCESSIBLE_SPACES = 100;
+const ORGANIZATION_FIELDS = "id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+const ORGANIZATION_MEMBER_FIELDS = "id, organization_id, profile_id, role, status, joined_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
+
+function toOrganization(row: OrganizationRow): Organization {
+  const settings = row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
+    ? row.settings as Record<string, unknown>
+    : {};
+  return { ...row, settings };
+}
+
+function toOrganizationMember(row: OrganizationMemberRow): OrganizationMember {
+  return row;
+}
 
 function toSpace(row: SpaceRow): Space {
   const settings = row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
@@ -30,12 +46,97 @@ export async function getSpaceById(spaceId: string): Promise<Space | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("spaces")
-    .select("id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at")
+    .select(SPACE_FIELDS)
     .eq("id", spaceId)
     .is("archived_at", null)
     .maybeSingle();
   if (error || !data) return null;
   return toSpace(data);
+}
+
+async function getOrganizationById(organizationId: string): Promise<Organization | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(organizationId)) return null;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select(ORGANIZATION_FIELDS)
+    .eq("id", organizationId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (error || !data) return null;
+  return toOrganization(data);
+}
+
+async function loadOrganizationMembership(profileId: string, organizationId: string): Promise<OrganizationMember | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("organization_members")
+    .select(ORGANIZATION_MEMBER_FIELDS)
+    .eq("profile_id", profileId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return toOrganizationMember(data);
+}
+
+export async function getAccessibleOrganizations(user: AuthenticatedUser): Promise<AccessibleOrganization[]> {
+  const supabase = createAdminClient();
+  if (isOwner(user.role)) {
+    const { data, error } = await supabase
+      .from("organizations")
+      .select(ORGANIZATION_FIELDS)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true })
+      .limit(MAX_ACCESSIBLE_SPACES);
+    if (error || !data) return [];
+    return data.map((row) => ({ ...toOrganization(row), membership_role: null, membership_status: null, is_platform_owner: true }));
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select(ORGANIZATION_MEMBER_FIELDS)
+    .eq("profile_id", user.id)
+    .eq("status", "active")
+    .limit(MAX_ACCESSIBLE_SPACES);
+  if (membershipError || !memberships || memberships.length === 0) return [];
+
+  const organizationIds = memberships.map((membership) => membership.organization_id);
+  const { data: organizations, error: organizationError } = await supabase
+    .from("organizations")
+    .select(ORGANIZATION_FIELDS)
+    .in("id", organizationIds)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+    .limit(MAX_ACCESSIBLE_SPACES);
+  if (organizationError || !organizations) return [];
+
+  const membershipByOrganization = new Map(memberships.map((membership) => [membership.organization_id, membership]));
+  return organizations.map((organization) => {
+    const membership = membershipByOrganization.get(organization.id);
+    return {
+      ...toOrganization(organization),
+      membership_role: membership?.role ?? null,
+      membership_status: membership?.status ?? null,
+      is_platform_owner: false,
+    };
+  });
+}
+
+export async function authorizeOrganizationMember(organizationId: string, user: AuthenticatedUser): Promise<OrganizationAccess> {
+  const organization = await getOrganizationById(organizationId);
+  if (!organization) throw denied("Organization access denied");
+  if (isOwner(user.role)) {
+    return { user, organization, membership: null, effective_role: user.role, is_platform_owner: true };
+  }
+  const membership = await loadOrganizationMembership(user.id, organization.id);
+  if (!membership || membership.status !== "active") throw denied("Organization access denied");
+  return { user, organization, membership, effective_role: membership.role, is_platform_owner: false };
+}
+
+export async function authorizeOrganizationAdmin(organizationId: string, user: AuthenticatedUser): Promise<OrganizationAccess> {
+  const access = await authorizeOrganizationMember(organizationId, user);
+  if (access.is_platform_owner || access.membership?.role === "admin") return access;
+  throw denied("Organization admin access denied");
 }
 
 async function loadMembership(profileId: string, spaceId: string): Promise<SpaceMember | null> {
@@ -55,7 +156,7 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
   if (isOwner(user.role)) {
     const { data, error } = await supabase
       .from("spaces")
-      .select("id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at")
+      .select(SPACE_FIELDS)
       .is("archived_at", null)
       .order("created_at", { ascending: true })
       .limit(MAX_ACCESSIBLE_SPACES);
@@ -68,31 +169,49 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
     }));
   }
 
+  const { data: organizationMemberships, error: organizationMembershipError } = await supabase
+    .from("organization_members")
+    .select(ORGANIZATION_MEMBER_FIELDS)
+    .eq("profile_id", user.id)
+    .eq("status", "active")
+    .limit(MAX_ACCESSIBLE_SPACES);
+  if (organizationMembershipError) return [];
+
   const { data: memberships, error: membershipError } = await supabase
     .from("space_members")
     .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
     .eq("profile_id", user.id)
     .eq("status", "active")
     .limit(MAX_ACCESSIBLE_SPACES);
-  if (membershipError || !memberships || memberships.length === 0) return [];
+  if (membershipError) return [];
 
-  const spaceIds = memberships.map((membership) => membership.space_id);
-  const { data: spaces, error: spaceError } = await supabase
-    .from("spaces")
-    .select("id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at")
-    .in("id", spaceIds)
-    .is("archived_at", null)
-    .order("created_at", { ascending: true })
-    .limit(MAX_ACCESSIBLE_SPACES);
-  if (spaceError || !spaces) return [];
+  const organizationIds = new Set(
+    (organizationMemberships ?? [])
+      .filter((membership) => membership.role === "admin")
+      .map((membership) => membership.organization_id),
+  );
+  const directSpaceIds = new Set((memberships ?? []).map((membership) => membership.space_id));
+  const organizationSpaces = organizationIds.size > 0
+    ? await supabase.from("spaces").select(SPACE_FIELDS).in("organization_id", [...organizationIds]).is("archived_at", null).limit(MAX_ACCESSIBLE_SPACES)
+    : { data: [], error: null };
+  if (organizationSpaces.error || !organizationSpaces.data) return [];
 
-  const membershipBySpace = new Map(memberships.map((membership) => [membership.space_id, membership]));
-  return spaces.map((space) => {
+  const directSpaces = directSpaceIds.size > 0
+    ? await supabase.from("spaces").select(SPACE_FIELDS).in("id", [...directSpaceIds]).is("archived_at", null).limit(MAX_ACCESSIBLE_SPACES)
+    : { data: [], error: null };
+  if (directSpaces.error || !directSpaces.data) return [];
+
+  const allSpaces = [...organizationSpaces.data, ...directSpaces.data];
+  const uniqueSpaces = [...new Map(allSpaces.map((space) => [space.id, space])).values()].sort((left, right) => left.created_at.localeCompare(right.created_at)).slice(0, MAX_ACCESSIBLE_SPACES);
+  const membershipBySpace = new Map((memberships ?? []).map((membership) => [membership.space_id, membership]));
+  const organizationMembershipByOrganization = new Map((organizationMemberships ?? []).map((membership) => [membership.organization_id, membership]));
+  return uniqueSpaces.map((space) => {
     const membership = membershipBySpace.get(space.id);
+    const organizationMembership = organizationMembershipByOrganization.get(space.organization_id);
     return {
       ...toSpace(space),
-      membership_role: membership?.role ?? null,
-      membership_status: membership?.status ?? null,
+      membership_role: membership?.role ?? (organizationMembership?.role === "admin" ? "admin" : null),
+      membership_status: membership?.status ?? (organizationMembership?.role === "admin" ? "active" : null),
       is_platform_owner: false,
     };
   });
@@ -107,9 +226,14 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
   const space = await getSpaceById(spaceId);
   if (!space) throw denied();
 
+  const organization = await getOrganizationById(space.organization_id);
+  if (!organization) throw denied();
+
   if (isOwner(user.role)) {
     return {
       user,
+      organization,
+      organization_membership: null,
       space,
       membership: null,
       effective_role: user.role,
@@ -117,13 +241,20 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
     };
   }
 
-  const membership = await loadMembership(user.id, space.id);
-  if (!membership || membership.status !== "active") throw denied();
+  const [membership, organizationMembership] = await Promise.all([
+    loadMembership(user.id, space.id),
+    loadOrganizationMembership(user.id, organization.id),
+  ]);
+  const hasActiveOrganizationAccess = organizationMembership?.status === "active" && organizationMembership.role === "admin";
+  const hasActiveSpaceAccess = membership?.status === "active";
+  if (!hasActiveOrganizationAccess && !hasActiveSpaceAccess) throw denied();
   return {
     user,
+    organization,
+    organization_membership: organizationMembership?.status === "active" ? organizationMembership : null,
     space,
-    membership,
-    effective_role: membership.role,
+    membership: hasActiveSpaceAccess ? membership : null,
+    effective_role: hasActiveSpaceAccess ? membership.role : organizationMembership?.role ?? "member",
     is_platform_owner: false,
   };
 }

@@ -31,6 +31,7 @@ assert(readSpaceSelector(new Request("https://trackup.test/videos")) === null, "
 
 section("Additive migration and database isolation");
 const migration = source("supabase/migrations/20260824000007_create_spaces_and_memberships.sql");
+const organizationMigration = source("supabase/migrations/20260824000008_create_organizations_and_memberships.sql");
 assert(migration.includes("CREATE TYPE public.space_member_role") && migration.includes("CREATE TYPE public.space_member_status"), "Space role/status enums are persisted");
 assert(migration.includes("CREATE TABLE IF NOT EXISTS public.spaces") && migration.includes("CREATE TABLE IF NOT EXISTS public.space_members"), "Spaces and memberships are additive tables");
 assert(migration.includes("ADD COLUMN IF NOT EXISTS space_id UUID"), "video scope is an additive nullable migration seam");
@@ -39,6 +40,12 @@ assert(migration.includes("ENABLE ROW LEVEL SECURITY") && migration.includes("No
 assert(migration.includes("idx_spaces_clickup_workspace") && migration.includes("idx_space_members_space_status") && migration.includes("idx_videos_space"), "Space and resource lookup indexes exist");
 assert(migration.includes("INSERT INTO public.spaces") && migration.includes("INSERT INTO public.space_members") && migration.includes("UPDATE public.videos AS v"), "workspace, membership, and video backfill is deterministic");
 assert(migration.includes("ON CONFLICT (clickup_workspace_id) DO NOTHING") && migration.includes("ON CONFLICT (space_id, profile_id) DO NOTHING"), "backfill reruns are idempotent on unique keys");
+assert(organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organizations") && organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organization_members"), "Organization hierarchy is additive");
+assert(organizationMigration.includes("ADD COLUMN IF NOT EXISTS organization_id UUID") && organizationMigration.includes("spaces_organization_id_fkey"), "Space-to-Organization relationship is additive and constrained");
+assert(organizationMigration.includes("ALTER COLUMN organization_id SET NOT NULL") && organizationMigration.includes("INSERT INTO public.organization_members"), "existing Spaces are deterministically backfilled into Organization memberships");
+assert(!/\\bDROP\\s+(TABLE|COLUMN|TYPE)\\b/i.test(organizationMigration) && !/\\bDELETE\\s+FROM\\b/i.test(organizationMigration), "Organization migration contains no destructive drop/delete operation");
+assert(organizationMigration.includes("No direct organization reads") && organizationMigration.includes("No direct organization member reads") && organizationMigration.includes("ENABLE ROW LEVEL SECURITY"), "Organization tables deny direct anon/authenticated access");
+assert(organizationMigration.includes("idx_spaces_organization") && organizationMigration.includes("idx_organization_members_org_status"), "Organization lookup indexes exist");
 
 section("Server-side Space authorization and membership mutations");
 const access = source("src/lib/spaces/access.ts");
@@ -48,6 +55,8 @@ assert(access.includes("membership.status !== \"active\"") && access.includes("t
 assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpaceMember(explicitSpaceId, user)"), "query selector is followed by authorization");
 assert(access.includes("resolveSpaceAdminForUser") && access.includes("authorizeSpaceAdmin(explicitSpaceId, user)"), "admin selector is followed by admin authorization");
 assert(access.includes("getAccessibleSpaces") && access.includes("from(\"spaces\")") && access.includes("isOwner(user.role)"), "owner directory can enumerate active Spaces without membership fabrication");
+assert(access.includes('.filter((membership) => membership.role === "admin")') && access.includes('organizationMembership?.role === "admin"'), "only Organization admins receive organization-wide Space visibility");
+assert(access.includes('organizationMembership?.status === "active" && organizationMembership.role === "admin"'), "ordinary Organization members require direct active Space membership");
 assert(spaceService.includes("cannot_modify_owner") && spaceService.includes("cannot_modify_self") && spaceService.includes("last_admin_required"), "membership mutations protect platform owner, self, and last admin");
 assert(spaceService.includes("source: \"manual\"") && spaceService.includes("clickup_user_id: null"), "manual membership creation has explicit source metadata");
 assert(spaceService.includes("profiles") && spaceService.includes("is_active") && !spaceService.includes("insert({ email"), "member management uses existing active profiles and does not create guests");
@@ -61,6 +70,11 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/spaces/[spaceId]/member-candidates/route.ts", ["withAuth", "searchSpaceMemberCandidates"]],
   ["app/api/spaces/[spaceId]/analytics/route.ts", ["withAuth", "authorizeSpaceAdmin"]],
   ["app/api/spaces/[spaceId]/sync-clickup/route.ts", ["withAuth", "authorizeSpaceAdmin", "syncClickUpAuthorizedTeams"]],
+  ["app/api/organizations/route.ts", ["withAuth", "listOrganizationsForUser"]],
+  ["app/api/organizations/[organizationId]/route.ts", ["withAuth", "getOrganizationForUser", "listOrganizationSpaces"]],
+  ["app/api/organizations/[organizationId]/spaces/route.ts", ["withAuth", "createSpace", "listOrganizationSpaces"]],
+  ["app/api/organizations/[organizationId]/members/route.ts", ["withAuth", "listOrganizationMembers", "addOrganizationMember"]],
+  ["app/api/organizations/[organizationId]/members/[profileId]/route.ts", ["withAuth", "updateOrganizationMemberRole", "removeOrganizationMember"]],
   ["app/api/videos/route.ts", ["withAuth", "resolveSpaceForUser", "resolveSpaceAdminForUser", "access.space.id"]],
   ["app/api/videos/[id]/route.ts", ["withAuth", "resolveSpaceForUser", "resolveSpaceAdminForUser", "access.space.id"]],
   ["app/api/videos/[id]/watch-link/route.ts", ["withAuth", "resolveSpaceAdminForUser", "access.space.id"]],
@@ -99,7 +113,7 @@ assert(sync.includes("return { identities, complete: false }"), "ClickUp member 
 assert(!sync.includes('status: \"suspended\"') && !sync.includes('status: "removed"'), "sync does not silently suspend/remove absent members");
 assert(sync.includes("existingMembership?.role") && sync.includes("source = existingMembership?.source"), "sync preserves existing membership role and manual source");
 assert(!sync.includes('from("profiles").insert') && !sync.includes('from("profiles").upsert'), "sync never fabricates TrackUp profiles from ClickUp payloads");
-assert(sync.includes("ensureSpaceForWorkspace") && sync.includes("concurrent OAuth callback") && sync.includes("clickup_workspace_id"), "Space creation re-reads after a unique race and is workspace keyed");
+assert(sync.includes("findLinkedSpace") && sync.includes("clickup_workspace_id") && !sync.includes("ensureSpaceForWorkspace") && !sync.includes(".insert({ name: team.name"), "ClickUp sync never turns an unlinked Workspace into a TrackUp Space");
 assert(callback.includes("getAuthorizedTeams") && callback.includes("upsertClickUpConnections") && callback.includes("syncClickUpAuthorizedTeams"), "OAuth callback persists all authorized teams and invokes safe sync after provisioning");
 assert(callback.includes("createSignedSessionCookie") && callback.includes("new URL(destination, request.url)"), "OAuth session and return redirect architecture remains intact");
 assert(clickupClient.includes("/api/v2/team") && clickupClient.includes("getClickUpTokenForWorkspace") && !clickupClient.includes("console.log(token"), "manual sync uses stored server token only and never logs it");

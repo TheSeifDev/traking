@@ -169,6 +169,8 @@ export default function WatchPlayer({
   const pausedPositionRef = useRef<number | null>(null);
   const furthestPositionRef = useRef(0);
   const seekFromRef = useRef<number | null>(null);
+  const lastPlaybackRateRef = useRef<number | null>(null);
+  const bufferStartedAtRef = useRef<number | null>(null);
   const pendingEventsRef = useRef<TrackingEventPayload[]>([]);
   const eventFlushRequestRef = useRef<Promise<boolean> | null>(null);
   const flushEventsRef = useRef<((keepalive?: boolean) => Promise<boolean>) | null>(null);
@@ -242,6 +244,7 @@ export default function WatchPlayer({
     snapshot: PlaybackSnapshot,
     fromPosition?: number | null,
     metadata?: Record<string, string | number | boolean | null>,
+    telemetryFields?: Pick<TrackingEventPayload, "playback_rate" | "from_rate" | "to_rate">,
   ) => {
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
@@ -256,11 +259,19 @@ export default function WatchPlayer({
       client_event_id: createClientEventId(),
       sequence_number: sequenceNumberRef.current++,
       occurred_at: new Date().toISOString(),
+      ...telemetryFields,
       metadata,
     };
     pendingEventsRef.current.push(event);
     if (eventType !== "heartbeat" || pendingEventsRef.current.length >= 5) void flushEvents();
   }, [flushEvents]);
+
+  const finishBuffer = useCallback((snapshot: PlaybackSnapshot) => {
+    const startedAt = bufferStartedAtRef.current;
+    if (startedAt === null || !sessionIdRef.current) return;
+    bufferStartedAtRef.current = null;
+    void sendEvent("buffer", snapshot, null, { state: "end", buffer_duration_ms: Math.max(0, Math.round(Date.now() - startedAt)) });
+  }, [sendEvent]);
 
   const startSession = useCallback(async (): Promise<boolean> => {
     if (sessionIdRef.current && sessionTokenRef.current) return true;
@@ -440,13 +451,15 @@ export default function WatchPlayer({
   const handleDirectPlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    void startPlaybackSegment(() => ({
+    const snapshot = {
       position: Math.max(0, video.currentTime),
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
-    })).then((started) => {
+    };
+    finishBuffer(snapshot);
+    void startPlaybackSegment(() => snapshot).then((started) => {
       if (!started) video.pause();
     });
-  }, [startPlaybackSegment]);
+  }, [finishBuffer, startPlaybackSegment]);
 
   const handleDirectPause = useCallback(() => {
     const video = videoRef.current;
@@ -505,6 +518,7 @@ export default function WatchPlayer({
     const snapshot = readYouTubeSnapshot();
     if (!api || !snapshot) return;
     if (event.data === api.PlayerState.PLAYING) {
+      finishBuffer(snapshot);
       void startPlaybackSegment(readYouTubeSnapshot).then((started) => {
         if (!started) youtubePlayerRef.current?.pauseVideo();
       });
@@ -520,7 +534,10 @@ export default function WatchPlayer({
       return;
     }
     if (event.data === api.PlayerState.BUFFERING) {
-      if (sessionIdRef.current) void sendEvent("buffer", snapshot, null, { state: "buffering" });
+      if (sessionIdRef.current) {
+        if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now();
+        void sendEvent("buffer", snapshot, null, { state: "start" });
+      }
       return;
     }
     if (event.data === api.PlayerState.ENDED) {
@@ -528,7 +545,7 @@ export default function WatchPlayer({
       updateSnapshot({ ...snapshot, position: snapshot.duration ?? snapshot.position });
       void endSession();
     }
-  }, [accumulateWatchTime, endSession, readYouTubeSnapshot, sendEvent, startPlaybackSegment, stopHeartbeat, updateSnapshot]);
+  }, [accumulateWatchTime, endSession, finishBuffer, readYouTubeSnapshot, sendEvent, startPlaybackSegment, stopHeartbeat, updateSnapshot]);
 
   useEffect(() => {
     if (!isYouTube || !youtubeContainerRef.current) return;
@@ -640,8 +657,8 @@ export default function WatchPlayer({
             onSeeking={handleDirectSeeking}
             onSeeked={handleDirectSeeked}
             onTimeUpdate={handleDirectTimeUpdate}
-            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) void sendEvent("buffer", { position: video.currentTime, duration: durationRef.current }, null, { state: "waiting" }); }}
-            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) void sendEvent("rate_change", { position: video.currentTime, duration: durationRef.current }, null, { rate: event.currentTarget.playbackRate }); }}
+            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) { if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now(); void sendEvent("buffer", { position: video.currentTime, duration: durationRef.current }, null, { state: "start" }); } }}
+            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) { const nextRate = event.currentTarget.playbackRate; const previousRate = lastPlaybackRateRef.current; lastPlaybackRateRef.current = nextRate; void sendEvent("rate_change", { position: video.currentTime, duration: durationRef.current }, null, { rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate }); } }}
             onEnded={handleDirectEnded}
             title={title}
           />

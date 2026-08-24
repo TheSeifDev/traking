@@ -29,7 +29,7 @@ type OwnerRecentActivity = {
 };
 
 type OwnerOverview = Omit<WorkspaceAnalytics, "viewer_sessions" | "recent_activity"> & { recent_activity: OwnerRecentActivity[] };
-type SystemState = { checked_at: string; environment: string; deployment_sha: string | null; region: string | null; database: "connected" | "error" };
+type SystemState = { checked_at: string; environment: string; deployment_sha: string | null; region: string | null; database: "connected" | "error"; database_status: "healthy" | "degraded"; database_latency_ms: number; database_error: "database_unavailable" | null };
 
 type ApiState = {
   overview: OwnerOverview | null;
@@ -196,8 +196,15 @@ function LogsPanel({ logs, category, level, setCategory, setLevel, onApply }: { 
 
 function SystemPanel({ system }: { system: SystemState | null }) {
   if (!system) return <div className="mt-8"><EmptyPanel title="System state unavailable" body="The server-side system probe did not return a result." /></div>;
-  const cards = [{ label: "Database", value: system.database, icon: Database }, { label: "Environment", value: system.environment, icon: Server }, { label: "Deployment", value: system.deployment_sha ?? "Unavailable", icon: ShieldCheck }, { label: "Region", value: system.region ?? "Unavailable", icon: Activity }];
-  return <div className="mt-8 space-y-6"><div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">{cards.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-2xl border border-white/8 bg-white/[0.03] p-5"><Icon size={17} className="text-violet-300" /><p className="mt-5 text-[10px] uppercase tracking-[0.18em] text-white/30">{label}</p><p className="mt-2 break-all text-sm font-semibold text-white/80">{value}</p></article>)}</div><article className="rounded-3xl border border-white/8 bg-white/[0.03] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 size={18} className={system.database === "connected" ? "text-emerald-300" : "text-amber-300"} /><div><h2 className="text-base font-semibold text-white">Bounded polling is active</h2><p className="mt-2 max-w-2xl text-xs leading-6 text-white/40">The console refreshes through indexed server queries every 12 seconds while the tab is visible. Supabase Realtime is not assumed because no relevant publication exists in the current database.</p><p className="mt-3 text-[11px] text-white/30">Last checked {formatAnalyticsDate(system.checked_at)}</p></div></div></article></div>;
+  const databaseLabel = system.database_status === "healthy" ? "Healthy" : "Degraded";
+  const cards = [
+    { label: "Database", value: databaseLabel, icon: Database },
+    { label: "Latency", value: `${system.database_latency_ms}ms`, icon: Clock3 },
+    { label: "Environment", value: system.environment, icon: Server },
+    { label: "Deployment", value: system.deployment_sha ?? "Unavailable", icon: ShieldCheck },
+    { label: "Region", value: system.region ?? "Unavailable", icon: Activity },
+  ];
+  return <div className="mt-8 space-y-6"><div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-5">{cards.map(({ label, value, icon: Icon }) => <article key={label} className="rounded-2xl border border-white/8 bg-white/[0.03] p-5"><Icon size={17} className={label === "Database" && system.database_status === "degraded" ? "text-amber-300" : "text-violet-300"} /><p className="mt-5 text-[10px] uppercase tracking-[0.18em] text-white/30">{label}</p><p className="mt-2 break-all text-sm font-semibold text-white/80">{value}</p></article>)}</div><article className="rounded-3xl border border-white/8 bg-white/[0.03] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 size={18} className={system.database_status === "healthy" ? "text-emerald-300" : "text-amber-300"} /><div><h2 className="text-base font-semibold text-white">Database {databaseLabel.toLowerCase()}</h2><p className="mt-2 max-w-2xl text-xs leading-6 text-white/40">The Owner Console uses the same bounded, read-only Supabase probe as the internal health route. It never writes tracking, session, or analytics data. A once-daily production scheduler may be configured separately; this panel does not claim a scheduled run without trusted scheduler evidence.</p>{system.database_error && <p className="mt-3 text-[11px] text-amber-100">Database unavailable</p>}<p className="mt-3 text-[11px] text-white/30">Last checked {formatAnalyticsDate(system.checked_at)} · {system.database_latency_ms}ms</p></div></div></article></div>;
 }
 
 function SmallStat({ label, value }: { label: string; value: string }) {

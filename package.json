@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/verify-provisioning.ts && tsx scripts/verify-rbac.ts && tsx scripts/verify-role-management.ts && tsx scripts/verify-routes.ts && tsx scripts/verify-security-hardening.ts && tsx scripts/verify-invitations.ts && tsx scripts/verify-analytics.ts && tsx scripts/verify-owner-observability.ts && tsx scripts/verify-spaces.ts"
+    "test": "tsx scripts/verify-provisioning.ts && tsx scripts/verify-rbac.ts && tsx scripts/verify-role-management.ts && tsx scripts/verify-routes.ts && tsx scripts/verify-security-hardening.ts && tsx scripts/verify-invitations.ts && tsx scripts/verify-analytics.ts && tsx scripts/verify-owner-observability.ts && tsx scripts/verify-spaces.ts && tsx scripts/verify-health.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -92,6 +92,12 @@ export interface WatchEvent {
   position: number;
   duration: number | null;
   from_position: number | null;
+  occurred_at?: string | null;
+  received_at?: string | null;
+  playback_rate?: number | null;
+  from_rate?: number | null;
+  to_rate?: number | null;
+  metadata?: Record<string, string | number | boolean | null>;
   created_at: string;
 }
 
@@ -102,7 +108,10 @@ export type WatchEventType =
   | "seek"
   | "heartbeat"
   | "complete"
-  | "ended";
+  | "ended"
+  | "buffer"
+  | "rate_change"
+  | "visibility_change";
 
 // Input types for creation
 export interface CreateVideoInput {
@@ -133,6 +142,10 @@ export interface WatchEventSummary {
   created_at: string;
   sequence_number?: number | null;
   occurred_at?: string | null;
+  received_at?: string | null;
+  playback_rate?: number | null;
+  from_rate?: number | null;
+  to_rate?: number | null;
   metadata?: Record<string, string | number | boolean | null>;
 }
 

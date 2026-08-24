@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/src/lib/auth/api-handler";
 import { removeSpaceMember, updateSpaceMemberRole } from "@/src/lib/spaces/service";
+import { getUser360 } from "@/src/lib/users/service";
 
 type RouteContext = { params: Promise<{ spaceId: string; profileId: string }> };
+
+export const GET = withAuth(async (_request: NextRequest, user, context) => {
+  const { spaceId, profileId } = await (context as RouteContext).params;
+  if (!spaceId || !profileId) return NextResponse.json({ error: "missing_id" }, { status: 400 });
+  try {
+    const data = await getUser360(profileId, { kind: "space", id: spaceId }, user);
+    if (!data) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+});
 
 function statusFor(error: string): number {
   if (error === "forbidden" || error === "cannot_modify_owner" || error === "cannot_modify_self") return 403;

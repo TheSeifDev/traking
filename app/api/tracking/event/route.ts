@@ -37,6 +37,7 @@ function normalizeEvent(value: unknown): Omit<TrackingEventPayload, "session_id"
   const rawSequence = typeof event.sequence_number === "number" && Number.isInteger(event.sequence_number) ? event.sequence_number : null;
   const sequenceNumber = rawSequence === null ? null : Math.max(0, Math.min(1000000, rawSequence));
   const occurredAt = typeof event.occurred_at === "string" && !Number.isNaN(new Date(event.occurred_at).getTime()) ? event.occurred_at : null;
+  const normalizeRate = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.min(8, value) : null;
   return {
     event_type: event.event_type,
     position: typeof event.position === "number" && Number.isFinite(event.position) ? Math.max(0, event.position) : 0,
@@ -45,6 +46,9 @@ function normalizeEvent(value: unknown): Omit<TrackingEventPayload, "session_id"
     client_event_id: clientEventId,
     sequence_number: sequenceNumber,
     occurred_at: occurredAt,
+    playback_rate: normalizeRate(event.playback_rate),
+    from_rate: normalizeRate(event.from_rate),
+    to_rate: normalizeRate(event.to_rate),
     metadata: normalizeMetadata(event.metadata),
   };
 }

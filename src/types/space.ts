@@ -1,5 +1,5 @@
 import type { AuthenticatedUser, UserRole } from "./auth";
-import type { SpaceMemberRole, SpaceMemberStatus } from "./database";
+import type { OrganizationMemberRole, OrganizationMemberStatus, SpaceMemberRole, SpaceMemberStatus } from "./database";
 import type { ViewerSessionAnalytics } from "./video";
 
 export const SPACE_ROLES = {
@@ -8,7 +8,37 @@ export const SPACE_ROLES = {
 } as const;
 
 export type SpaceRole = SpaceMemberRole;
+export type OrganizationRole = OrganizationMemberRole;
 export type SpaceStatus = "active" | "archived";
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  clickup_workspace_id: string | null;
+  created_by: string | null;
+  settings: Record<string, unknown>;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  profile_id: string;
+  role: OrganizationRole;
+  status: OrganizationMemberStatus;
+  joined_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessibleOrganization extends Organization {
+  membership_role: OrganizationRole | null;
+  membership_status: OrganizationMemberStatus | null;
+  is_platform_owner: boolean;
+}
 
 export interface PersonalSpaceAnalytics {
   total_sessions: number;
@@ -23,6 +53,7 @@ export interface PersonalSpaceAnalytics {
 
 export interface Space {
   id: string;
+  organization_id: string;
   name: string;
   slug: string;
   clickup_workspace_id: string | null;
@@ -53,10 +84,20 @@ export interface AccessibleSpace extends Space {
   is_platform_owner: boolean;
 }
 
+export interface OrganizationAccess {
+  user: AuthenticatedUser;
+  organization: Organization;
+  membership: OrganizationMember | null;
+  effective_role: UserRole | OrganizationRole;
+  is_platform_owner: boolean;
+}
+
 export interface SpaceAccess {
   user: AuthenticatedUser;
+  organization: Organization | null;
+  organization_membership: OrganizationMember | null;
   space: Space;
   membership: SpaceMember | null;
-  effective_role: UserRole | SpaceRole;
+  effective_role: UserRole | OrganizationRole | SpaceRole;
   is_platform_owner: boolean;
 }

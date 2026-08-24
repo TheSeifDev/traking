@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { isOwner } from "@/src/lib/auth/rbac";
-import { authorizeSpaceAdmin, authorizeSpaceMember, getAccessibleSpaces } from "@/src/lib/spaces/access";
+import { authorizeOrganizationAdmin, authorizeSpaceAdmin, authorizeSpaceMember, getAccessibleSpaces } from "@/src/lib/spaces/access";
 import type { AuthenticatedUser } from "@/src/types/auth";
 import type { Database, SpaceMemberRole, SpaceMemberStatus } from "@/src/types/database";
 import type { AccessibleSpace, Space, SpaceMember } from "@/src/types/space";
@@ -8,9 +8,12 @@ import type { AccessibleSpace, Space, SpaceMember } from "@/src/types/space";
 const MAX_SPACE_MEMBERS = 500;
 const SPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,95}[a-z0-9]$/;
 
+type OrganizationInsert = Database["public"]["Tables"]["organizations"]["Insert"];
 type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
 type SpaceInsert = Database["public"]["Tables"]["spaces"]["Insert"];
 type MembershipRow = Database["public"]["Tables"]["space_members"]["Row"];
+
+const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at";
 
 type ProfileSummary = {
   id: string;
@@ -40,7 +43,8 @@ export type SpaceMutationError =
   | "invalid_role"
   | "cannot_modify_owner"
   | "cannot_modify_self"
-  | "last_admin_required";
+  | "last_admin_required"
+  | "organization_mismatch";
 
 function toSpace(row: SpaceRow): Space {
   const settings = row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
@@ -80,9 +84,17 @@ export async function getSpaceForUser(spaceId: string, user: AuthenticatedUser) 
 
 export async function createSpace(
   user: AuthenticatedUser,
-  input: { name: string; slug?: string | null; clickupWorkspaceId?: string | null },
+  input: { name: string; slug?: string | null; organizationId?: string | null; clickupWorkspaceId?: string | null },
 ): Promise<{ success: true; space: Space; membership: SpaceMember } | { success: false; error: SpaceMutationError }> {
-  if (!isOwner(user.role)) return { success: false, error: "forbidden" };
+  const requestedOrganizationId = input.organizationId?.trim() || null;
+  if (!isOwner(user.role) && !requestedOrganizationId) return { success: false, error: "forbidden" };
+  if (requestedOrganizationId) {
+    try {
+      await authorizeOrganizationAdmin(requestedOrganizationId, user);
+    } catch {
+      return { success: false, error: "forbidden" };
+    }
+  }
   const name = input.name.trim();
   if (!name || name.length > 160) return { success: false, error: "invalid_name" };
   const slug = normalizeSpaceSlug(input.slug, name);
@@ -91,6 +103,8 @@ export async function createSpace(
 
   try {
     const supabase = createAdminClient();
+    let organizationId = requestedOrganizationId;
+    let createdOrganizationId: string | null = null;
     if (clickupWorkspaceId) {
       const { data: workspace, error: workspaceError } = await supabase
         .from("workspaces")
@@ -99,9 +113,53 @@ export async function createSpace(
         .maybeSingle();
       if (workspaceError) return { success: false, error: "database_error" };
       if (!workspace) return { success: false, error: "clickup_workspace_not_found" };
+
+      if (organizationId) {
+        const { data: organization, error: organizationError } = await supabase
+          .from("organizations")
+          .select("id, clickup_workspace_id")
+          .eq("id", organizationId)
+          .maybeSingle();
+        if (organizationError) return { success: false, error: "database_error" };
+        if (!organization || (organization.clickup_workspace_id && organization.clickup_workspace_id !== clickupWorkspaceId)) {
+          return { success: false, error: "organization_mismatch" };
+        }
+        if (!organization.clickup_workspace_id) {
+          const { error: linkError } = await supabase.from("organizations").update({ clickup_workspace_id: clickupWorkspaceId }).eq("id", organizationId);
+          if (linkError) return { success: false, error: linkError.code === "23505" ? "organization_mismatch" : "database_error" };
+        }
+      } else {
+        const { data: linkedOrganization, error: linkedOrganizationError } = await supabase
+          .from("organizations")
+          .select("id")
+          .eq("clickup_workspace_id", clickupWorkspaceId)
+          .maybeSingle();
+        if (linkedOrganizationError) return { success: false, error: "database_error" };
+        organizationId = linkedOrganization?.id ?? null;
+      }
+    }
+
+    if (!organizationId) {
+      if (!isOwner(user.role)) return { success: false, error: "forbidden" };
+      const organizationValues: OrganizationInsert = {
+        name,
+        slug: normalizeSpaceSlug(`${slug}-org`, `${name}-organization`),
+        clickup_workspace_id: clickupWorkspaceId,
+        created_by: user.id,
+        settings: {},
+      };
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .insert(organizationValues)
+        .select("id")
+        .single();
+      if (organizationError || !organization) return { success: false, error: organizationError?.code === "23505" ? "slug_taken" : "database_error" };
+      organizationId = organization.id;
+      createdOrganizationId = organization.id;
     }
 
     const values: SpaceInsert = {
+      organization_id: organizationId,
       name,
       slug,
       clickup_workspace_id: clickupWorkspaceId,
@@ -111,9 +169,10 @@ export async function createSpace(
     const { data: spaceRow, error: spaceError } = await supabase
       .from("spaces")
       .insert(values)
-      .select("id, name, slug, clickup_workspace_id, created_by, settings, archived_at, created_at, updated_at")
+      .select(SPACE_FIELDS)
       .single();
     if (spaceError || !spaceRow) {
+      if (createdOrganizationId) await supabase.from("organizations").delete().eq("id", createdOrganizationId);
       return { success: false, error: spaceError?.code === "23505" ? "slug_taken" : "database_error" };
     }
 
@@ -133,6 +192,7 @@ export async function createSpace(
       .single();
     if (membershipError || !membershipRow) {
       await supabase.from("spaces").delete().eq("id", spaceRow.id);
+      if (createdOrganizationId) await supabase.from("organizations").delete().eq("id", createdOrganizationId);
       return { success: false, error: "database_error" };
     }
     return { success: true, space: toSpace(spaceRow), membership: membershipRow };

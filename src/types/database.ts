@@ -12,6 +12,8 @@ export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" 
 export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended" | "buffer" | "rate_change" | "visibility_change";
 export type SpaceMemberRole = "admin" | "member";
 export type SpaceMemberStatus = "active" | "suspended" | "removed";
+export type OrganizationMemberRole = "admin" | "member";
+export type OrganizationMemberStatus = "active" | "suspended" | "removed";
 
 export interface Database {
   public: {
@@ -203,7 +205,7 @@ export interface Database {
           },
         ];
       };
-      spaces: {
+      organizations: {
         Row: {
           id: string;
           name: string;
@@ -238,6 +240,110 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "organizations_clickup_workspace_id_fkey";
+            columns: ["clickup_workspace_id"];
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organizations_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_members: {
+        Row: {
+          id: string;
+          organization_id: string;
+          profile_id: string;
+          role: OrganizationMemberRole;
+          status: OrganizationMemberStatus;
+          joined_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          profile_id: string;
+          role?: OrganizationMemberRole;
+          status?: OrganizationMemberStatus;
+          joined_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          profile_id?: string;
+          role?: OrganizationMemberRole;
+          status?: OrganizationMemberStatus;
+          joined_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey";
+            columns: ["organization_id"];
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey";
+            columns: ["profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      spaces: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          slug: string;
+          clickup_workspace_id: string | null;
+          created_by: string | null;
+          settings: Json;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          slug: string;
+          clickup_workspace_id?: string | null;
+          created_by?: string | null;
+          settings?: Json;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          slug?: string;
+          clickup_workspace_id?: string | null;
+          created_by?: string | null;
+          settings?: Json;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "spaces_organization_id_fkey";
+            columns: ["organization_id"];
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "spaces_clickup_workspace_id_fkey";
             columns: ["clickup_workspace_id"];
@@ -618,7 +724,11 @@ export interface Database {
           client_event_id: string | null;
           sequence_number: number | null;
           occurred_at: string | null;
+          playback_rate: number | null;
+          from_rate: number | null;
+          to_rate: number | null;
           metadata: Json;
+          received_at: string;
           created_at: string;
         };
         Insert: {
@@ -631,7 +741,11 @@ export interface Database {
           client_event_id?: string | null;
           sequence_number?: number | null;
           occurred_at?: string | null;
+          playback_rate?: number | null;
+          from_rate?: number | null;
+          to_rate?: number | null;
           metadata?: Json;
+          received_at?: string;
           created_at?: string;
         };
         Update: {
@@ -644,7 +758,11 @@ export interface Database {
           client_event_id?: string | null;
           sequence_number?: number | null;
           occurred_at?: string | null;
+          playback_rate?: number | null;
+          from_rate?: number | null;
+          to_rate?: number | null;
           metadata?: Json;
+          received_at?: string;
           created_at?: string;
         };
         Relationships: [
@@ -692,6 +810,8 @@ export interface Database {
       user_role: UserRole;
       space_member_role: SpaceMemberRole;
       space_member_status: SpaceMemberStatus;
+      organization_member_role: OrganizationMemberRole;
+      organization_member_status: OrganizationMemberStatus;
       video_source_type: VideoSourceType;
       watch_event_type: WatchEventType;
     };

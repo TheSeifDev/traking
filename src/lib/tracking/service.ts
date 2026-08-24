@@ -271,6 +271,9 @@ export async function recordTrackingEvents(
       client_event_id: event.client_event_id ?? null,
       sequence_number: event.sequence_number ?? null,
       occurred_at: event.occurred_at ?? null,
+      playback_rate: event.playback_rate ?? null,
+      from_rate: event.from_rate ?? null,
+      to_rate: event.to_rate ?? null,
       metadata: event.metadata ?? {},
     }));
     const { error } = await supabase.from("watch_events").upsert(rows, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });

@@ -14,6 +14,7 @@ type SyncSummary = {
   unmatched_clickup_members: number;
   incomplete_member_responses: number;
   failed_teams: number;
+  teams_without_linked_space: number;
 };
 
 const MAX_MEMBERS_PER_TEAM = 500;
@@ -55,40 +56,17 @@ function parseMembers(raw: unknown): { identities: ClickUpMemberIdentity[]; comp
   return { identities, complete: false };
 }
 
-function stableSlug(teamId: string): string {
-  const normalized = teamId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 88);
-  return `clickup-${normalized || "workspace"}`.slice(0, 96);
-}
-
-async function ensureSpaceForWorkspace(
+async function findLinkedSpace(
   supabase: ReturnType<typeof createAdminClient>,
   workspaceId: string,
-  team: ClickUpTeamInput,
-  profileId: string,
-): Promise<{ id: string; created: boolean } | null> {
-  const { data: existing, error: lookupError } = await supabase
+): Promise<{ id: string; organization_id: string } | null> {
+  const { data, error } = await supabase
     .from("spaces")
-    .select("id")
+    .select("id, organization_id")
     .eq("clickup_workspace_id", workspaceId)
     .maybeSingle();
-  if (lookupError) return null;
-  if (existing) return { id: existing.id, created: false };
-
-  const { data: created, error: createError } = await supabase
-    .from("spaces")
-    .insert({ name: team.name, slug: stableSlug(team.id), clickup_workspace_id: workspaceId, created_by: profileId, settings: {} })
-    .select("id")
-    .single();
-  if (!createError && created) return { id: created.id, created: true };
-
-  // A concurrent OAuth callback may have won the unique workspace insert. Re-read it;
-  // never retry an insert blindly and never overwrite the existing Space owner/settings.
-  const { data: raced } = await supabase
-    .from("spaces")
-    .select("id")
-    .eq("clickup_workspace_id", workspaceId)
-    .maybeSingle();
-  return raced ? { id: raced.id, created: false } : null;
+  if (error || !data) return null;
+  return data;
 }
 
 async function findProfiles(supabase: ReturnType<typeof createAdminClient>, identities: ClickUpMemberIdentity[]) {
@@ -108,7 +86,7 @@ async function findProfiles(supabase: ReturnType<typeof createAdminClient>, iden
 }
 
 export async function syncClickUpAuthorizedTeams(profileId: string, profileRole: UserRole, rawTeams: unknown): Promise<SyncSummary> {
-  const summary: SyncSummary = { teams: 0, spaces: 0, memberships_added_or_updated: 0, memberships_suspended: 0, unmatched_clickup_members: 0, incomplete_member_responses: 0, failed_teams: 0 };
+  const summary: SyncSummary = { teams: 0, spaces: 0, memberships_added_or_updated: 0, memberships_suspended: 0, unmatched_clickup_members: 0, incomplete_member_responses: 0, failed_teams: 0, teams_without_linked_space: 0 };
   if (!profileId || !Array.isArray(rawTeams)) return summary;
   const teams: ClickUpTeamInput[] = rawTeams.slice(0, MAX_TEAMS).flatMap((raw) => {
     if (!raw || typeof raw !== "object") return [];
@@ -127,14 +105,15 @@ export async function syncClickUpAuthorizedTeams(profileId: string, profileRole:
         summary.failed_teams += 1;
         continue;
       }
-      const ensuredSpace = await ensureSpaceForWorkspace(supabase, workspace.id, team, profileId);
-      if (!ensuredSpace) {
-        summary.failed_teams += 1;
+      const linkedSpace = await findLinkedSpace(supabase, workspace.id);
+      if (!linkedSpace) {
+        // ClickUp Workspace identity is not a TrackUp Space. A user must explicitly
+        // associate a workspace with an existing/new Organization Space first.
+        summary.teams_without_linked_space += 1;
         continue;
       }
-      const spaceId = ensuredSpace.id;
+      const spaceId = linkedSpace.id;
       summary.teams += 1;
-      summary.spaces += ensuredSpace.created ? 1 : 0;
 
       const parsed = parseMembers(team.members);
       if (!parsed.complete) summary.incomplete_member_responses += 1;
