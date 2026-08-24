@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, CheckCircle2, Eye, ShieldAlert, Users, XCircle } from "lucide-react";
 import type { AnalyticsViewerSummary, HeatmapAvailability, PlaybackHeatmap, ViewerSessionAnalytics } from "@/src/types/video";
+import GroupedSessionTimeline from "@/src/components/analytics/GroupedSessionTimeline";
 
 export function formatAnalyticsDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "Not recorded";
@@ -128,8 +129,8 @@ export function HeatmapPanel({ heatmap }: { heatmap: PlaybackHeatmap | null | un
 export function SessionTimeline({ session }: { session: ViewerSessionAnalytics }) {
   return (
     <article className="min-w-0 rounded-3xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Session timeline</p><h2 className="mt-2 text-base font-semibold text-white">{session.playback_events.length ? `${session.playback_events.length} stored playback events` : "No stored playback events"}</h2><p className="mt-2 break-words text-xs leading-5 text-white/40">Events are shown in provider order when the client sequence is available; server receipt time is retained for audit.</p></div><Activity size={18} className="shrink-0 text-violet-300" /></div>
-      {session.playback_events.length === 0 ? <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs text-white/35">No events were stored for this session.</div> : <div className="mt-6 space-y-2">{session.playback_events.map((event) => <div key={event.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-white/7 bg-black/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-400/10 text-[10px] font-semibold text-violet-200">{event.sequence_number ?? "—"}</span><div className="min-w-0"><p className="break-words text-xs font-semibold capitalize text-white/85">{event.event_type.replace("_", " ")}</p><p className="mt-1 break-words text-[10px] text-white/35">{formatAnalyticsDate(event.occurred_at ?? event.created_at)}</p></div></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-white/45"><span>Position {formatAnalyticsPosition(event.position)}</span>{event.from_position !== null && <span>From {formatAnalyticsPosition(event.from_position)}</span>}{event.duration !== null && <span>Duration {formatAnalyticsPosition(event.duration)}</span>}</div></div>)}</div>}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Session timeline</p><h2 className="mt-2 text-base font-semibold text-white">{session.playback_events.length ? `${session.playback_events.length} persisted playback events` : "No stored playback events"}</h2><p className="mt-2 break-words text-xs leading-5 text-white/40">Meaningful actions are prioritized; heartbeat samples stay available in a collapsed progress group and raw event data remains available on demand.</p></div><Activity size={18} className="shrink-0 text-violet-300" /></div>
+      <div className="mt-6"><GroupedSessionTimeline events={session.playback_events} /></div>
     </article>
   );
 }

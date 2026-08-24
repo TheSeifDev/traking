@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isSpaceRole, readSpaceSelector } from "../src/lib/spaces/access";
+import { getSafeSpaceDisplayName, hasOrganizationSpaceLabelCollision } from "../src/lib/spaces/labels";
 
 let passed = 0;
 let failed = 0;
@@ -28,6 +29,9 @@ assert(!isSpaceRole("owner") && !isSpaceRole("viewer") && !isSpaceRole("guest"),
 assert(readSpaceSelector(new Request("https://trackup.test/videos?space_id=space-a")) === "space-a", "space_id is read as a selector");
 assert(readSpaceSelector(new Request("https://trackup.test/videos?spaceId=space-b")) === "space-b", "spaceId compatibility selector is supported");
 assert(readSpaceSelector(new Request("https://trackup.test/videos")) === null, "missing selector is explicit null");
+assert(getSafeSpaceDisplayName("PHANTOMS | ORG", "PHANTOMS | ORG") === "Legacy Space label (review required)", "Organization/Space label collision is never presented as the Organization itself");
+assert(hasOrganizationSpaceLabelCollision("PHANTOMS | ORG", "PHANTOMS | ORG"), "legacy Organization/Space label collision is detectable");
+assert(getSafeSpaceDisplayName("AI Team-Phantoms", "PHANTOMS | ORG") === "AI Team-Phantoms", "real Space labels remain selectable under their Organization");
 
 section("Additive migration and database isolation");
 const migration = source("supabase/migrations/20260824000007_create_spaces_and_memberships.sql");
@@ -50,6 +54,7 @@ assert(organizationMigration.includes("idx_spaces_organization") && organization
 section("Server-side Space authorization and membership mutations");
 const access = source("src/lib/spaces/access.ts");
 const spaceService = source("src/lib/spaces/service.ts");
+const organizationService = source("src/lib/organizations/service.ts");
 assert(access.includes("if (isOwner(user.role))") && access.includes("is_platform_owner: true"), "platform owner bypass is explicit and server-side");
 assert(access.includes("membership.status !== \"active\"") && access.includes("throw denied()"), "inactive/suspended/removed memberships fail closed");
 assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpaceMember(explicitSpaceId, user)"), "query selector is followed by authorization");
@@ -57,6 +62,7 @@ assert(access.includes("resolveSpaceAdminForUser") && access.includes("authorize
 assert(access.includes("getAccessibleSpaces") && access.includes("from(\"spaces\")") && access.includes("isOwner(user.role)"), "owner directory can enumerate active Spaces without membership fabrication");
 assert(access.includes('.filter((membership) => membership.role === "admin")') && access.includes('organizationMembership?.role === "admin"'), "only Organization admins receive organization-wide Space visibility");
 assert(access.includes('organizationMembership?.status === "active" && organizationMembership.role === "admin"'), "ordinary Organization members require direct active Space membership");
+assert(organizationService.includes('from("space_members")') && organizationService.includes('permittedSpaceIds') && organizationService.includes('query.in("id", permittedSpaceIds)'), "Organization Space listing is restricted to explicit direct memberships for ordinary members");
 assert(spaceService.includes("cannot_modify_owner") && spaceService.includes("cannot_modify_self") && spaceService.includes("last_admin_required"), "membership mutations protect platform owner, self, and last admin");
 assert(spaceService.includes("source: \"manual\"") && spaceService.includes("clickup_user_id: null"), "manual membership creation has explicit source metadata");
 assert(spaceService.includes("profiles") && spaceService.includes("is_active") && !spaceService.includes("insert({ email"), "member management uses existing active profiles and does not create guests");
@@ -75,6 +81,8 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/organizations/[organizationId]/spaces/route.ts", ["withAuth", "createSpace", "listOrganizationSpaces"]],
   ["app/api/organizations/[organizationId]/members/route.ts", ["withAuth", "listOrganizationMembers", "addOrganizationMember"]],
   ["app/api/organizations/[organizationId]/members/[profileId]/route.ts", ["withAuth", "updateOrganizationMemberRole", "removeOrganizationMember"]],
+  ["app/(dashboard)/organizations/[organizationId]/analytics/page.tsx", ["getOrganizationForUser", "listOrganizationSpaces", "getWorkspaceAnalytics"]],
+  ["app/(dashboard)/organizations/[organizationId]/settings/page.tsx", ["getOrganizationForUser", "Organization settings"]],
   ["app/api/videos/route.ts", ["withAuth", "resolveSpaceForUser", "resolveSpaceAdminForUser", "access.space.id"]],
   ["app/api/videos/[id]/route.ts", ["withAuth", "resolveSpaceForUser", "resolveSpaceAdminForUser", "access.space.id"]],
   ["app/api/videos/[id]/watch-link/route.ts", ["withAuth", "resolveSpaceAdminForUser", "access.space.id"]],
@@ -124,7 +132,7 @@ const overview = source("src/components/dashboard/DashboardOverview.tsx");
 const analyticsDashboard = source("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx");
 const viewerPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
 const membersManager = source("src/components/spaces/SpaceMembersManager.tsx");
-assert(shell.includes("useSearchParams") && shell.includes("space_id") && shell.includes("Members"), "dashboard shell preserves Space selection and exposes Space members for admins");
+assert(shell.includes("useSearchParams") && shell.includes("space_id") && shell.includes("Members") && shell.includes("getSafeSpaceDisplayName") && shell.includes("AccessibleOrganization"), "dashboard shell preserves Space selection and keeps Organization context separate");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel spaceId"), "analytics drilldowns retain Space context");
 assert(viewerPanel.includes("spaceId?") && viewerPanel.includes("playback_events.length") && viewerPanel.includes("Watched ranges"), "viewer/session analytics renders real event and honest range state");

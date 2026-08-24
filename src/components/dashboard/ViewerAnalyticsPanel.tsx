@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Activity, Clock3, Eye, PlayCircle, Search, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { PlaybackMetricsScope, ViewerSessionAnalytics } from "@/src/types/video";
+import GroupedSessionTimeline from "@/src/components/analytics/GroupedSessionTimeline";
 
 interface ViewerAnalyticsPanelProps {
   sessions: ViewerSessionAnalytics[];
@@ -155,22 +156,8 @@ export default function ViewerAnalyticsPanel({
                 </p>
 
                 <details className="mt-3 rounded-xl border border-white/7 bg-black/10 px-3 py-2">
-                  <summary className="cursor-pointer text-xs text-violet-200/80">View stored playback timeline ({session.playback_events.length} events)</summary>
-                  {session.playback_events.length === 0 ? (
-                    <p className="mt-3 text-xs text-white/35">No playback events were stored for this session.</p>
-                  ) : (
-                    <div className="mt-3 space-y-1.5" aria-label="Playback event timeline">
-                      {session.playback_events.map((event) => (
-                        <div key={event.id} className="flex flex-wrap gap-x-3 gap-y-1 rounded-md border border-white/8 bg-white/[0.04] px-2 py-1.5 text-[10px] text-white/50">
-                          <span className="font-medium capitalize text-white/75">{event.event_type}</span>
-                          <span>position {formatPosition(event.position)}</span>
-                          {event.from_position !== null && <span>from {formatPosition(event.from_position)}</span>}
-                          {event.duration !== null && <span>duration {formatPosition(event.duration)}</span>}
-                          <span>{formatDate(event.created_at)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <summary className="cursor-pointer text-xs text-violet-200/80">View playback timeline ({session.playback_events.length} persisted events)</summary>
+                  <div className="mt-3"><GroupedSessionTimeline events={session.playback_events} /></div>
                 </details>
                 <div className="mt-3 rounded-xl border border-white/7 bg-black/10 px-3 py-2 text-xs text-white/45">
                   <span className="font-medium text-white/70">Watched ranges:</span>{" "}

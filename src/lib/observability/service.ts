@@ -2,7 +2,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { getWorkspaceAnalytics } from "@/src/lib/videos/service";
 import { checkDatabaseHealth } from "@/src/lib/health/db";
 import { sanitizeOwnerMetadata, type SafeOwnerLog, type ObservabilityCategory, type ObservabilityLevel } from "./logger";
-import type { ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
+import type { ViewerSessionAnalytics, WatchEventSummary, WorkspaceAnalytics } from "@/src/types/video";
 
 export const OWNER_QUERY_LIMIT = 100;
 export const OWNER_QUERY_MAX_OFFSET = 5000;
@@ -58,17 +58,7 @@ export interface OwnerSessionDetail extends OwnerSessionListItem {
   device_type: string | null;
   browser: string | null;
   os: string | null;
-  playback_events: Array<{
-    id: string;
-    event_type: string;
-    position: number;
-    from_position: number | null;
-    duration: number | null;
-    created_at: string;
-    sequence_number: number | null | undefined;
-    occurred_at: string | null | undefined;
-    metadata: Record<string, unknown>;
-  }>;
+  playback_events: WatchEventSummary[];
   heatmap: ViewerSessionAnalytics["heatmap"];
 }
 
@@ -109,6 +99,14 @@ function mapSessionListItem(session: ViewerSessionAnalytics): OwnerSessionListIt
   };
 }
 
+function safeTimelineMetadata(value: ReturnType<typeof sanitizeOwnerMetadata>): Record<string, string | number | boolean | null> {
+  const metadata: Record<string, string | number | boolean | null> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === null || typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean") metadata[key] = entry;
+  }
+  return metadata;
+}
+
 function mapSessionDetail(session: ViewerSessionAnalytics): OwnerSessionDetail {
   return {
     ...mapSessionListItem(session),
@@ -129,7 +127,11 @@ function mapSessionDetail(session: ViewerSessionAnalytics): OwnerSessionDetail {
       created_at: event.created_at,
       sequence_number: event.sequence_number,
       occurred_at: event.occurred_at,
-      metadata: sanitizeOwnerMetadata(event.metadata),
+      received_at: event.received_at,
+      playback_rate: event.playback_rate,
+      from_rate: event.from_rate,
+      to_rate: event.to_rate,
+      metadata: safeTimelineMetadata(sanitizeOwnerMetadata(event.metadata)),
     })),
     heatmap: session.heatmap,
   };

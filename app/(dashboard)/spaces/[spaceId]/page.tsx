@@ -17,7 +17,7 @@ export default async function SpaceDashboardPage({ params }: PageContext) {
   }
   const canManage = access.is_platform_owner || access.membership?.role === "admin";
   if (!access.space.clickup_workspace_id) {
-    return <SpaceDashboard space={{ ...access.space, membership_role: access.membership?.role ?? null, membership_status: access.membership?.status ?? null, is_platform_owner: access.is_platform_owner }} analytics={null} videoCount={0} canManage={canManage} />;
+    return <SpaceDashboard organization={access.organization} space={{ ...access.space, membership_role: access.membership?.role ?? null, membership_status: access.membership?.status ?? null, is_platform_owner: access.is_platform_owner }} analytics={null} videoCount={0} canManage={canManage} />;
   }
 
   const [videos, analytics] = await Promise.all([
@@ -25,5 +25,5 @@ export default async function SpaceDashboardPage({ params }: PageContext) {
     canManage ? getWorkspaceAnalytics(access.space.clickup_workspace_id, access.space.id) : Promise.resolve(null),
   ]);
   if (!access.space) notFound();
-  return <SpaceDashboard space={{ ...access.space, membership_role: access.membership?.role ?? null, membership_status: access.membership?.status ?? null, is_platform_owner: access.is_platform_owner }} analytics={analytics} videoCount={videos.length} canManage={canManage} />;
+  return <SpaceDashboard organization={access.organization} space={{ ...access.space, membership_role: access.membership?.role ?? null, membership_status: access.membership?.status ?? null, is_platform_owner: access.is_platform_owner }} analytics={analytics} videoCount={videos.length} canManage={canManage} />;
 }

@@ -5,14 +5,16 @@ import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
-import type { AccessibleSpace } from "@/src/types/space";
+import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
+import { getSafeSpaceDisplayName } from "@/src/lib/spaces/labels";
 
 interface DashboardShellProps {
   children: React.ReactNode;
   user: { name: string | null; email: string; role: UserRole };
   workspace: { name: string } | null;
   spaces?: AccessibleSpace[];
+  organizations?: AccessibleOrganization[];
 }
 
 const navItems = [
@@ -27,13 +29,18 @@ const navItems = [
 
 const ownerNavItem = { label: "Owner console", href: "/owner", icon: ShieldCheck };
 
-export default function DashboardShell({ children, user, workspace, spaces = [] }: DashboardShellProps) {
+function selectorSpaceName(space: AccessibleSpace, organization: AccessibleOrganization | null): string {
+  return getSafeSpaceDisplayName(space.name, organization?.name);
+}
+
+export default function DashboardShell({ children, user, workspace, spaces = [], organizations = [] }: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const spaceMatch = pathname.match(/^\/spaces\/([^/]+)/);
   const activeSpaceId = spaceMatch?.[1] ?? searchParams.get("space_id");
   const activeSpace = spaces.find((space) => space.id === activeSpaceId) ?? null;
+  const activeOrganization = activeSpace ? organizations.find((organization) => organization.id === activeSpace.organization_id) ?? null : null;
   const canManageActiveSpace = Boolean(activeSpace?.is_platform_owner || activeSpace?.membership_role === "admin");
   const visibleNavItems = [
     ...navItems,
@@ -67,7 +74,7 @@ export default function DashboardShell({ children, user, workspace, spaces = [] 
         <div className="px-4 pt-4">
           {spaces.length > 0 ? (
             <label className="block rounded-lg border border-white/8 bg-white/5 px-3 py-2">
-              <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space{activeOrganization ? ` · ${activeOrganization.name}` : ""}</span>
               <select
                 value={activeSpaceId ?? ""}
                 onChange={(event) => {
@@ -77,13 +84,13 @@ export default function DashboardShell({ children, user, workspace, spaces = [] 
                 className="w-full bg-transparent text-sm font-medium text-white/80 outline-none"
                 aria-label="Select Space"
               >
-                <option value="" className="bg-[#0b0b28]">{activeSpace?.name ?? "Select a Space"}</option>
-                {spaces.map((space) => <option key={space.id} value={space.id} className="bg-[#0b0b28]">{space.name}</option>)}
+                <option value="" className="bg-[#0b0b28]">{activeSpace ? selectorSpaceName(activeSpace, activeOrganization) : "Select a Space"}</option>
+                {spaces.map((space) => { const organization = organizations.find((item) => item.id === space.organization_id) ?? null; return <option key={space.id} value={space.id} className="bg-[#0b0b28]">{selectorSpaceName(space, organization)}</option>; })}
               </select>
             </label>
           ) : workspace ? (
             <div className="rounded-lg border border-white/8 bg-white/5 px-3 py-2">
-              <p className="mb-0.5 text-[10px] uppercase tracking-widest text-white/40">Workspace</p>
+              <p className="mb-0.5 text-[10px] uppercase tracking-widest text-white/40">ClickUp connection</p>
               <p className="truncate text-sm font-medium text-white/80">{workspace.name}</p>
             </div>
           ) : null}
@@ -120,7 +127,7 @@ export default function DashboardShell({ children, user, workspace, spaces = [] 
         <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
           <Link href={scopedHref("/dashboard")} className="flex min-w-0 items-center gap-2.5" aria-label="TrackUp dashboard">
             <Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 shrink-0 object-contain" />
-            <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{(activeSpace?.name ?? workspace?.name) && <span className="block max-w-28 truncate text-[10px] text-white/35">{activeSpace?.name ?? workspace?.name}</span>}</div>
+            <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{(activeSpace ? selectorSpaceName(activeSpace, activeOrganization) : workspace?.name) && <span className="block max-w-28 truncate text-[10px] text-white/35">{activeSpace ? selectorSpaceName(activeSpace, activeOrganization) : workspace?.name}</span>}</div>
           </Link>
           <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleNavItems.map(({ label, href, icon: Icon }) => (

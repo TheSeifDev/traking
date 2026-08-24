@@ -2,7 +2,7 @@ import { authorizeOrganizationAdmin, authorizeSpaceAdmin } from "@/src/lib/space
 import { isOwner } from "@/src/lib/auth/rbac";
 import type { AuthenticatedUser } from "@/src/types/auth";
 import type { Database } from "@/src/types/database";
-import { buildPlaybackHeatmap } from "@/src/lib/analytics/ranges";
+import { buildPlaybackHeatmap, mergeWatchedRanges } from "@/src/lib/analytics/ranges";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -32,7 +32,7 @@ type EventRow = {
   playback_rate: number | null;
   from_rate: number | null;
   to_rate: number | null;
-  metadata: Database["public"]["Tables"]["watch_events"]["Row"]["metadata"];
+  metadata?: Record<string, string | number | boolean | null>;
   created_at: string;
   sequence_number: number | null;
 };
@@ -40,13 +40,39 @@ type EventRow = {
 
 type User360Result = {
   profile: Pick<ProfileRow, "id" | "name" | "email" | "clickup_user_id" | "role" | "is_active" | "created_at" | "last_seen_at">;
+  organizations: Array<{ organization_id: string; organization_name: string; role: string; status: string }>;
   memberships: Array<{ organization_id: string; organization_name: string; space_id: string; space_name: string; role: string; status: string }>;
+  videos: Array<{
+    video_id: string;
+    video_title: string;
+    organization_id: string;
+    space_id: string;
+    source_type: string;
+    duration: number | null;
+    first_watched_at: string | null;
+    last_watched_at: string | null;
+    total_watch_time_seconds: number | null;
+    completion_percentage: number | null;
+    sessions: number;
+    pauses: number;
+    resumes: number;
+    seeks: number;
+    speed_changes: number;
+    speed_values: number[];
+    final_playback_rate: number | null;
+    buffering_events: number;
+    visibility_changes: number;
+    last_position: number | null;
+    watched_ranges: Array<{ start: number; end: number }>;
+    heatmap_availability: ReturnType<typeof buildPlaybackHeatmap>["availability"];
+  }>;
   sessions: Array<{
     session_id: string;
     video_id: string;
     video_title: string;
     organization_id: string;
     space_id: string;
+    duration: number | null;
     started_at: string;
     first_play_at: string | null;
     last_activity_at: string;
@@ -64,6 +90,15 @@ type User360Result = {
   }>;
   summary: { total_watch_time_seconds: number | null; videos_watched: number; videos_completed: number; sessions: number; average_completion_percentage: number | null; average_session_duration_seconds: number | null; last_activity_at: string | null };
 };
+
+function normalizedMetadata(value: Database["public"]["Tables"]["watch_events"]["Row"]["metadata"]): Record<string, string | number | boolean | null> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === null || typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean") result[key] = entry;
+  }
+  return result;
+}
 
 async function authorizeScope(scope: Scope, actor: AuthenticatedUser): Promise<void> {
   if (scope.kind === "owner") {
@@ -87,6 +122,29 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
     .eq("id", profileId)
     .maybeSingle();
   if (profileError || !profile) return null;
+
+  const { data: organizationMembershipRows, error: organizationMembershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id, profile_id, role, status")
+    .eq("profile_id", profileId)
+    .neq("status", "removed")
+    .limit(100);
+  if (organizationMembershipError) return null;
+  const { data: scopeSpace } = scope.kind === "space"
+    ? await supabase.from("spaces").select("id, organization_id").eq("id", scope.id).is("archived_at", null).maybeSingle()
+    : { data: null };
+  const scopeOrganizationId = scope.kind === "organization" ? scope.id : scopeSpace?.organization_id ?? null;
+  const organizationIdsForProfile = [...new Set((organizationMembershipRows ?? []).map((membership) => membership.organization_id))];
+  const { data: organizationRows, error: organizationRowsError } = organizationIdsForProfile.length > 0
+    ? await supabase.from("organizations").select("id, name").in("id", organizationIdsForProfile).is("archived_at", null).limit(100)
+    : { data: [], error: null };
+  if (organizationRowsError) return null;
+  const profileOrganizationById = new Map((organizationRows ?? []).map((organization) => [organization.id, organization]));
+  const profileOrganizations = (organizationMembershipRows ?? []).flatMap((membership) => {
+    const organization = profileOrganizationById.get(membership.organization_id);
+    if (!organization || (scope.kind !== "owner" && membership.organization_id !== scopeOrganizationId)) return [];
+    return [{ organization_id: organization.id, organization_name: organization.name, role: membership.role, status: membership.status }];
+  });
 
   const { data: memberships, error: membershipError } = await supabase
     .from("space_members")
@@ -113,14 +171,14 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
   }
   const scopedMemberships = membershipRows.filter((membership) => scope.kind === "owner" || visibleSpaceIds.has(membership.space_id));
   const organizationIds = [...new Set(scopedMemberships.map((membership) => spaceById.get(membership.space_id)?.organization_id).filter((id): id is string => typeof id === "string"))];
-  const { data: organizations, error: organizationsError } = organizationIds.length > 0
+  const { data: spaceOrganizations, error: organizationsError } = organizationIds.length > 0
     ? await supabase.from("organizations").select("id, name").in("id", organizationIds).limit(100)
     : { data: [], error: null };
   if (organizationsError) return null;
-  const organizationById = new Map((organizations ?? []).map((organization) => [organization.id, organization]));
+  const spaceOrganizationById = new Map((spaceOrganizations ?? []).map((organization) => [organization.id, organization]));
   const membershipViews = scopedMemberships.flatMap((membership) => {
     const space = spaceById.get(membership.space_id);
-    const organization = space ? organizationById.get(space.organization_id) : undefined;
+    const organization = space ? spaceOrganizationById.get(space.organization_id) : undefined;
     if (!space || !organization) return [];
     return [{ organization_id: organization.id, organization_name: organization.name, space_id: space.id, space_name: space.name, role: membership.role, status: membership.status }];
   });
@@ -174,7 +232,7 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
       playback_rate: event.playback_rate,
       from_rate: event.from_rate,
       to_rate: event.to_rate,
-      metadata: event.metadata,
+      metadata: normalizedMetadata(event.metadata),
       created_at: event.created_at,
       sequence_number: event.sequence_number,
     };
@@ -186,14 +244,70 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
     const lastEvent = events[events.length - 1];
     const heatmap = buildPlaybackHeatmap(events.map((event) => ({ id: event.id, event_type: event.event_type, position: event.position, from_position: event.from_position, duration: event.duration, created_at: event.created_at, sequence_number: event.sequence_number, occurred_at: event.occurred_at })), video.duration, video.source_type === "youtube" || video.source_type === "direct_url");
     const measured = heatmap.available || events.some((event) => event.duration !== null && event.duration > 0);
-    return { session_id: session.id, video_id: video.id, video_title: video.title, organization_id: video.organization_id, space_id: video.space_id, started_at: session.started_at, first_play_at: firstPlay?.occurred_at ?? firstPlay?.created_at ?? null, last_activity_at: lastEvent?.occurred_at ?? lastEvent?.received_at ?? session.last_seen_at, ended_at: session.ended_at, watch_time_seconds: measured ? Math.max(0, Number(session.watch_time_seconds ?? 0)) : null, completion_percentage: measured ? Math.max(0, Math.min(100, Number(session.completion_percentage ?? 0))) : null, last_position: measured ? (lastEvent?.position ?? null) : null, source_type: video.source_type, device_type: session.device_type, browser: session.browser, os: session.os, event_count: events.length, playback_events: events, heatmap };
+    return { session_id: session.id, video_id: video.id, video_title: video.title, organization_id: video.organization_id, space_id: video.space_id, duration: video.duration, started_at: session.started_at, first_play_at: firstPlay?.occurred_at ?? firstPlay?.created_at ?? null, last_activity_at: lastEvent?.occurred_at ?? lastEvent?.received_at ?? session.last_seen_at, ended_at: session.ended_at, watch_time_seconds: measured ? Math.max(0, Number(session.watch_time_seconds ?? 0)) : null, completion_percentage: measured ? Math.max(0, Math.min(100, Number(session.completion_percentage ?? 0))) : null, last_position: measured ? (lastEvent?.position ?? null) : null, source_type: video.source_type, device_type: session.device_type, browser: session.browser, os: session.os, event_count: events.length, playback_events: events, heatmap };
   });
   const measuredSessions = resultSessions.filter((session) => session.watch_time_seconds !== null);
   const totalWatchTime = measuredSessions.length > 0 ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null;
   const lastActivity = resultSessions.slice().sort((a, b) => new Date(b.last_activity_at).getTime() - new Date(a.last_activity_at).getTime())[0]?.last_activity_at ?? null;
+  const videosById = new Map<string, User360Result["videos"][number]>();
+  for (const session of resultSessions) {
+    const existing = videosById.get(session.video_id);
+    const events = session.playback_events;
+    const sessionRanges = session.heatmap.ranges;
+    const measuredWatchTime = session.watch_time_seconds ?? null;
+    const rateValues = [...new Set(events.flatMap((event) => [event.to_rate, event.playback_rate].filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)))];
+    const latestRateEvent = events.slice().reverse().find((event) => event.to_rate !== null || event.playback_rate !== null);
+    const latestRate = latestRateEvent?.to_rate ?? latestRateEvent?.playback_rate ?? null;
+    if (!existing) {
+      videosById.set(session.video_id, {
+        video_id: session.video_id,
+        video_title: session.video_title,
+        organization_id: session.organization_id,
+        space_id: session.space_id,
+        source_type: session.source_type,
+        duration: session.duration,
+        first_watched_at: session.started_at,
+        last_watched_at: session.last_activity_at,
+        total_watch_time_seconds: measuredWatchTime,
+        completion_percentage: session.completion_percentage,
+        sessions: 1,
+        pauses: events.filter((event) => event.event_type === "pause").length,
+        resumes: events.filter((event) => event.event_type === "resume").length,
+        seeks: events.filter((event) => event.event_type === "seek").length,
+        speed_changes: events.filter((event) => event.event_type === "rate_change").length,
+        speed_values: rateValues,
+        final_playback_rate: latestRate,
+        buffering_events: events.filter((event) => event.event_type === "buffer").length,
+        visibility_changes: events.filter((event) => event.event_type === "visibility_change").length,
+        last_position: session.last_position,
+        watched_ranges: sessionRanges,
+        heatmap_availability: session.heatmap.availability,
+      });
+    } else {
+      const watchTimes = [existing.total_watch_time_seconds, measuredWatchTime].filter((value): value is number => value !== null);
+      const completions = [existing.completion_percentage, session.completion_percentage].filter((value): value is number => value !== null);
+      existing.last_watched_at = session.last_activity_at > (existing.last_watched_at ?? "") ? session.last_activity_at : existing.last_watched_at;
+      existing.total_watch_time_seconds = watchTimes.length > 0 ? Math.round(watchTimes.reduce((sum, value) => sum + value, 0)) : null;
+      existing.completion_percentage = completions.length > 0 ? Math.max(...completions) : null;
+      existing.sessions += 1;
+      existing.pauses += events.filter((event) => event.event_type === "pause").length;
+      existing.resumes += events.filter((event) => event.event_type === "resume").length;
+      existing.seeks += events.filter((event) => event.event_type === "seek").length;
+      existing.speed_changes += events.filter((event) => event.event_type === "rate_change").length;
+      existing.speed_values = [...new Set([...existing.speed_values, ...rateValues])].sort((left, right) => left - right);
+      existing.final_playback_rate = latestRate ?? existing.final_playback_rate;
+      existing.buffering_events += events.filter((event) => event.event_type === "buffer").length;
+      existing.visibility_changes += events.filter((event) => event.event_type === "visibility_change").length;
+      existing.last_position = session.last_position ?? existing.last_position;
+      existing.watched_ranges = mergeWatchedRanges([...existing.watched_ranges, ...sessionRanges], existing.duration);
+      if (existing.heatmap_availability !== "measured" && session.heatmap.availability === "measured") existing.heatmap_availability = "measured";
+    }
+  }
   return {
     profile,
+    organizations: profileOrganizations,
     memberships: membershipViews,
+    videos: [...videosById.values()],
     sessions: resultSessions,
     summary: {
       total_watch_time_seconds: totalWatchTime,

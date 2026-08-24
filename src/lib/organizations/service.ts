@@ -60,15 +60,28 @@ export async function getOrganizationForUser(organizationId: string, user: Authe
 
 export async function listOrganizationSpaces(organizationId: string, user: AuthenticatedUser): Promise<Space[] | null> {
   try {
-    await authorizeOrganizationMember(organizationId, user);
+    const access = await authorizeOrganizationMember(organizationId, user);
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("spaces")
       .select(SPACE_FIELDS)
       .eq("organization_id", organizationId)
       .is("archived_at", null)
       .order("created_at", { ascending: true })
       .limit(MAX_ORGANIZATION_SPACES);
+    if (!access.is_platform_owner && access.membership?.role !== "admin") {
+      const { data: directMemberships, error: directMembershipError } = await supabase
+        .from("space_members")
+        .select("space_id")
+        .eq("profile_id", user.id)
+        .eq("status", "active")
+        .limit(MAX_ORGANIZATION_SPACES);
+      if (directMembershipError) return null;
+      const permittedSpaceIds = (directMemberships ?? []).map((membership) => membership.space_id);
+      if (permittedSpaceIds.length === 0) return [];
+      query = query.in("id", permittedSpaceIds);
+    }
+    const { data, error } = await query;
     if (error || !data) return null;
     return data.map(toSpace);
   } catch {

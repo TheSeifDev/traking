@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { buildPlaybackHeatmap, mergeWatchedRanges, reconstructWatchedRanges } from "../src/lib/analytics/ranges";
 import type { WatchEventSummary } from "../src/types/video";
+import { groupTimelineItems } from "../src/components/analytics/GroupedSessionTimeline";
 
 let checks = 0;
 
@@ -80,5 +81,21 @@ equal(unordered.availability, "insufficient_data");
 const unsupported = buildPlaybackHeatmap(realisticPlayback, 120, false);
 equal(unsupported.available, false);
 equal(unsupported.availability, "not_available_from_provider");
+
+const grouped = groupTimelineItems([
+  event("play", "play", 0, 1),
+  event("heartbeat-7", "heartbeat", 7, 2),
+  event("heartbeat-12", "heartbeat", 12, 3),
+  event("pause", "pause", 12, 4),
+  event("heartbeat-18", "heartbeat", 18, 5),
+]);
+equal(grouped.length, 4);
+equal(grouped[0]?.kind, "event");
+equal(grouped[1]?.kind, "progress");
+if (grouped[1]?.kind === "progress") equal(grouped[1].events.length, 2);
+equal(grouped[2]?.kind, "event");
+if (grouped[2]?.kind === "event") equal(grouped[2].event.event_type, "pause");
+equal(grouped[3]?.kind, "progress");
+if (grouped[3]?.kind === "progress") equal(grouped[3].events.length, 1);
 
 console.log(`Analytics Verification: ${checks}/${checks} passed`);

@@ -249,6 +249,7 @@ export default function WatchPlayer({
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken || sessionEndedRef.current) return;
+    const nativeRate = sourceType === "direct_url" ? videoRef.current?.playbackRate ?? lastPlaybackRateRef.current : null;
     const event: TrackingEventPayload = {
       session_id: sessionId,
       session_token: sessionToken,
@@ -259,12 +260,14 @@ export default function WatchPlayer({
       client_event_id: createClientEventId(),
       sequence_number: sequenceNumberRef.current++,
       occurred_at: new Date().toISOString(),
-      ...telemetryFields,
+      playback_rate: telemetryFields?.playback_rate ?? nativeRate,
+      from_rate: telemetryFields?.from_rate,
+      to_rate: telemetryFields?.to_rate,
       metadata,
     };
     pendingEventsRef.current.push(event);
     if (eventType !== "heartbeat" || pendingEventsRef.current.length >= 5) void flushEvents();
-  }, [flushEvents]);
+  }, [flushEvents, sourceType]);
 
   const finishBuffer = useCallback((snapshot: PlaybackSnapshot) => {
     const startedAt = bufferStartedAtRef.current;
@@ -432,7 +435,7 @@ export default function WatchPlayer({
         updateSnapshot(snapshot);
         accumulateWatchTime(true);
         if (isYouTube && previousPosition !== null && Math.abs(snapshot.position - previousPosition) >= 8) {
-          void sendEvent("seek", snapshot, previousPosition);
+          void sendEvent("seek", snapshot, previousPosition, { inferred: true, detection: "position_discontinuity" });
         }
         void sendEvent("heartbeat", snapshot);
         maybeRecordCompletion(snapshot);
@@ -471,6 +474,7 @@ export default function WatchPlayer({
     updateSnapshot(snapshot);
     accumulateWatchTime(false);
     stopHeartbeat();
+    pausedPositionRef.current = snapshot.position;
     void sendEvent("pause", snapshot);
   }, [accumulateWatchTime, sendEvent, stopHeartbeat, updateSnapshot]);
 
@@ -651,6 +655,7 @@ export default function WatchPlayer({
                 durationRef.current = metadataDuration;
                 lastDurationRef.current = metadataDuration;
               }
+              lastPlaybackRateRef.current = event.currentTarget.playbackRate;
             }}
             onPlay={handleDirectPlay}
             onPause={handleDirectPause}
