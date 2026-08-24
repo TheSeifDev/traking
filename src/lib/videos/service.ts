@@ -1106,6 +1106,7 @@ export async function getViewerAnalytics(
 
     const viewerSessionsRows: AnalyticsSessionRow[] = [];
     const sessionVideos = new Map<string, ViewerVideoSourceInfo>();
+    const videosById = new Map<string, ViewerVideoSourceInfo>();
     for (const raw of (rawSessions ?? []) as unknown[]) {
       if (!raw || typeof raw !== "object") continue;
       const row = raw as AnalyticsSessionRow;
@@ -1119,14 +1120,16 @@ export async function getViewerAnalytics(
         !allowedSpaceIds?.has(relatedVideo.space_id)
       ) continue;
       viewerSessionsRows.push(row);
-      sessionVideos.set(row.id, {
+      const videoInfo: ViewerVideoSourceInfo = {
         id: relatedVideo.id,
         space_id: relatedVideo.space_id,
         title: relatedVideo.title,
         source_type: relatedVideo.source_type,
         duration: typeof relatedVideo.duration === "number" ? relatedVideo.duration : null,
         source_url: typeof relatedVideo.source_url === "string" ? relatedVideo.source_url : null,
-      });
+      };
+      sessionVideos.set(row.id, videoInfo);
+      videosById.set(videoInfo.id, videoInfo);
     }
     if (viewerSessionsRows.length === 0) return null;
     await attachSessionProfiles(supabase, viewerSessionsRows);
@@ -1152,7 +1155,7 @@ export async function getViewerAnalytics(
     const sessionsByVideo = new Map<string, VideoAnalytics["viewer_sessions"]>();
     for (const session of viewerSessions) sessionsByVideo.set(session.video_id, [...(sessionsByVideo.get(session.video_id) ?? []), session]);
     const videos: ViewerVideoAnalytics[] = Array.from(sessionsByVideo.entries()).flatMap(([videoId, sessions]) => {
-      const video = sessionVideos.get(videoId);
+      const video = videosById.get(videoId);
       if (!video) return [];
       const measuredSessions = sessions.filter((session) => session.has_playback_telemetry);
       const watchTimes = measuredSessions.map(effectiveWatchTime).filter((value): value is number => value !== null);
