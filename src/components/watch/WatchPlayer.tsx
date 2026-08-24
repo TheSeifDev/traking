@@ -626,9 +626,9 @@ export default function WatchPlayer({
         return;
       }
       const iframe = document.createElement("iframe");
-      iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.origin)}`;
       iframe.title = title;
       iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?enablejsapi=1&rel=0&playsinline=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.origin)}`;
       iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
       iframe.allowFullscreen = true;
       iframe.className = "h-full w-full";
