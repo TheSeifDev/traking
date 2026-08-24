@@ -36,6 +36,7 @@ const legacyContainer = { name: "PHANTOMS | ORG", clickup_workspace_id: "workspa
 const linkedChild = { name: "Software Team", clickup_workspace_id: null, clickup_space_id: "space-1" };
 assert(isLegacyOrganizationContainerSpace(legacyContainer, "PHANTOMS | ORG"), "an unbound Organization-label workspace row is diagnosed as a legacy container");
 assert(!isSelectableChildSpace(legacyContainer, "PHANTOMS | ORG"), "the Organization-label workspace row is never put in a Space selector");
+assert(!isSelectableChildSpace({ name: "PHANTOMS | ORG", clickup_workspace_id: null, clickup_space_id: null }, "PHANTOMS | ORG"), "an older Organization-label row without workspace mapping is also excluded from child Space scope");
 assert(isSelectableChildSpace(linkedChild, "PHANTOMS | ORG") && getSpaceDisplayName(linkedChild) === "Software Team", "a linked ClickUp Space remains a selectable child with its real name");
 
 section("Additive migration and database isolation");

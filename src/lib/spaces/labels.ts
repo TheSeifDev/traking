@@ -24,16 +24,16 @@ export function hasOrganizationSpaceLabelCollision(spaceName: string, organizati
 
 /**
  * Legacy rows created before Organization/Space mapping can carry the
- * Workspace relationship and the Organization name. They remain in storage
- * for historical data, but are not a selectable child Space until a real
- * ClickUp Space ID is bound.
+ * Organization name but no provider Space ID. They remain in storage for
+ * historical data, but are not a selectable child Space until a real ClickUp
+ * Space ID is bound. The provider workspace column is optional on older rows,
+ * so the name collision plus missing provider Space ID is the safe signal.
  */
 export function isLegacyOrganizationContainerSpace(
   space: SpaceHierarchyLabelInput,
   organizationName: string | null | undefined,
 ): boolean {
   return !space.clickup_space_id
-    && Boolean(space.clickup_workspace_id)
     && hasOrganizationSpaceLabelCollision(space.name, organizationName);
 }
 
