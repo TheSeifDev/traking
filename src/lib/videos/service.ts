@@ -824,6 +824,9 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
     const { count: videoCount, error: videoCountError } = await videoCountQuery;
     if (videoCountError) return empty;
 
+    const scopedSpaceIdSet = spaceIds
+      ? new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))
+      : null;
     let sessionsQuery = supabase
       .from("watch_sessions")
       .select(`
@@ -846,11 +849,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
       `)
       .eq("watch_links.videos.workspace_id", workspaceId);
     if (spaceId) sessionsQuery = sessionsQuery.eq("watch_links.videos.space_id", spaceId);
-    else if (spaceIds) {
-      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
-      if (scopedSpaceIds.length === 0) return empty;
-      sessionsQuery = sessionsQuery.in("watch_links.videos.space_id", scopedSpaceIds);
-    }
+    else if (spaceIds && scopedSpaceIdSet?.size === 0) return empty;
     if (viewerProfileId) sessionsQuery = sessionsQuery.eq("viewer_profile_id", viewerProfileId);
     const { data: rawSessions, error: sessionsError } = await sessionsQuery
       .order("started_at", { ascending: false })
@@ -869,6 +868,7 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
         typeof relatedVideo.title !== "string" ||
         !isValidSourceType(relatedVideo.source_type)
       ) continue;
+      if (scopedSpaceIdSet && (typeof relatedVideo.space_id !== "string" || !scopedSpaceIdSet.has(relatedVideo.space_id))) continue;
       workspaceSessions.push(row);
       sessionVideos.set(row.id, {
         id: relatedVideo.id,
