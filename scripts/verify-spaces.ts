@@ -148,7 +148,7 @@ const organizationDashboard = source("src/components/organizations/OrganizationD
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
 const ownerPage = source("app/owner/page.tsx");
 const activeSpaceRoute = source("app/api/spaces/active/route.ts");
-assert(shell.includes("useSearchParams") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && !shell.includes("<select") && !shell.includes("selectSpace("), "dashboard shell is a non-interactive Organization/Space context indicator");
+assert(shell.includes("useSearchParams") && shell.includes("useRouter") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && shell.includes('aria-label="Select Organization"') && shell.includes("selectOrganization") && !shell.includes('aria-label="Select Space"') && !shell.includes("selectSpace("), "dashboard shell keeps Organization selection while Space remains a non-interactive context indicator");
 assert(activeSpaceRoute.includes("withAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel spaceId"), "analytics drilldowns retain Space context");

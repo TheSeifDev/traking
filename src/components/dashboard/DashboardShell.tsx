@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { useEffect } from "react";
@@ -47,6 +47,7 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
   const requestedOrganizationId = searchParams.get("organization_id");
@@ -82,6 +83,11 @@ export default function DashboardShell({
     }
   }, [activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
 
+  function selectOrganization(nextId: string) {
+    if (!nextId || nextId === selectedOrganizationId) return;
+    router.push(`/dashboard?organization_id=${encodeURIComponent(nextId)}`);
+  }
+
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     if (href === "/spaces") return selectedOrganizationId ? `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}` : href;
@@ -114,10 +120,12 @@ export default function DashboardShell({
 
           <div className="space-y-3 px-4 pt-4" aria-label="Current context">
             {organizations.length > 0 && (
-              <div className="min-w-0 px-1 py-1">
+              <label className="block rounded-lg border border-white/8 bg-white/5 px-3 py-2">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Organization</span>
-                <p className="truncate text-sm font-medium text-white/80" title={organizationContext ?? undefined}>{organizationContext ?? "No accessible Organization"}</p>
-              </div>
+                <select value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="w-full bg-transparent text-sm font-medium text-white/80 outline-none" aria-label="Select Organization">
+                  {organizations.map((organization) => <option key={organization.id} value={organization.id} className="bg-[#0b0b28]">{organization.name}</option>)}
+                </select>
+              </label>
             )}
 
             <div className="min-w-0 px-1 py-1">
