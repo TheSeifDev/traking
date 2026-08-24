@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Activity, ArrowLeft, BarChart3, CheckCircle2, Clock3, Eye, Layers3, Users } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
-import { getSpaceForUser, listSpacesForUser } from "@/src/lib/spaces/service";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
 import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 import { AnalyticsMetricGrid, EmptyAnalytics, HeatmapPanel, formatAnalyticsDate, formatAnalyticsDuration } from "@/src/components/dashboard/AnalyticsDetail";
@@ -17,23 +17,11 @@ export default async function VideoAnalyticsPage({ params, searchParams }: Props
   const user = await guardAuth();
   const query = await searchParams;
   const requestedSpaceId = query?.space_id?.trim() || null;
-  let access;
-  if (requestedSpaceId) {
-    try {
-      access = await getSpaceForUser(requestedSpaceId, user);
-    } catch {
-      redirect("/spaces?error=forbidden");
-    }
-  } else {
-    const spaces = await listSpacesForUser(user);
-    if (spaces.length > 1) redirect("/spaces?error=select_space");
-    if (!spaces[0]) return <EmptyAnalytics title="No accessible Space" body="Join a Space before opening private analytics." />;
-    try {
-      access = await getSpaceForUser(spaces[0].id, user);
-    } catch {
-      redirect("/spaces?error=forbidden");
-    }
-  }
+  const resolution = await resolveActiveSpaceForUser(user, { requestedSpaceId });
+  if (resolution.requestedSpaceInvalid) redirect("/spaces?error=forbidden");
+  if (resolution.requiresSelection) redirect("/spaces?error=select_space");
+  if (!resolution.access) return <EmptyAnalytics title="No accessible Space" body="Join a Space before opening private analytics." />;
+  const access = resolution.access;
   const canManage = access.is_platform_owner || access.membership?.role === "admin";
   if (!canManage) return <EmptyAnalytics title="Space admin access required" body="Per-video aggregate analytics are restricted to the platform owner and active Space admins." />;
   if (!access.space.clickup_workspace_id) return <EmptyAnalytics title="No ClickUp Workspace connected" body="Connect this Space before opening video analytics." />;

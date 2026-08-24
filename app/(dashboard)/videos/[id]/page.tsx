@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ArrowLeft, BarChart3, CheckCircle2, ExternalLink, FileText, Link2, Play, Video } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
-import { getSpaceForUser, listSpacesForUser } from "@/src/lib/spaces/service";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { getVideo, getVideoAnalytics } from "@/src/lib/videos/service";
 import { getAppUrl } from "@/src/lib/app-url";
 import WatchLinkPanel from "@/src/components/dashboard/WatchLinkPanel";
@@ -32,23 +32,11 @@ export default async function VideoDetailPage({ params, searchParams }: Props) {
   const user = await guardAuth();
   const query = await searchParams;
   const requestedSpaceId = query?.space_id?.trim() || null;
-  let access;
-  if (requestedSpaceId) {
-    try {
-      access = await getSpaceForUser(requestedSpaceId, user);
-    } catch {
-      redirect("/spaces?error=forbidden");
-    }
-  } else {
-    const spaces = await listSpacesForUser(user);
-    if (spaces.length > 1) redirect("/spaces?error=select_space");
-    if (!spaces[0]) notFound();
-    try {
-      access = await getSpaceForUser(spaces[0].id, user);
-    } catch {
-      redirect("/spaces?error=forbidden");
-    }
-  }
+  const resolution = await resolveActiveSpaceForUser(user, { requestedSpaceId });
+  if (resolution.requestedSpaceInvalid) redirect("/spaces?error=forbidden");
+  if (resolution.requiresSelection) redirect("/spaces?error=select_space");
+  if (!resolution.access) notFound();
+  const access = resolution.access;
   if (!access.space.clickup_workspace_id) notFound();
   const [video, analytics] = await Promise.all([
     getVideo(id, access.space.clickup_workspace_id, access.space.id),

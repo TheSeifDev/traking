@@ -81,6 +81,7 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/spaces/[spaceId]/route.ts", ["withAuth", "getSpaceForUser"]],
   ["app/api/spaces/[spaceId]/members/route.ts", ["withAuth", "listSpaceMembers", "addSpaceMember"]],
   ["app/api/spaces/[spaceId]/members/[profileId]/route.ts", ["withAuth", "updateSpaceMemberRole", "removeSpaceMember"]],
+  ["app/api/spaces/active/route.ts", ["withAuth", "setActiveSpacePreference", "getSpaceForUser"]],
   ["app/api/spaces/[spaceId]/member-candidates/route.ts", ["withAuth", "searchSpaceMemberCandidates"]],
   ["app/api/spaces/[spaceId]/analytics/route.ts", ["withAuth", "authorizeSpaceAdmin"]],
   ["app/api/spaces/[spaceId]/sync-clickup/route.ts", ["withAuth", "authorizeSpaceAdmin", "syncClickUpAuthorizedTeams"]],
@@ -145,12 +146,14 @@ const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
 const organizationDashboard = source("src/components/organizations/OrganizationDashboard.tsx");
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
 const ownerPage = source("app/owner/page.tsx");
-assert(shell.includes("useSearchParams") && shell.includes("organization_id") && shell.includes("selectableSpaces") && shell.includes("isSelectableChildSpace") && shell.includes("Select Organization") && shell.includes("Select Space") && shell.includes("AccessibleOrganization"), "dashboard shell separates Organization context from an authorized child Space selector");
+const activeSpaceRoute = source("app/api/spaces/active/route.ts");
+assert(shell.includes("useSearchParams") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && !shell.includes("<select") && !shell.includes("selectSpace("), "dashboard shell is a non-interactive Organization/Space context indicator");
+assert(activeSpaceRoute.includes("withAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel spaceId"), "analytics drilldowns retain Space context");
 assert(viewerPanel.includes("spaceId?") && viewerPanel.includes("playback_events.length") && viewerPanel.includes("Watched ranges"), "viewer/session analytics renders real event and honest range state");
 assert(membersManager.includes("/sync-clickup") && membersManager.includes("clickupConnected"), "membership UI exposes explicit ClickUp sync only when connected");
-assert(spacesDirectory.includes("isLegacyOrganizationContainerSpace") && spacesDirectory.includes("getSpaceDisplayName(space)") && spacesDirectory.includes("organization_id: selectedOrganizationId") && !spacesDirectory.includes("getSafeSpaceDisplayName"), "Space directory uses Organization context and real child-Space names");
+assert(spacesDirectory.includes("isLegacyOrganizationContainerSpace") && spacesDirectory.includes("getSpaceDisplayName(space)") && spacesDirectory.includes("activeSpaceId") && spacesDirectory.includes("/api/spaces/active") && spacesDirectory.includes("Current Space") && !spacesDirectory.includes("getSafeSpaceDisplayName"), "Space directory selects and marks the authorized active child Space");
 assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");
 assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organizationDashboard.includes("getSafeSpaceDisplayName"), "Organization dashboard renders child Space names directly");
 assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");

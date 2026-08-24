@@ -4,8 +4,7 @@
  */
 import { guardAuth } from "@/src/lib/auth/guards";
 import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
-import { listSpacesForUser } from "@/src/lib/spaces/service";
-import { getAccessibleOrganizations } from "@/src/lib/spaces/access";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import DashboardShell from "@/src/components/dashboard/DashboardShell";
 
 export default async function DashboardLayout({
@@ -14,18 +13,21 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await guardAuth();
-  const [workspace, spaces, organizations] = await Promise.all([
+  const [workspace, activeSpace] = await Promise.all([
     getPrimaryWorkspace(user.id),
-    listSpacesForUser(user),
-    getAccessibleOrganizations(user),
+    resolveActiveSpaceForUser(user),
   ]);
 
   return (
     <DashboardShell
       user={{ name: user.name, email: user.email, role: user.role }}
       workspace={workspace}
-      spaces={spaces}
-      organizations={organizations}
+      spaces={activeSpace.spaces}
+      organizations={activeSpace.organizations}
+      activeSpaceId={activeSpace.space?.id ?? null}
+      activeOrganizationId={activeSpace.organization?.id ?? null}
+      activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}
+      activeSpacePreferenceInvalid={activeSpace.activeSpacePreferenceInvalid}
     >
       {children}
     </DashboardShell>

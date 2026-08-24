@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import { Link2, Space as SpaceIcon, Video as VideoIcon } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
-import { listSpacesForUser } from "@/src/lib/spaces/service";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import DashboardOverview from "@/src/components/dashboard/DashboardOverview";
 import type { Video, WorkspaceAnalytics } from "@/src/types/video";
@@ -25,12 +25,12 @@ const emptyAnalytics: WorkspaceAnalytics = {
 
 export default async function DashboardPage() {
   const user = await guardAuth();
-  const spaces = await listSpacesForUser(user);
+  const resolution = await resolveActiveSpaceForUser(user);
 
-  if (spaces.length > 1) {
+  if (resolution.requiresSelection) {
     return <MultipleSpacesState />;
   }
-  const space = spaces[0];
+  const space = resolution.space;
   if (!space || !space.clickup_workspace_id) {
     return <SetupState />;
   }

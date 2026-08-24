@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
+import { useEffect } from "react";
 import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
 import { getSpaceDisplayName, isSelectableChildSpace } from "@/src/lib/spaces/labels";
@@ -15,6 +16,10 @@ interface DashboardShellProps {
   workspace: { name: string } | null;
   spaces?: AccessibleSpace[];
   organizations?: AccessibleOrganization[];
+  activeSpaceId?: string | null;
+  activeOrganizationId?: string | null;
+  activeSpaceNeedsPersistence?: boolean;
+  activeSpacePreferenceInvalid?: boolean;
 }
 
 const navItems = [
@@ -29,28 +34,53 @@ const navItems = [
 
 const ownerNavItem = { label: "Owner console", href: "/owner", icon: ShieldCheck };
 
-export default function DashboardShell({ children, user, workspace, spaces = [], organizations = [] }: DashboardShellProps) {
+export default function DashboardShell({
+  children,
+  user,
+  workspace,
+  spaces = [],
+  organizations = [],
+  activeSpaceId = null,
+  activeOrganizationId = null,
+  activeSpaceNeedsPersistence = false,
+  activeSpacePreferenceInvalid = false,
+}: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
   const requestedOrganizationId = searchParams.get("organization_id");
   const selectedOrganizationId = routeSpace?.organization_id
+    ?? (activeOrganizationId && organizations.some((organization) => organization.id === activeOrganizationId) ? activeOrganizationId : null)
     ?? (requestedOrganizationId && organizations.some((organization) => organization.id === requestedOrganizationId) ? requestedOrganizationId : organizations[0]?.id ?? "");
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? null;
   const selectableSpaces = spaces.filter((space) => space.organization_id === selectedOrganizationId)
     .filter((space) => isSelectableChildSpace(space, selectedOrganization?.name));
-  const selectedSpaceId = routeSpace && routeSpace.organization_id === selectedOrganizationId
-    ? routeSpace.id
-    : selectableSpaces.length === 1 ? selectableSpaces[0].id : "";
-  const selectedSpace = selectableSpaces.find((space) => space.id === selectedSpaceId) ?? null;
+  const persistedSpace = selectableSpaces.find((space) => space.id === activeSpaceId) ?? null;
+  const selectedSpace = routeSpace && routeSpace.organization_id === selectedOrganizationId
+    ? routeSpace
+    : persistedSpace;
+  const selectedSpaceId = selectedSpace?.id ?? "";
   const canManageActiveSpace = Boolean(selectedSpace?.is_platform_owner || selectedSpace?.membership_role === "admin");
   const visibleNavItems = [
     ...navItems,
     ...(selectedSpaceId && canManageActiveSpace ? [{ label: "Members", href: `/spaces/${selectedSpaceId}/members`, icon: UsersRound }] : []),
     ...(user.role === "owner" ? [ownerNavItem] : []),
   ];
+
+  useEffect(() => {
+    if (activeSpacePreferenceInvalid && !activeSpaceId) {
+      void fetch("/api/spaces/active", { method: "DELETE" });
+      return;
+    }
+    if ((activeSpaceNeedsPersistence || activeSpacePreferenceInvalid) && activeSpaceId) {
+      void fetch("/api/spaces/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_id: activeSpaceId }),
+      });
+    }
+  }, [activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
 
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
@@ -64,21 +94,9 @@ export default function DashboardShell({ children, user, workspace, spaces = [],
     return pathname.startsWith(href);
   }
 
-  function selectOrganization(nextId: string) {
-    if (!nextId) return;
-    router.push(`/dashboard?organization_id=${encodeURIComponent(nextId)}`);
-  }
-
-  function selectSpace(nextId: string) {
-    if (!nextId) {
-      router.push(`/spaces?organization_id=${encodeURIComponent(selectedOrganizationId)}`);
-      return;
-    }
-    router.push(`/spaces/${encodeURIComponent(nextId)}`);
-  }
-
   const organizationContext = selectedOrganization?.name ?? workspace?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
+  const displayedSpaceContext = spaceContext ?? (selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space");
 
   return (
     <>
@@ -94,30 +112,21 @@ export default function DashboardShell({ children, user, workspace, spaces = [],
             </Link>
           </div>
 
-          <div className="space-y-3 px-4 pt-4">
+          <div className="space-y-3 px-4 pt-4" aria-label="Current context">
             {organizations.length > 0 && (
-              <label className="block rounded-lg border border-white/8 bg-white/5 px-3 py-2">
+              <div className="min-w-0 px-1 py-1">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Organization</span>
-                <select value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="w-full bg-transparent text-sm font-medium text-white/80 outline-none" aria-label="Select Organization">
-                  {organizations.map((organization) => <option key={organization.id} value={organization.id} className="bg-[#0b0b28]">{organization.name}</option>)}
-                </select>
-              </label>
+                <p className="truncate text-sm font-medium text-white/80" title={organizationContext ?? undefined}>{organizationContext ?? "No accessible Organization"}</p>
+              </div>
             )}
 
-            <div className="rounded-lg border border-white/8 bg-white/5 px-3 py-2">
+            <div className="min-w-0 px-1 py-1">
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
-              {selectableSpaces.length > 0 ? (
-                <select value={selectedSpaceId} onChange={(event) => selectSpace(event.target.value)} className="w-full bg-transparent text-sm font-medium text-white/80 outline-none" aria-label="Select Space">
-                  {selectableSpaces.length > 1 && <option value="" className="bg-[#0b0b28]">Select a Space</option>}
-                  {selectableSpaces.map((space) => <option key={space.id} value={space.id} className="bg-[#0b0b28]">{getSpaceDisplayName(space)}</option>)}
-                </select>
-              ) : (
-                <p className="truncate text-sm font-medium text-white/65">{selectedOrganization ? "No accessible Spaces" : "Select an Organization"}</p>
-              )}
+              <p className="truncate text-sm font-medium text-white/65" title={displayedSpaceContext}>{displayedSpaceContext}</p>
             </div>
 
             {organizations.length === 0 && !selectableSpaces.length && workspace && (
-              <div className="rounded-lg border border-white/8 bg-white/5 px-3 py-2">
+              <div className="min-w-0 px-1 py-1">
                 <p className="mb-0.5 text-[10px] uppercase tracking-widest text-white/40">ClickUp connection</p>
                 <p className="truncate text-sm font-medium text-white/80">{workspace.name}</p>
               </div>
@@ -145,7 +154,7 @@ export default function DashboardShell({ children, user, workspace, spaces = [],
           <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
             <Link href={scopedHref("/dashboard")} className="flex min-w-0 items-center gap-2.5" aria-label="TrackUp dashboard">
               <Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 shrink-0 object-contain" />
-              <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{organizationContext && <span className="block max-w-28 truncate text-[10px] text-white/35">{organizationContext}</span>}{spaceContext && <span className="block max-w-28 truncate text-[10px] text-violet-200/55">{spaceContext}</span>}</div>
+              <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span><span className="block max-w-28 truncate text-[10px] text-white/35" title={organizationContext ?? undefined}>{organizationContext ?? "No Organization"}</span><span className="block max-w-28 truncate text-[10px] text-violet-200/55" title={displayedSpaceContext}>{displayedSpaceContext}</span></div>
             </Link>
             <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.map(({ label, href, icon: Icon }) => <Link key={href} href={scopedHref(href)} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs transition-colors ${isActive(href) ? "bg-violet-500/15 text-violet-300" : "text-white/45 hover:bg-white/5 hover:text-white"}`} aria-label={label}><Icon size={16} /><span className="hidden min-[430px]:inline">{label}</span></Link>)}

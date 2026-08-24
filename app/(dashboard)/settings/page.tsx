@@ -1,7 +1,7 @@
 ﻿import { Building2, CheckCircle2, ExternalLink, KeyRound, Settings, Shield, SlidersHorizontal, User } from "lucide-react";
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
-import { getSpaceForUser, listSpacesForUser } from "@/src/lib/spaces/service";
+import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -13,18 +13,11 @@ type PageProps = { searchParams?: Promise<{ space_id?: string }> };
 export default async function SettingsPage({ searchParams }: PageProps) {
   const user = await guardAuth();
   const params = await searchParams;
-  const spaces = await listSpacesForUser(user);
   const requestedSpaceId = params?.space_id?.trim() || null;
-  if (!requestedSpaceId && spaces.length > 1) redirect("/spaces?error=select_space");
-  const selectedSpaceId = requestedSpaceId ?? spaces[0]?.id ?? null;
-  let access = null;
-  if (selectedSpaceId) {
-    try {
-      access = await getSpaceForUser(selectedSpaceId, user);
-    } catch {
-      redirect("/spaces?error=forbidden");
-    }
-  }
+  const resolution = await resolveActiveSpaceForUser(user, { requestedSpaceId });
+  if (resolution.requestedSpaceInvalid) redirect("/spaces?error=forbidden");
+  if (resolution.requiresSelection) redirect("/spaces?error=select_space");
+  const access = resolution.access;
   const workspace = access?.space.clickup_workspace_id
     ? (await createAdminClient().from("workspaces").select("name, clickup_team_id").eq("id", access.space.clickup_workspace_id).maybeSingle()).data
     : null;
