@@ -215,9 +215,9 @@ export default function WorkspaceAnalyticsDashboard({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have an authenticated ClickUp viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
       ) : section === "sessions" ? (
-        <ViewerAnalyticsPanel spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Session activity" description="A structured view of every persisted session, with real viewer identity, provider, timing, telemetry quality, event count, and a direct timeline action." />
+        <ViewerAnalyticsPanel mode="sessions" spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Session activity" description="A structured view of every persisted session, with real viewer identity, provider, timing, telemetry quality, event count, and a direct timeline action." />
       ) : section === "viewers" ? (
-        <ViewerAnalyticsPanel spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Viewer activity" description="Understand who watched, what they watched, when they watched, and which sessions contain defensible playback evidence." />
+        <ViewerAnalyticsPanel mode="viewers" spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Viewer activity" description="A viewer directory grouped by persisted identity, with real session counts, video coverage, measured watch time, completion, last seen, and links into the viewer/session details." />
       ) : section === "videos" ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">

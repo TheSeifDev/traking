@@ -13,9 +13,20 @@ interface ViewerAnalyticsPanelProps {
   description?: string;
   spaceId?: string;
   organizationId?: string;
+  mode?: "sessions" | "viewers";
 }
 
 type StatusFilter = "all" | "measured" | "missing" | "unsupported";
+
+type ViewerRow = {
+  session: ViewerSessionAnalytics;
+  sessions: number;
+  videos: Set<string>;
+  watchTime: number | null;
+  completions: number[];
+  lastSeen: string;
+  measured: number;
+};
 
 function formatDate(value: string | null): string {
   if (!value) return "Not recorded";
@@ -86,10 +97,12 @@ export default function ViewerAnalyticsPanel({
   description = "Each row is a real watch session recorded by TrackUp.",
   spaceId,
   organizationId,
+  mode = "sessions",
 }: ViewerAnalyticsPanelProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
+  const [viewerPage, setViewerPage] = useState(1);
   const pageSize = 8;
   const videoById = useMemo(() => new Map(videos.map((video) => [video.id, video])), [videos]);
 
@@ -122,7 +135,7 @@ export default function ViewerAnalyticsPanel({
   const pageSessions = filteredSessions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const viewerRows = useMemo(() => {
-    const rows = new Map<string, { session: ViewerSessionAnalytics; sessions: number; videos: Set<string>; watchTime: number | null; completions: number[]; lastSeen: string; measured: number }>();
+    const rows = new Map<string, ViewerRow>();
     for (const session of filteredSessions) {
       const key = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
       const current = rows.get(key) ?? { session, sessions: 0, videos: new Set<string>(), watchTime: null, completions: [], lastSeen: session.last_activity_at, measured: 0 };
@@ -138,6 +151,10 @@ export default function ViewerAnalyticsPanel({
     }
     return [...rows.values()].sort((a, b) => b.sessions - a.sessions || b.lastSeen.localeCompare(a.lastSeen));
   }, [filteredSessions]);
+
+  const viewerPageCount = Math.max(1, Math.ceil(viewerRows.length / pageSize));
+  const currentViewerPage = Math.min(viewerPage, viewerPageCount);
+  const pageViewerRows = viewerRows.slice((currentViewerPage - 1) * pageSize, currentViewerPage * pageSize);
 
   const providerRows = useMemo(() => {
     const counts = new Map<string, number>();
@@ -172,7 +189,7 @@ export default function ViewerAnalyticsPanel({
         <label className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/45"><Filter size={14} /><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="bg-transparent text-sm text-white outline-none"><option value="all">All sessions</option><option value="measured">Measured</option><option value="missing">No telemetry</option><option value="unsupported">Session only</option></select></label>
       </div>
 
-      {filteredSessions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 px-6 py-14 text-center"><VideoIcon size={28} className="mx-auto text-white/15" /><p className="mt-3 text-sm text-white/45">{sessions.length === 0 ? "No viewer sessions recorded yet." : "No sessions match these filters."}</p><p className="mt-1 text-xs text-white/30">Only persisted session and playback records appear here. Unsupported telemetry is never inferred.</p></div> : <>
+      {filteredSessions.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 px-6 py-14 text-center"><VideoIcon size={28} className="mx-auto text-white/15" /><p className="mt-3 text-sm text-white/45">{sessions.length === 0 ? "No viewer sessions recorded yet." : "No sessions match these filters."}</p><p className="mt-1 text-xs text-white/30">Only persisted session and playback records appear here. Unsupported telemetry is never inferred.</p></div> : mode === "viewers" ? <ViewerDirectory rows={pageViewerRows} totalRows={viewerRows.length} currentPage={currentViewerPage} pageCount={viewerPageCount} pageSize={pageSize} onPrevious={() => setViewerPage((value) => Math.max(1, value - 1))} onNext={() => setViewerPage((value) => Math.min(viewerPageCount, value + 1))} scopedForSession={scopedForSession} /> : <>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.55fr)]">
           <article className="min-w-0 rounded-2xl border border-white/8 bg-white/[0.025] p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">Top viewers</p><h3 className="mt-1 text-sm font-semibold text-white">Who is watching</h3></div><Users size={16} className="text-violet-300" /></div><div className="mt-4 space-y-3">{viewerRows.slice(0, 5).map((row) => <div key={row.session.viewer_profile_id ?? row.session.viewer_identifier ?? row.session.session_id} className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-400/12 text-xs font-semibold text-violet-100">{initials(row.session)}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm text-white/80">{viewerLabel(row.session)}</p><span className="shrink-0 text-xs text-white/45">{row.sessions} session{row.sessions === 1 ? "" : "s"}</span></div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-violet-400/80" style={{ width: `${(row.sessions / maxViewerSessions) * 100}%` }} /></div><p className="mt-1 truncate text-[11px] text-white/30">{row.videos.size} video{row.videos.size === 1 ? "" : "s"} · last seen {shortDate(row.lastSeen)} · {row.measured > 0 ? formatDuration(row.watchTime) : "Not measured"} · {row.completions.length > 0 ? `${Math.round(row.completions.reduce((sum, value) => sum + value, 0) / row.completions.length)}% completion` : "Not measured"}</p></div></div>)}</div></article>
           <article className="min-w-0 rounded-2xl border border-white/8 bg-white/[0.025] p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">Session type distribution</p><h3 className="mt-1 text-sm font-semibold text-white">Provider breakdown</h3></div><Activity size={16} className="text-cyan-300" /></div><div className="mt-4 space-y-3">{providerRows.map(([provider, count]) => <div key={provider}><div className="flex items-center justify-between gap-3 text-xs"><span className="truncate capitalize text-white/65">{getProviderLabel(provider as Video["source_type"])}</span><span className="text-white/45">{count}</span></div><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/8"><div className="h-full rounded-full bg-cyan-400/75" style={{ width: `${(count / maxProviderSessions) * 100}%` }} /></div><p className="mt-1 text-[10px] text-white/30">{scopeLabel(sessions.find((session) => session.source_type === provider)?.playback_metrics_scope ?? "session_only")}</p></div>)}</div></article>
@@ -186,6 +203,18 @@ export default function ViewerAnalyticsPanel({
       </>}
     </section>
   );
+}
+
+function ViewerDirectory({ rows, totalRows, currentPage, pageCount, pageSize, onPrevious, onNext, scopedForSession }: { rows: ViewerRow[]; totalRows: number; currentPage: number; pageCount: number; pageSize: number; onPrevious: () => void; onNext: () => void; scopedForSession: (path: string, session?: ViewerSessionAnalytics) => string }) {
+  return <div className="space-y-4">
+    <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">Viewer directory</p><h3 className="mt-1 text-sm font-semibold text-white">People and identities</h3></div><Users size={16} className="text-violet-300" /></div>
+      <p className="mt-2 text-xs leading-5 text-white/35">One row per real viewer identity in the selected scope. Session count, videos, watch time, completion, and last seen are aggregated only from persisted sessions.</p>
+    </div>
+    <div className="hidden overflow-hidden rounded-2xl border border-white/8 bg-white/[0.025] md:block"><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left"><thead className="border-b border-white/8 bg-white/[0.025] text-[10px] uppercase tracking-[0.13em] text-white/30"><tr><th className="px-4 py-3 font-medium">Viewer</th><th className="px-4 py-3 font-medium">Sessions</th><th className="px-4 py-3 font-medium">Videos</th><th className="px-4 py-3 font-medium">Watch time</th><th className="px-4 py-3 font-medium">Completion</th><th className="px-4 py-3 font-medium">Last seen</th><th className="px-4 py-3 font-medium">Action</th></tr></thead><tbody className="divide-y divide-white/7">{rows.map((row) => { const profileHref = row.session.viewer_profile_id ? scopedForSession(`/analytics/videos/${row.session.video_id}/viewers/${encodeURIComponent(row.session.viewer_profile_id)}`, row.session) : null; const sessionHref = scopedForSession(`/analytics/videos/${row.session.video_id}/sessions/${row.session.session_id}`, row.session); const completion = row.completions.length > 0 ? `${Math.round(row.completions.reduce((sum, value) => sum + value, 0) / row.completions.length)}%` : "Not measured"; return <tr key={row.session.viewer_profile_id ?? row.session.viewer_identifier ?? row.session.session_id} className="transition hover:bg-white/[0.025]"><td className="px-4 py-3"><div className="flex min-w-[230px] items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-400/12 text-xs font-semibold text-violet-100">{initials(row.session)}</div><div className="min-w-0"><p className="truncate text-sm text-white/80">{viewerLabel(row.session)}</p><p className="truncate text-[11px] text-white/35">{viewerEmail(row.session)}</p></div></div></td><td className="px-4 py-3 text-sm text-white/70">{row.sessions}</td><td className="px-4 py-3 text-sm text-white/70">{row.videos.size}</td><td className="px-4 py-3 text-sm text-white/70">{row.measured > 0 ? formatDuration(row.watchTime) : "Not measured"}</td><td className="px-4 py-3 text-sm text-white/70">{completion}</td><td className="whitespace-nowrap px-4 py-3 text-xs text-white/50">{formatDate(row.lastSeen)}</td><td className="px-4 py-3"><div className="flex flex-col items-start gap-1.5">{profileHref && <Link href={profileHref} className="whitespace-nowrap text-xs font-medium text-violet-200 hover:text-violet-100">View viewer →</Link>}<Link href={sessionHref} className="whitespace-nowrap text-[10px] text-white/40 hover:text-white">Latest session</Link></div></td></tr>; })}</tbody></table></div></div>
+    <div className="space-y-3 md:hidden">{rows.map((row) => { const profileHref = row.session.viewer_profile_id ? scopedForSession(`/analytics/videos/${row.session.video_id}/viewers/${encodeURIComponent(row.session.viewer_profile_id)}`, row.session) : null; const sessionHref = scopedForSession(`/analytics/videos/${row.session.video_id}/sessions/${row.session.session_id}`, row.session); const completion = row.completions.length > 0 ? `${Math.round(row.completions.reduce((sum, value) => sum + value, 0) / row.completions.length)}%` : "Not measured"; return <article key={row.session.viewer_profile_id ?? row.session.viewer_identifier ?? row.session.session_id} className="rounded-2xl border border-white/8 bg-white/[0.025] p-4"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-400/12 text-xs font-semibold text-violet-100">{initials(row.session)}</div><div className="min-w-0"><p className="truncate text-sm font-medium text-white/85">{viewerLabel(row.session)}</p><p className="truncate text-xs text-white/35">{viewerEmail(row.session)}</p><p className="mt-2 text-[10px] text-white/30">Last seen {formatDate(row.lastSeen)}</p></div></div><div className="mt-4 grid grid-cols-2 gap-2"><Detail label="Sessions" value={String(row.sessions)} /><Detail label="Videos" value={String(row.videos.size)} /><Detail label="Watch time" value={row.measured > 0 ? formatDuration(row.watchTime) : "Not measured"} /><Detail label="Completion" value={completion} /></div><div className="mt-4 flex flex-wrap gap-3 border-t border-white/7 pt-3">{profileHref && <Link href={profileHref} className="text-xs font-medium text-violet-200 hover:text-violet-100">View viewer →</Link>}<Link href={sessionHref} className="text-xs text-white/45 hover:text-white">Latest session</Link></div></article>; })}</div>
+    <div className="flex flex-col gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs text-white/35">Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalRows)} of {totalRows} viewers</p><div className="flex items-center gap-2"><button onClick={onPrevious} disabled={currentPage === 1} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/55 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Previous</button><span className="min-w-16 text-center text-xs text-white/45">Page {currentPage} / {pageCount}</span><button onClick={onNext} disabled={currentPage === pageCount} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/55 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-30">Next</button></div></div>
+  </div>;
 }
 
 function Metric({ label, value, note, icon: Icon }: { label: string; value: string; note: string; icon: typeof Users }) {
