@@ -10,12 +10,16 @@ export const SPACE_ROLES = {
 export type SpaceRole = SpaceMemberRole;
 export type OrganizationRole = OrganizationMemberRole;
 export type SpaceStatus = "active" | "archived";
+export type ClickUpSyncStatus = "never" | "running" | "success" | "partial" | "failed";
 
 export interface Organization {
   id: string;
   name: string;
   slug: string;
   clickup_workspace_id: string | null;
+  clickup_sync_status: ClickUpSyncStatus;
+  clickup_last_synced_at: string | null;
+  clickup_sync_error: string | null;
   created_by: string | null;
   settings: Record<string, unknown>;
   archived_at: string | null;
@@ -57,6 +61,10 @@ export interface Space {
   name: string;
   slug: string;
   clickup_workspace_id: string | null;
+  clickup_space_id: string | null;
+  clickup_sync_status: ClickUpSyncStatus;
+  clickup_last_synced_at: string | null;
+  clickup_sync_error: string | null;
   created_by: string | null;
   settings: Record<string, unknown>;
   archived_at: string | null;

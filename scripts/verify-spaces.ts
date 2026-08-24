@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isSpaceRole, readSpaceSelector } from "../src/lib/spaces/access";
-import { getSafeSpaceDisplayName, hasOrganizationSpaceLabelCollision } from "../src/lib/spaces/labels";
+import { getSafeSpaceDisplayName, getSpaceDisplayName, hasOrganizationSpaceLabelCollision, isLegacyOrganizationContainerSpace, isSelectableChildSpace } from "../src/lib/spaces/labels";
 
 let passed = 0;
 let failed = 0;
@@ -32,6 +32,11 @@ assert(readSpaceSelector(new Request("https://trackup.test/videos")) === null, "
 assert(getSafeSpaceDisplayName("PHANTOMS | ORG", "PHANTOMS | ORG") === "Legacy Space label (review required)", "Organization/Space label collision is never presented as the Organization itself");
 assert(hasOrganizationSpaceLabelCollision("PHANTOMS | ORG", "PHANTOMS | ORG"), "legacy Organization/Space label collision is detectable");
 assert(getSafeSpaceDisplayName("AI Team-Phantoms", "PHANTOMS | ORG") === "AI Team-Phantoms", "real Space labels remain selectable under their Organization");
+const legacyContainer = { name: "PHANTOMS | ORG", clickup_workspace_id: "workspace-1", clickup_space_id: null };
+const linkedChild = { name: "Software Team", clickup_workspace_id: null, clickup_space_id: "space-1" };
+assert(isLegacyOrganizationContainerSpace(legacyContainer, "PHANTOMS | ORG"), "an unbound Organization-label workspace row is diagnosed as a legacy container");
+assert(!isSelectableChildSpace(legacyContainer, "PHANTOMS | ORG"), "the Organization-label workspace row is never put in a Space selector");
+assert(isSelectableChildSpace(linkedChild, "PHANTOMS | ORG") && getSpaceDisplayName(linkedChild) === "Software Team", "a linked ClickUp Space remains a selectable child with its real name");
 
 section("Additive migration and database isolation");
 const migration = source("supabase/migrations/20260824000007_create_spaces_and_memberships.sql");
@@ -46,6 +51,7 @@ assert(migration.includes("INSERT INTO public.spaces") && migration.includes("IN
 assert(migration.includes("ON CONFLICT (clickup_workspace_id) DO NOTHING") && migration.includes("ON CONFLICT (space_id, profile_id) DO NOTHING"), "backfill reruns are idempotent on unique keys");
 const controlRoomMigration = source("supabase/migrations/20260824000010_add_clickup_space_and_cron_evidence.sql");
 assert(controlRoomMigration.includes("clickup_space_id") && controlRoomMigration.includes("cron_executions") && controlRoomMigration.includes("UNIQUE (job_name, execution_key)"), "Control Room hierarchy and cron evidence migration is additive and idempotent");
+assert(controlRoomMigration.includes("uq_spaces_clickup_space_id") && controlRoomMigration.includes("WHERE clickup_space_id IS NOT NULL"), "ClickUp Space IDs are unique without rewriting legacy rows");
 assert(organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organizations") && organizationMigration.includes("CREATE TABLE IF NOT EXISTS public.organization_members"), "Organization hierarchy is additive");
 assert(organizationMigration.includes("ADD COLUMN IF NOT EXISTS organization_id UUID") && organizationMigration.includes("spaces_organization_id_fkey"), "Space-to-Organization relationship is additive and constrained");
 assert(organizationMigration.includes("ALTER COLUMN organization_id SET NOT NULL") && organizationMigration.includes("INSERT INTO public.organization_members"), "existing Spaces are deterministically backfilled into Organization memberships");
@@ -134,11 +140,19 @@ const overview = source("src/components/dashboard/DashboardOverview.tsx");
 const analyticsDashboard = source("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx");
 const viewerPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
 const membersManager = source("src/components/spaces/SpaceMembersManager.tsx");
-assert(shell.includes("useSearchParams") && shell.includes("space_id") && shell.includes("Members") && shell.includes("getSafeSpaceDisplayName") && shell.includes("AccessibleOrganization"), "dashboard shell preserves Space selection and keeps Organization context separate");
+const spacesDirectory = source("src/components/spaces/SpacesDirectory.tsx");
+const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
+const organizationDashboard = source("src/components/organizations/OrganizationDashboard.tsx");
+const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
+assert(shell.includes("useSearchParams") && shell.includes("organization_id") && shell.includes("selectableSpaces") && shell.includes("isSelectableChildSpace") && shell.includes("Select Organization") && shell.includes("Select Space") && shell.includes("AccessibleOrganization"), "dashboard shell separates Organization context from an authorized child Space selector");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel spaceId"), "analytics drilldowns retain Space context");
 assert(viewerPanel.includes("spaceId?") && viewerPanel.includes("playback_events.length") && viewerPanel.includes("Watched ranges"), "viewer/session analytics renders real event and honest range state");
 assert(membersManager.includes("/sync-clickup") && membersManager.includes("clickupConnected"), "membership UI exposes explicit ClickUp sync only when connected");
+assert(spacesDirectory.includes("isLegacyOrganizationContainerSpace") && spacesDirectory.includes("getSpaceDisplayName(space)") && spacesDirectory.includes("organization_id: selectedOrganizationId") && !spacesDirectory.includes("getSafeSpaceDisplayName"), "Space directory uses Organization context and real child-Space names");
+assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");
+assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organizationDashboard.includes("getSafeSpaceDisplayName"), "Organization dashboard renders child Space names directly");
+assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");
 
 console.log(`\n${"=".repeat(56)}`);
 console.log(`TrackUp Spaces: ${passed}/${passed + failed} tests passed`);
