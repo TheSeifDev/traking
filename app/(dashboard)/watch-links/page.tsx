@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
+import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
 import { getAppUrl } from "@/src/lib/app-url";
 import { listVideos } from "@/src/lib/videos/service";
 import WatchLinksManager from "@/src/components/dashboard/WatchLinksManager";
@@ -19,18 +20,19 @@ export default async function WatchLinksPage({ searchParams }: PageProps) {
 
   if (resolution.context.type === "all") {
     const organization = resolution.organization;
-    if (!organization?.clickup_workspace_id) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
-    const spaceIds = resolution.spaces.filter((space) => space.organization_id === organization.id).map((space) => space.id);
-    const videos = await listVideos(organization.clickup_workspace_id, undefined, spaceIds);
+    const scope = organization ? organizationDataScope(organization) : null;
+    if (!scope) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
+    const videos = await listVideos(scope);
     return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} spaceCanManage={false} />;
   }
 
   if (!resolution.access) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} />;
   const access = resolution.access;
-  const canManage = access.is_platform_owner || access.membership?.role === "admin";
-  if (!access.space.clickup_workspace_id) {
-    return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceId={access.space.id} spaceCanManage={canManage} />;
+  const scope = access ? spaceDataScope(access.space) : null;
+  const canManage = Boolean(access?.is_platform_owner || access?.membership?.role === "admin");
+  if (!access || !scope) {
+    return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceId={access?.space.id} spaceCanManage={canManage} />;
   }
-  const videos = await listVideos(access.space.clickup_workspace_id, access.space.id);
+  const videos = await listVideos(scope);
   return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={access.space.id} spaceCanManage={canManage} />;
 }

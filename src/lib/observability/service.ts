@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getWorkspaceAnalytics } from "@/src/lib/videos/service";
+import { workspaceDataScope } from "@/src/lib/spaces/data-scope";
 import { checkDatabaseHealth } from "@/src/lib/health/db";
 import { sanitizeOwnerMetadata, type SafeOwnerLog, type ObservabilityCategory, type ObservabilityLevel } from "./logger";
 import type { ViewerSessionAnalytics, WatchEventSummary, WorkspaceAnalytics } from "@/src/types/video";
@@ -150,11 +151,11 @@ function filterSessions(sessions: ViewerSessionAnalytics[], filters: OwnerSessio
 }
 
 export async function getOwnerWorkspaceAnalytics(workspaceId: string): Promise<WorkspaceAnalytics> {
-  return getWorkspaceAnalytics(workspaceId);
+  return getWorkspaceAnalytics(workspaceDataScope(workspaceId));
 }
 
 export async function listOwnerSessions(workspaceId: string, filters: OwnerSessionFilters = {}) {
-  const analytics = await getWorkspaceAnalytics(workspaceId);
+  const analytics = await getWorkspaceAnalytics(workspaceDataScope(workspaceId));
   const filtered = filterSessions(analytics.viewer_sessions.slice(0, OWNER_SESSION_SOURCE_LIMIT), filters);
   const offset = boundedOffset(filters.offset);
   const limit = boundedLimit(filters.limit);
@@ -169,7 +170,7 @@ export async function listOwnerSessions(workspaceId: string, filters: OwnerSessi
 }
 
 export async function getOwnerSession(workspaceId: string, sessionId: string): Promise<OwnerSessionDetail | null> {
-  const analytics = await getWorkspaceAnalytics(workspaceId);
+  const analytics = await getWorkspaceAnalytics(workspaceDataScope(workspaceId));
   const session = analytics.viewer_sessions.find((item) => item.session_id === sessionId);
   return session ? mapSessionDetail(session) : null;
 }

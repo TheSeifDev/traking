@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
+import { spaceDataScope } from "@/src/lib/spaces/data-scope";
 import { getVideo, updateVideo, deleteVideo } from "@/src/lib/videos/service";
 import { isValidSourceType } from "@/src/types/video";
 
@@ -17,8 +18,9 @@ export const GET = withDashboardAuth(async (request: NextRequest, user, context)
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
     const access = await resolveSpaceForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const video = await getVideo(id, access.space.clickup_workspace_id, access.space.id);
+    const scope = spaceDataScope(access.space);
+    if (!scope) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    const video = await getVideo(id, scope);
     if (!video) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ video, space: { id: access.space.id, name: access.space.name } });
   } catch {

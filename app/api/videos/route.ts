@@ -6,9 +6,9 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withDashboardAuth } from "@/src/lib/auth/api-handler";
-import { getAccessibleSpaces, resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
+import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { authorizeAllSpacesForUser } from "@/src/lib/spaces/active-space";
-import { isSelectableChildSpace } from "@/src/lib/spaces/labels";
+import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
 import { getWorkspaceAnalytics, listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType, type Video, type WorkspaceAnalytics } from "@/src/types/video";
 
@@ -50,14 +50,11 @@ export const GET = withDashboardAuth(async (request: NextRequest, user) => {
     const organizationId = request.nextUrl.searchParams.get("organization_id")?.trim() || null;
     if (organizationId) {
       const organization = await authorizeAllSpacesForUser(organizationId, user);
-      if (!organization.clickup_workspace_id) return NextResponse.json({ videos: [], summary: emptySummary, organization: { id: organization.id, name: organization.name }, active_space_scope: "all", space_connected: false });
-      const authorizedSpaceIds = (await getAccessibleSpaces(user))
-        .filter((space) => space.organization_id === organization.id)
-        .filter((space) => isSelectableChildSpace(space, organization.name))
-        .map((space) => space.id);
+      const scope = organizationDataScope(organization);
+      if (!scope) return NextResponse.json({ videos: [], summary: emptySummary, organization: { id: organization.id, name: organization.name }, active_space_scope: "all", space_connected: false });
       const [rawVideos, analytics] = await Promise.all([
-        listVideos(organization.clickup_workspace_id, undefined, authorizedSpaceIds),
-        getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, authorizedSpaceIds),
+        listVideos(scope),
+        getWorkspaceAnalytics(scope),
       ]);
       const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analytics.total_videos === rawVideos.length);
       const now = Date.now();
@@ -71,12 +68,13 @@ export const GET = withDashboardAuth(async (request: NextRequest, user) => {
       });
     }
     const access = await resolveSpaceForUser(request, user);
-    if (!access.space.clickup_workspace_id) {
+    const scope = spaceDataScope(access.space);
+    if (!scope) {
       return NextResponse.json({ videos: [], summary: emptySummary, space_connected: false });
     }
     const [rawVideos, analytics] = await Promise.all([
-      listVideos(access.space.clickup_workspace_id, access.space.id),
-      getWorkspaceAnalytics(access.space.clickup_workspace_id, access.space.id),
+      listVideos(scope),
+      getWorkspaceAnalytics(scope),
     ]);
     const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analytics.total_videos === rawVideos.length);
     const now = Date.now();

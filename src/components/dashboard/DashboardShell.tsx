@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { useEffect } from "react";
@@ -50,7 +50,6 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
   const requestedOrganizationId = searchParams.get("organization_id");
@@ -90,35 +89,6 @@ export default function DashboardShell({
     }
   }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
 
-  async function selectOrganization(nextId: string) {
-    if (!nextId || nextId === selectedOrganizationId) return;
-    try {
-      if (user.role === "owner") {
-        await fetch("/api/spaces/active", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scope: "all", organization_id: nextId }),
-        });
-      } else {
-        const nextSpaces = spaces.filter((space) => space.organization_id === nextId && isSelectableChildSpace(space, organizations.find((organization) => organization.id === nextId)?.name));
-        const currentSpace = activeSpaceId ? nextSpaces.find((space) => space.id === activeSpaceId) : null;
-        if (currentSpace) {
-          // Keep a valid active Space when it belongs to the newly selected Organization.
-        } else if (nextSpaces.length === 1) {
-          await fetch("/api/spaces/active", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ scope: "specific", space_id: nextSpaces[0]?.id }),
-          });
-        } else {
-          await fetch("/api/spaces/active", { method: "DELETE" });
-        }
-      }
-    } finally {
-      router.push(`/dashboard?organization_id=${encodeURIComponent(nextId)}`);
-    }
-  }
-
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     if (href === "/spaces") return selectedOrganizationId ? `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}` : href;
@@ -155,13 +125,11 @@ export default function DashboardShell({
           </div>
 
           <div className="space-y-3 px-4 pt-4" aria-label="Current context">
-            {organizations.length > 0 && (
-              <label className="block rounded-lg border border-white/8 bg-white/5 px-3 py-2">
+            {organizationContext && (
+              <div className="min-w-0 px-1 py-1">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Organization</span>
-                <select value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="w-full bg-transparent text-sm font-medium text-white/80 outline-none" aria-label="Select Organization">
-                  {organizations.map((organization) => <option key={organization.id} value={organization.id} className="bg-[#0b0b28]">{organization.name}</option>)}
-                </select>
-              </label>
+                <p className="truncate text-sm font-medium text-white/80" title={organizationContext}>{organizationContext}</p>
+              </div>
             )}
 
             <div className="min-w-0 px-1 py-1">

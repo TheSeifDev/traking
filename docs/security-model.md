@@ -36,7 +36,7 @@ The `users.read`, `users.manage`, and `admins.manage` permissions are platform-w
 
 Organization-scoped requests resolve the caller's accessible organizations first. Space-scoped requests verify that the Space belongs to the selected organization and that the caller has access to that Space. Video, watch-link, session, event, and analytics reads are constrained by the authorized parent resource. Invalid organization or Space selectors do not fall back to an unscoped global read.
 
-Owner `All Spaces` is a virtual active-context represented only by an HTTP-only preference value in the form `all:<organization-uuid>`. It is never a database Space, ClickUp Space, fake UUID, or ambiguous `NULL`. The server resolves it to the real authorized child ClickUp Space IDs under the selected Organization. Legacy Organization-container rows without a ClickUp Space identity are retained for historical preservation but excluded from child-Space presentation and All Spaces reads.
+Owner `All Spaces` is a virtual active-context represented only by an HTTP-only preference value in the form `all:<organization-uuid>`. It is never a database Space, ClickUp Space, fake UUID, or ambiguous `NULL`. The server authorizes the selected Organization and its linked ClickUp Workspace, then uses an explicit organization data scope for dashboard, video, watch-link, session, event, and analytics reads. That scope includes every organization-owned resource, including preserved historical Organization-container rows. Legacy Organization-container rows remain excluded from normal child-Space presentation and Space selection; they are not silently discarded from the Owner organization-wide scope.
 
 ## Viewer boundary and Watch Links
 

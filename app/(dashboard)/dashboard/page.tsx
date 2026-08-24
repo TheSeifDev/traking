@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
+import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
 import { getWorkspaceAnalytics, listVideos } from "@/src/lib/videos/service";
 import DashboardOverview from "@/src/components/dashboard/DashboardOverview";
 import type { Video, WorkspaceAnalytics } from "@/src/types/video";
@@ -39,17 +40,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   if (resolution.context.type === "all") {
     const organization = resolution.organization;
-    if (!organization?.clickup_workspace_id) return <SetupState />;
-    const spaceIds = resolution.spaces
-      .filter((space) => space.organization_id === organization.id)
-      .map((space) => space.id);
+    const scope = organization ? organizationDataScope(organization) : null;
+    if (!organization || !scope) return <SetupState />;
     let analytics = emptyAnalytics;
     let videos: Video[] = [];
     let error: string | null = null;
     try {
       const [loadedAnalytics, loadedVideos] = await Promise.all([
-        getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, spaceIds),
-        listVideos(organization.clickup_workspace_id, undefined, spaceIds),
+        getWorkspaceAnalytics(scope),
+        listVideos(scope),
       ]);
       analytics = loadedAnalytics;
       videos = loadedVideos;
@@ -61,15 +60,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   }
 
   const space = resolution.space;
-  if (!space || !space.clickup_workspace_id) return <SetupState />;
+  const scope = space ? spaceDataScope(space) : null;
+  if (!space || !scope) return <SetupState />;
   const canManage = space.is_platform_owner || space.membership_role === "admin";
   let analytics = emptyAnalytics;
   let videos: Video[] = [];
   let error: string | null = null;
   try {
     const [loadedAnalytics, loadedVideos] = await Promise.all([
-      getWorkspaceAnalytics(space.clickup_workspace_id, space.id, canManage ? undefined : user.id),
-      listVideos(space.clickup_workspace_id, space.id),
+      getWorkspaceAnalytics(scope, canManage ? undefined : user.id),
+      listVideos(scope),
     ]);
     analytics = loadedAnalytics;
     videos = loadedVideos;

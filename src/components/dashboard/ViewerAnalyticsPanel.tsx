@@ -11,6 +11,7 @@ interface ViewerAnalyticsPanelProps {
   title?: string;
   description?: string;
   spaceId?: string;
+  organizationId?: string;
 }
 
 function formatDate(value: string | null): string {
@@ -51,12 +52,15 @@ export default function ViewerAnalyticsPanel({
   title = "Viewer and session activity",
   description = "Each row is a real watch session recorded by TrackUp.",
   spaceId,
+  organizationId,
 }: ViewerAnalyticsPanelProps) {
   const [query, setQuery] = useState("");
   const scoped = (path: string) => spaceId ? `${path}?space_id=${encodeURIComponent(spaceId)}` : path;
-  const scopedForSession = (path: string, session: ViewerSessionAnalytics) => session.space_id
-    ? `${path}?space_id=${encodeURIComponent(session.space_id)}`
-    : scoped(path);
+  const scopedForSession = (path: string, session: ViewerSessionAnalytics) => organizationId
+    ? `${path}?organization_id=${encodeURIComponent(organizationId)}`
+    : session.space_id
+      ? `${path}?space_id=${encodeURIComponent(session.space_id)}`
+      : scoped(path);
   const visibleSessions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return sessions;

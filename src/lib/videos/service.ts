@@ -10,6 +10,7 @@ import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoI
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
+import type { AnalyticsDataScope, VideoDataScope } from "@/src/lib/spaces/data-scope";
 
 interface AnalyticsSessionRow {
   id: string;
@@ -268,7 +269,7 @@ function buildViewerSessionAnalytics(
 /**
  * Lists all videos for a workspace, with view counts.
  */
-export async function listVideos(workspaceId: string, spaceId?: string, spaceIds?: string[]): Promise<Video[]> {
+export async function listVideos(scope: VideoDataScope): Promise<Video[]> {
   try {
     const supabase = createAdminClient();
     let videoQuery = supabase
@@ -286,12 +287,16 @@ export async function listVideos(workspaceId: string, spaceId?: string, spaceIds
           watch_sessions(id, viewer_identifier, viewer_profile_id, started_at, last_seen_at, completion_percentage)
         )
       `)
-      .eq("workspace_id", workspaceId);
-    if (spaceId) videoQuery = videoQuery.eq("space_id", spaceId);
-    else if (spaceIds) {
-      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
-      if (scopedSpaceIds.length === 0) return [];
-      videoQuery = videoQuery.in("space_id", scopedSpaceIds);
+      .eq("workspace_id", scope.workspaceId);
+    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+    if (scope.type === "organization") {
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .maybeSingle();
+      if (organizationError || !organization) return [];
     }
     const { data, error } = await videoQuery.order("created_at", { ascending: false });
 
@@ -362,7 +367,7 @@ export async function listVideos(workspaceId: string, spaceId?: string, spaceIds
  * Fetches a single video, verifying workspace ownership.
  * Returns null if not found or not in the workspace.
  */
-export async function getVideo(videoId: string, workspaceId: string, spaceId?: string): Promise<Video | null> {
+export async function getVideo(videoId: string, scope: VideoDataScope): Promise<Video | null> {
   try {
     const supabase = createAdminClient();
     let videoQuery = supabase
@@ -373,8 +378,17 @@ export async function getVideo(videoId: string, workspaceId: string, spaceId?: s
         watch_links(id, token, created_by, expires_at, revoked_at, created_at)
       `)
       .eq("id", videoId)
-      .eq("workspace_id", workspaceId);
-    if (spaceId) videoQuery = videoQuery.eq("space_id", spaceId);
+      .eq("workspace_id", scope.workspaceId);
+    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+    if (scope.type === "organization") {
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .maybeSingle();
+      if (organizationError || !organization) return null;
+    }
     const { data, error } = await videoQuery.maybeSingle();
 
     if (error || !data) return null;
@@ -608,8 +622,7 @@ export async function revokeWatchLink(
  */
 export async function getVideoAnalytics(
   videoId: string,
-  workspaceId: string,
-  spaceId?: string,
+  scope: VideoDataScope,
 ): Promise<VideoAnalytics | null> {
   try {
     const supabase = createAdminClient();
@@ -618,8 +631,17 @@ export async function getVideoAnalytics(
       .from("videos")
       .select("id, title, duration, source_type")
       .eq("id", videoId)
-      .eq("workspace_id", workspaceId);
-    if (spaceId) videoQuery = videoQuery.eq("space_id", spaceId);
+      .eq("workspace_id", scope.workspaceId);
+    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+    if (scope.type === "organization") {
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .maybeSingle();
+      if (organizationError || !organization) return null;
+    }
     const { data: video } = await videoQuery.maybeSingle();
 
     if (!video) return null;
@@ -790,7 +812,7 @@ export async function associateClickUpTask(
 /**
  * Workspace-level analytics summary.
  */
-export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: string, viewerProfileId?: string, spaceIds?: string[]): Promise<WorkspaceAnalytics> {
+export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerProfileId?: string): Promise<WorkspaceAnalytics> {
   const empty: WorkspaceAnalytics = {
     total_videos: 0,
     total_views: 0,
@@ -811,22 +833,25 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
   try {
     const supabase = createAdminClient();
 
+    if (scope.type === "organization") {
+      const { data: organization, error: organizationError } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("id", scope.organizationId)
+        .eq("clickup_workspace_id", scope.workspaceId)
+        .maybeSingle();
+      if (organizationError || !organization) return empty;
+    }
+
     let videoCountQuery = supabase
       .from("videos")
       .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId);
-    if (spaceId) videoCountQuery = videoCountQuery.eq("space_id", spaceId);
-    else if (spaceIds) {
-      const scopedSpaceIds = [...new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))];
-      if (scopedSpaceIds.length === 0) return empty;
-      videoCountQuery = videoCountQuery.in("space_id", scopedSpaceIds);
-    }
+      .eq("workspace_id", scope.workspaceId);
+    if (scope.type === "space") videoCountQuery = videoCountQuery.eq("space_id", scope.spaceId);
     const { count: videoCount, error: videoCountError } = await videoCountQuery;
     if (videoCountError) return empty;
 
-    const scopedSpaceIdSet = spaceIds
-      ? new Set(spaceIds.filter((value) => /^[0-9a-f-]{36}$/i.test(value)))
-      : null;
+    const scopedSpaceIdSet = scope.type === "space" ? new Set([scope.spaceId]) : null;
     let sessionsQuery = supabase
       .from("watch_sessions")
       .select(`
@@ -847,9 +872,8 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
           videos!inner(id, title, workspace_id, space_id, source_type, duration)
         )
       `)
-      .eq("watch_links.videos.workspace_id", workspaceId);
-    if (spaceId) sessionsQuery = sessionsQuery.eq("watch_links.videos.space_id", spaceId);
-    else if (spaceIds && scopedSpaceIdSet?.size === 0) return empty;
+      .eq("watch_links.videos.workspace_id", scope.workspaceId);
+    if (scope.type === "space") sessionsQuery = sessionsQuery.eq("watch_links.videos.space_id", scope.spaceId);
     if (viewerProfileId) sessionsQuery = sessionsQuery.eq("viewer_profile_id", viewerProfileId);
     const { data: rawSessions, error: sessionsError } = await sessionsQuery
       .order("started_at", { ascending: false })
@@ -987,12 +1011,11 @@ export async function getWorkspaceAnalytics(workspaceId: string, spaceId?: strin
 
 export async function getVideoViewerAnalytics(
   videoId: string,
-  workspaceId: string,
+  scope: VideoDataScope,
   viewerId: string,
-  spaceId?: string,
 ): Promise<{ video_id: string; video_title: string; source_type: Video["source_type"]; viewer: AnalyticsViewerSummary | null; sessions: VideoAnalytics["viewer_sessions"] } | null> {
   if (!viewerId) return null;
-  const analytics = await getVideoAnalytics(videoId, workspaceId, spaceId);
+  const analytics = await getVideoAnalytics(videoId, scope);
   if (!analytics) return null;
   const sessions = analytics.viewer_sessions.filter((session) => {
     const sessionViewerId = session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
@@ -1011,11 +1034,10 @@ export async function getVideoViewerAnalytics(
 
 export async function getVideoSessionAnalytics(
   videoId: string,
-  workspaceId: string,
+  scope: VideoDataScope,
   sessionId: string,
-  spaceId?: string,
 ): Promise<VideoAnalytics["viewer_sessions"][number] | null> {
   if (!sessionId) return null;
-  const analytics = await getVideoAnalytics(videoId, workspaceId, spaceId);
+  const analytics = await getVideoAnalytics(videoId, scope);
   return analytics?.viewer_sessions.find((session) => session.session_id === sessionId) ?? null;
 }

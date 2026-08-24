@@ -396,11 +396,11 @@ assert(
   "settings reconnect CTA points to the implemented ClickUp OAuth route"
 );
 assert(
-  videoListRoute.includes("withDashboardAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("listVideos(access.space.clickup_workspace_id, access.space.id)"),
+  videoListRoute.includes("withDashboardAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("spaceDataScope") && videoListRoute.includes("listVideos(scope)"),
   "video list route enforces authenticated Space membership and scoped reads"
 );
 assert(
-  videoDetailRoute.includes("withDashboardAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("getVideo(id, access.space.clickup_workspace_id, access.space.id)"),
+  videoDetailRoute.includes("withDashboardAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("spaceDataScope") && videoDetailRoute.includes("getVideo(id, scope)"),
   "video detail route enforces authenticated Space membership"
 );
 assert(

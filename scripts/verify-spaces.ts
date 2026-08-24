@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { isSpaceRole, readSpaceSelector } from "../src/lib/spaces/access";
 import { getSafeSpaceDisplayName, getSpaceDisplayName, hasOrganizationSpaceLabelCollision, isLegacyOrganizationContainerSpace, isSelectableChildSpace } from "../src/lib/spaces/labels";
+import { organizationDataScope } from "../src/lib/spaces/data-scope";
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +39,8 @@ assert(isLegacyOrganizationContainerSpace(legacyContainer, "PHANTOMS | ORG"), "a
 assert(!isSelectableChildSpace(legacyContainer, "PHANTOMS | ORG"), "the Organization-label workspace row is never put in a Space selector");
 assert(!isSelectableChildSpace({ name: "PHANTOMS | ORG", clickup_workspace_id: null, clickup_space_id: null }, "PHANTOMS | ORG"), "an older Organization-label row without workspace mapping is also excluded from child Space scope");
 assert(isSelectableChildSpace(linkedChild, "PHANTOMS | ORG") && getSpaceDisplayName(linkedChild) === "Software Team", "a linked ClickUp Space remains a selectable child with its real name");
+const organizationScope = organizationDataScope({ id: "organization-1", clickup_workspace_id: "workspace-1" });
+assert(organizationScope?.type === "organization" && organizationScope.organizationId === "organization-1" && organizationScope.workspaceId === "workspace-1", "Owner All Spaces has an explicit organization scope");
 
 section("Additive migration and database isolation");
 const migration = source("supabase/migrations/20260824000007_create_spaces_and_memberships.sql");
@@ -106,7 +109,8 @@ for (const [path, terms] of routeContracts) {
   assert(terms.every((term) => content.includes(term)), `${path} has its complete authenticated Space contract`);
 }
 const videoService = source("src/lib/videos/service.ts");
-assert(videoService.includes('.eq("workspace_id", workspaceId)') && videoService.includes('.eq("space_id", spaceId)'), "resource service applies workspace and Space predicates");
+assert(videoService.includes('scope: VideoDataScope') && videoService.includes('scope.type === "organization"') && videoService.includes('.eq("workspace_id", scope.workspaceId)') && videoService.includes('.eq("space_id", scope.spaceId)'), "resource service applies explicit organization or Space predicates");
+assert(videoService.includes('organizationId') && videoService.includes('clickup_workspace_id') && !videoService.includes('spaceIds'), "Owner organization scope is validated against its organization/workspace and does not use child-Space allowlists");
 assert(videoService.includes("getVideoViewerAnalytics") && videoService.includes("getVideoSessionAnalytics") && videoService.includes("viewer_profile_id"), "analytics service exposes scoped viewer/session data");
 
 section("Authenticated watch access and tracking preservation");
@@ -150,18 +154,31 @@ const organizationSpacesPage = source("app/(dashboard)/organizations/[organizati
 const ownerPage = source("app/owner/page.tsx");
 const activeSpaceRoute = source("app/api/spaces/active/route.ts");
 const activeSpaceService = source("src/lib/spaces/active-space.ts");
+const dataScope = source("src/lib/spaces/data-scope.ts");
+const dashboardPage = source("app/(dashboard)/dashboard/page.tsx");
 const videosRoute = source("app/api/videos/route.ts");
 const videosPage = source("app/(dashboard)/videos/page.tsx");
 const analyticsPage = source("app/(dashboard)/analytics/page.tsx");
 const watchLinksPage = source("app/(dashboard)/watch-links/page.tsx");
-assert(shell.includes("useSearchParams") && shell.includes("useRouter") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && shell.includes('aria-label="Select Organization"') && shell.includes("selectOrganization") && !shell.includes('aria-label="Select Space"') && !shell.includes("selectSpace("), "dashboard shell keeps Organization selection while Space remains a non-interactive context indicator");
+const videoDetailPage = source("app/(dashboard)/videos/[id]/page.tsx");
+const analyticsVideoPage = source("app/(dashboard)/analytics/videos/[id]/page.tsx");
+const viewerAnalyticsPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
+const securityModel = source("docs/security-model.md");
+assert(shell.includes("useSearchParams") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && shell.includes("organizationContext") && shell.includes("displayedSpaceContext") && !shell.includes("useRouter") && !shell.includes('aria-label="Select Organization"') && !shell.includes("selectOrganization") && !shell.includes('aria-label="Select Space"') && !shell.includes("selectSpace("), "dashboard shell displays Organization and Space as non-interactive context indicators");
 assert(activeSpaceRoute.includes("withDashboardAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(activeSpaceService.includes('ALL_SPACES_PREFIX = "all:"') && activeSpaceService.includes('type: "all"') && activeSpaceService.includes("setAllSpacesPreference"), "All Spaces is represented by an explicit organization preference, not a fake Space UUID");
+assert(activeSpaceService.includes("isOwner(user.role)") && activeSpaceService.includes("organizationSpaces.length === 1") && activeSpaceService.includes("requiresSelection"), "Owner defaults to All Spaces, one-space users auto-select, and multi-space users require an explicit choice");
+assert(dataScope.includes('type: "organization"') && dataScope.includes('type: "space"') && dataScope.includes("organizationDataScope"), "resource scope model distinguishes virtual Organization from real Space");
 assert(activeSpaceRoute.includes("scope === \"all\"") && activeSpaceRoute.includes("authorizeAllSpacesForUser") && activeSpaceRoute.includes("organization_id"), "All Spaces selection is server-authorized and owner-only");
-assert(videosRoute.includes("organization_id") && videosRoute.includes("authorizeAllSpacesForUser") && videosRoute.includes("getAccessibleSpaces") && videosRoute.includes("isSelectableChildSpace") && videosRoute.includes("authorizedSpaceIds"), "organization video GET is constrained to authorized child Space IDs");
+assert(videosRoute.includes("organization_id") && videosRoute.includes("authorizeAllSpacesForUser") && videosRoute.includes("organizationDataScope") && videosRoute.includes("listVideos(scope)") && videosRoute.includes("getWorkspaceAnalytics(scope)"), "organization video GET uses the authorized virtual organization scope");
 assert(videosPage.includes("context.type === \"all\"") && videosPage.includes("spaceCanManage={false}"), "All Spaces video library is read-only until a real Space is selected for mutation");
-assert(analyticsPage.includes("context.type === \"all\"") && analyticsPage.includes("getWorkspaceAnalytics(organization.clickup_workspace_id, undefined, undefined, spaceIds)"), "All Spaces analytics uses organization aggregate over authorized IDs");
-assert(watchLinksPage.includes("context.type === \"all\"") && watchLinksPage.includes("spaceCanManage={false}"), "All Spaces watch links are read-only and remain scoped to authorized videos");
+assert(analyticsPage.includes("context.type === \"all\"") && analyticsPage.includes("organizationDataScope") && analyticsPage.includes("getWorkspaceAnalytics(scope)") && analyticsPage.includes("listVideos(scope)"), "All Spaces analytics uses the complete authorized organization aggregate");
+assert(watchLinksPage.includes("context.type === \"all\"") && watchLinksPage.includes("organizationDataScope") && watchLinksPage.includes("listVideos(scope)") && watchLinksPage.includes("spaceCanManage={false}"), "All Spaces watch links are read-only and use the complete organization scope");
+assert(dashboardPage.includes("organizationDataScope") && dashboardPage.includes("getWorkspaceAnalytics(scope)") && dashboardPage.includes("listVideos(scope)"), "dashboard All Spaces aggregates complete organization data");
+assert(videoDetailPage.includes("organizationDataScope") && videoDetailPage.includes("getVideo(id, scope)") && videoDetailPage.includes("getVideoAnalytics(id, scope)"), "Owner All Spaces video detail includes historical organization-owned videos");
+assert(analyticsVideoPage.includes("organizationDataScope") && analyticsVideoPage.includes("getVideo(id, scope)") && analyticsVideoPage.includes("ViewerAnalyticsPanel") && analyticsVideoPage.includes("organizationId"), "Owner All Spaces analytics drilldown retains organization scope for viewer/session links");
+assert(viewerAnalyticsPanel.includes("organizationId?") && viewerAnalyticsPanel.includes("organization_id"), "viewer/session drilldown links preserve virtual organization context");
+assert(securityModel.includes("explicit organization data scope") && securityModel.includes("including preserved historical Organization-container rows") && securityModel.includes("excluded from normal child-Space presentation"), "security model documents the Owner organization scope and normal legacy exclusion separately");
 assert(overview.includes('scopeType?: "specific" | "all"') && overview.includes("organizationId") && overview.includes("scopedVideo"), "dashboard overview distinguishes organization aggregation and real Space detail links");
 assert(analyticsDashboard.includes('scopeType?: "specific" | "all"') && analyticsDashboard.includes("organizationId") && analyticsDashboard.includes("video.space_id"), "analytics drilldowns retain organization or real per-video Space context");
 assert(overview.includes("canManage: boolean") && overview.includes("spaceId") && overview.includes("scoped"), "dashboard overview uses explicit Space authorization and scoped links");
