@@ -136,7 +136,7 @@ export async function createWatchSession(
         os: viewerMetadata.os,
         session_token: sessionToken,
       })
-      .select("id, session_token")
+      .select("id, session_token, started_at")
       .single();
 
     if (error || !data) {
@@ -151,6 +151,28 @@ export async function createWatchSession(
       return null;
     }
 
+    const { error: lifecycleEventError } = await supabase.from("watch_events").upsert({
+      session_id: data.id,
+      event_type: "session_started",
+      position: 0,
+      duration: null,
+      from_position: null,
+      client_event_id: `session-start:${data.id}`,
+      sequence_number: 0,
+      occurred_at: data.started_at,
+      metadata: { source: "server", lifecycle: "session_started" },
+    }, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
+    if (lifecycleEventError) {
+      void writeOwnerLog({
+        level: "ERROR",
+        category: "DATABASE",
+        action: "session_started_event_failed",
+        userId: viewerIdentity,
+        sessionId: data.id,
+        metadata: { reason: lifecycleEventError.code },
+      });
+      return null;
+    }
     void writeOwnerLog({
       level: "INFO",
       category: "SESSION",
@@ -364,23 +386,45 @@ export async function endWatchSession(
   if (!sessionId || !sessionToken) return false;
 
   try {
-    if (!(await isAuthorizedWatchSession(sessionId, sessionToken, viewerIdentity))) return false;
-
     const supabase = createAdminClient();
-    if (position !== null || duration !== null) {
-      const { error: eventError } = await supabase.from("watch_events").insert({
+    const { data: existingSession, error: existingSessionError } = await supabase
+      .from("watch_sessions")
+      .select("id, viewer_identifier, viewer_profile_id, ended_at")
+      .eq("id", sessionId)
+      .eq("session_token", sessionToken)
+      .maybeSingle();
+    if (existingSessionError || !existingSession || existingSession.viewer_profile_id !== viewerIdentity || existingSession.viewer_identifier !== await hashViewerIdentity(viewerIdentity)) return false;
+    if (existingSession.ended_at) return true;
+
+    const finalEventId = finalEvent.client_event_id ?? `session-end:${sessionId}`;
+    const finalSequence = finalEvent.sequence_number ?? null;
+    const finalOccurredAt = finalEvent.occurred_at ?? null;
+    const lifecycleRows = [
+      ...(position !== null || duration !== null ? [{
         session_id: sessionId,
-        event_type: "ended",
+        event_type: "ended" as const,
         position: position ?? 0,
         duration: duration ?? null,
         from_position: null,
-        client_event_id: finalEvent.client_event_id ?? null,
-        sequence_number: finalEvent.sequence_number ?? null,
-        occurred_at: finalEvent.occurred_at ?? null,
-        metadata: {},
-      });
-      if (eventError) return false;
-    }
+        client_event_id: finalEventId,
+        sequence_number: finalSequence,
+        occurred_at: finalOccurredAt,
+        metadata: { source: "server", lifecycle: "ended" },
+      }] : []),
+      {
+        session_id: sessionId,
+        event_type: "session_ended" as const,
+        position: position ?? 0,
+        duration: duration ?? null,
+        from_position: null,
+        client_event_id: `${finalEventId}:session-ended`,
+        sequence_number: finalSequence === null ? null : finalSequence + 1,
+        occurred_at: finalOccurredAt,
+        metadata: { source: "server", lifecycle: "session_ended" },
+      },
+    ];
+    const { error: eventError } = await supabase.from("watch_events").upsert(lifecycleRows, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
+    if (eventError) return false;
 
     const { data, error } = await supabase
       .from("watch_sessions")

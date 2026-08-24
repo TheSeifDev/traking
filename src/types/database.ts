@@ -9,7 +9,7 @@ export type Json =
   | Json[];
 
 export type VideoSourceType = "youtube" | "google_drive" | "vimeo" | "telegram" | "direct_url";
-export type WatchEventType = "play" | "resume" | "pause" | "seek" | "heartbeat" | "complete" | "ended" | "buffer" | "rate_change" | "visibility_change";
+export type WatchEventType = "session_started" | "player_ready" | "metadata_loaded" | "play" | "resume" | "pause" | "seek" | "seek_started" | "seek_completed" | "heartbeat" | "playback_progress" | "complete" | "ended" | "session_ended" | "buffer" | "buffering_started" | "buffering_ended" | "rate_change" | "playback_rate_changed" | "volume_changed" | "mute_changed" | "fullscreen_entered" | "fullscreen_exited" | "visibility_change" | "visibility_hidden" | "visibility_visible" | "quality_changed" | "player_error";
 export type SpaceMemberRole = "admin" | "member";
 export type SpaceMemberStatus = "active" | "suspended" | "removed";
 export type OrganizationMemberRole = "admin" | "member";

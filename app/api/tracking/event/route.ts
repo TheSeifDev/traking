@@ -10,7 +10,7 @@ import { isValidEventType, type TrackingEventPayload } from "@/src/types/trackin
 
 const MAX_BATCH_SIZE = 50;
 const MAX_CLIENT_EVENT_ID_LENGTH = 100;
-const MAX_METADATA_BYTES = 512;
+const MAX_METADATA_BYTES = 2048;
 
 type RawEvent = Partial<Omit<TrackingEventPayload, "session_id" | "session_token">>;
 

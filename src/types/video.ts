@@ -103,16 +103,34 @@ export interface WatchEvent {
 }
 
 export type WatchEventType =
+  | "session_started"
+  | "player_ready"
+  | "metadata_loaded"
   | "play"
   | "resume"
   | "pause"
   | "seek"
+  | "seek_started"
+  | "seek_completed"
   | "heartbeat"
+  | "playback_progress"
   | "complete"
   | "ended"
+  | "session_ended"
   | "buffer"
+  | "buffering_started"
+  | "buffering_ended"
   | "rate_change"
-  | "visibility_change";
+  | "playback_rate_changed"
+  | "volume_changed"
+  | "mute_changed"
+  | "fullscreen_entered"
+  | "fullscreen_exited"
+  | "visibility_change"
+  | "visibility_hidden"
+  | "visibility_visible"
+  | "quality_changed"
+  | "player_error";
 
 // Input types for creation
 export interface CreateVideoInput {

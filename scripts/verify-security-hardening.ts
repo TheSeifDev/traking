@@ -78,7 +78,7 @@ async function runTests(): Promise<void> {
   assert(endRoute.includes("status: 404") && endRoute.includes("session_not_found"), "end route uses a non-leaking capability failure");
   assert(endRoute.includes("const position") && endRoute.includes("finalDuration") && endRoute.includes("finalEvent") && endRoute.includes("endWatchSession(sessionId, sessionToken, user.id, watchTime, completion, position, finalDuration, finalEvent)"), "session end accepts final player position and duration for the authenticated profile");
   assert(trackingService.includes('randomBytes(32).toString("hex")'), "tracking service creates an opaque random capability");
-  assert(trackingService.includes('.select("id, session_token")'), "tracking service reads the created capability");
+  assert(trackingService.includes('.select("id, session_token, started_at")'), "tracking service reads the created capability and lifecycle timestamp");
   assert(trackingService.includes("recordTrackingEvents") && trackingService.includes('.eq("session_token", sessionToken)'), "event writes scope last-seen updates by capability");
   assert(trackingService.includes('.eq("session_token", sessionToken)'), "session end updates scope by capability");
   assert(trackingService.includes('event_type: "ended"') && trackingService.includes("position: position ?? 0") && trackingService.includes("duration: duration ?? null"), "session end stores an ended event only when final player telemetry exists");

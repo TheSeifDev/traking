@@ -75,13 +75,15 @@ export function reconstructWatchedRanges(events: WatchEventSummary[], duration: 
   const hasCompleteOrdering = ordered.every((event) => event.sequence_number !== null && event.sequence_number !== undefined);
   const validDuration = duration !== null && Number.isFinite(duration) && duration > 0;
   const hasStart = ordered.some((event) => event.event_type === "play" || event.event_type === "resume");
-  const hasProgress = ordered.some((event) => ["heartbeat", "pause", "seek", "complete", "ended"].includes(event.event_type) && Number.isFinite(event.position));
+  const hasProgress = ordered.some((event) => ["heartbeat", "playback_progress", "pause", "seek", "seek_started", "seek_completed", "complete", "ended"].includes(event.event_type) && Number.isFinite(event.position));
   if (!validDuration || !hasStart || !hasProgress) return { ranges: [], reliable: false };
 
   const ranges: WatchedRange[] = [];
   let playing = false;
   let segmentStart: number | null = null;
   let lastPosition = 0;
+  let resumeAfterSeek = false;
+  let resumeAfterBuffer = false;
 
   for (const event of ordered) {
     const position = clampPosition(event.position, duration);
@@ -94,6 +96,7 @@ export function reconstructWatchedRanges(events: WatchEventSummary[], duration: 
         lastPosition = position;
         break;
       case "heartbeat":
+      case "playback_progress":
         if (!playing || segmentStart === null) break;
         if (position + 0.5 < lastPosition) {
           addRange(ranges, segmentStart, lastPosition, duration);
@@ -103,20 +106,44 @@ export function reconstructWatchedRanges(events: WatchEventSummary[], duration: 
         }
         lastPosition = position;
         break;
-      case "seek": {
-        if (playing && segmentStart !== null) {
-          const seekOrigin = event.from_position === null || event.from_position === undefined
-            ? lastPosition
-            : clampPosition(event.from_position, duration);
-          addRange(ranges, segmentStart, seekOrigin, duration);
-        }
-        segmentStart = playing ? position : null;
+      case "seek_started":
+        resumeAfterSeek = playing;
+        if (playing && segmentStart !== null) addRange(ranges, segmentStart, position, duration);
+        playing = false;
+        segmentStart = null;
         lastPosition = position;
         break;
+      case "seek_completed":
+      case "seek": {
+        const seekOrigin = event.from_position === null || event.from_position === undefined
+          ? lastPosition
+          : clampPosition(event.from_position, duration);
+        if (playing && segmentStart !== null) addRange(ranges, segmentStart, seekOrigin, duration);
+        const continuePlayback: boolean = event.event_type === "seek_completed"
+          ? resumeAfterSeek || event.metadata?.inferred === true
+          : playing;
+        playing = continuePlayback;
+        segmentStart = continuePlayback ? position : null;
+        lastPosition = position;
+        resumeAfterSeek = false;
+        break;
       }
+      case "buffering_started":
+        resumeAfterBuffer = playing;
+        if (playing && segmentStart !== null) addRange(ranges, segmentStart, lastPosition, duration);
+        playing = false;
+        segmentStart = null;
+        break;
+      case "buffering_ended":
+        playing = resumeAfterBuffer;
+        segmentStart = playing ? position : null;
+        lastPosition = position;
+        resumeAfterBuffer = false;
+        break;
       case "pause":
       case "complete":
       case "ended":
+      case "session_ended":
         if (playing && segmentStart !== null) addRange(ranges, segmentStart, Math.max(lastPosition, position), duration);
         playing = false;
         segmentStart = null;
@@ -145,6 +172,8 @@ export function buildPlaybackHeatmap(
   if (!supported) return { available: false, availability: "not_available_from_provider", duration_seconds: duration, bucket_size_seconds: null, ranges: [], buckets: [] };
   if (!duration || duration <= 0) return { available: false, availability: "no_telemetry", duration_seconds: null, bucket_size_seconds: null, ranges: [], buckets: [] };
   if (events.length === 0) return { available: false, availability: "no_telemetry", duration_seconds: duration, bucket_size_seconds: null, ranges: [], buckets: [] };
+  const hasPlaybackEvent = events.some((event) => ["play", "resume", "pause", "seek", "seek_started", "seek_completed", "heartbeat", "playback_progress", "complete", "ended"].includes(event.event_type));
+  if (!hasPlaybackEvent) return { available: false, availability: "no_telemetry", duration_seconds: duration, bucket_size_seconds: null, ranges: [], buckets: [] };
   const reconstructed = reconstructWatchedRanges(events, duration);
   if (!reconstructed.reliable) return { available: false, availability: "insufficient_data", duration_seconds: duration, bucket_size_seconds: null, ranges: reconstructed.ranges, buckets: [] };
 

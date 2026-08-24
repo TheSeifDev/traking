@@ -10,6 +10,11 @@ type YouTubeReadyEvent = { target: YouTubePlayer };
 type YouTubePlayer = {
   getCurrentTime: () => number;
   getDuration: () => number;
+  getPlayerState?: () => number;
+  getPlaybackRate?: () => number;
+  getVolume?: () => number;
+  isMuted?: () => boolean;
+  getPlaybackQuality?: () => string;
   playVideo: () => void;
   pauseVideo: () => void;
   destroy: () => void;
@@ -170,6 +175,9 @@ export default function WatchPlayer({
   const furthestPositionRef = useRef(0);
   const seekFromRef = useRef<number | null>(null);
   const lastPlaybackRateRef = useRef<number | null>(null);
+  const lastVolumeRef = useRef<number | null>(null);
+  const lastMutedRef = useRef<boolean | null>(null);
+  const lastQualityRef = useRef<string | null>(null);
   const bufferStartedAtRef = useRef<number | null>(null);
   const pendingEventsRef = useRef<TrackingEventPayload[]>([]);
   const eventFlushRequestRef = useRef<Promise<boolean> | null>(null);
@@ -266,14 +274,14 @@ export default function WatchPlayer({
       metadata,
     };
     pendingEventsRef.current.push(event);
-    if (eventType !== "heartbeat" || pendingEventsRef.current.length >= 5) void flushEvents();
+    if ((eventType !== "heartbeat" && eventType !== "playback_progress") || pendingEventsRef.current.length >= 5) void flushEvents();
   }, [flushEvents, sourceType]);
 
   const finishBuffer = useCallback((snapshot: PlaybackSnapshot) => {
     const startedAt = bufferStartedAtRef.current;
     if (startedAt === null || !sessionIdRef.current) return;
     bufferStartedAtRef.current = null;
-    void sendEvent("buffer", snapshot, null, { state: "end", buffer_duration_ms: Math.max(0, Math.round(Date.now() - startedAt)) });
+    void sendEvent("buffering_ended", snapshot, null, { state: "end", buffer_duration_ms: Math.max(0, Math.round(Date.now() - startedAt)) });
   }, [sendEvent]);
 
   const startSession = useCallback(async (): Promise<boolean> => {
@@ -312,17 +320,34 @@ export default function WatchPlayer({
     return request;
   }, [watchLinkToken]);
 
+  useEffect(() => {
+    if (!isDirectUrl) return;
+    const video = videoRef.current;
+    if (!video) return;
+    void startSession().then((started) => {
+      if (!started || sessionEndedRef.current) return;
+      void sendEvent("player_ready", {
+        position: 0,
+        duration: durationRef.current,
+      }, null, { provider_state: "ready", player_state: "idle" });
+    });
+  }, [isDirectUrl, sendEvent, startSession]);
+
   const reportProviderError = useCallback((providerCode: number) => {
     const sessionId = sessionIdRef.current;
     const sessionToken = sessionTokenRef.current;
     if (!sessionId || !sessionToken || !Number.isInteger(providerCode)) return;
+    const snapshot = isYouTube
+      ? readYouTubeSnapshot() ?? { position: lastPositionRef.current ?? 0, duration: durationRef.current }
+      : { position: videoRef.current?.currentTime ?? lastPositionRef.current ?? 0, duration: durationRef.current };
+    void sendEvent("player_error", snapshot, null, { error_code: providerCode, provider: sourceType, recoverable: false });
     void fetch("/api/tracking/provider-error", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, source_type: sourceType, provider_code: providerCode }),
       keepalive: true,
     }).catch(() => undefined);
-  }, [sourceType]);
+  }, [isYouTube, readYouTubeSnapshot, sendEvent, sourceType]);
 
   const accumulateWatchTime = useCallback((resume: boolean) => {
     const playStartedAt = startTimeRef.current;
@@ -360,9 +385,7 @@ export default function WatchPlayer({
     accumulateWatchTime(false);
     const finalPosition = finalSnapshot?.position ?? lastPositionRef.current;
     const finalDuration = finalSnapshot?.duration ?? lastDurationRef.current ?? durationRef.current;
-    const completion = finalDuration && finalDuration > 0
-      ? Math.min(100, Math.round((furthestPositionRef.current / finalDuration) * 100))
-      : 0;
+    const completion = completionSentRef.current ? 100 : 0;
     await flushEvents(true);
     const body = JSON.stringify({
       session_id: sessionId,
@@ -421,7 +444,7 @@ export default function WatchPlayer({
       const eventType: TrackingEventType = hasPlayedRef.current ? "resume" : "play";
       hasPlayedRef.current = true;
       if (eventType === "resume" && pausedPosition !== null && Math.abs(initialSnapshot.position - pausedPosition) >= 8) {
-        void sendEvent("seek", initialSnapshot, pausedPosition);
+        void sendEvent("seek_completed", initialSnapshot, pausedPosition, { inferred: true, seek_from_seconds: pausedPosition, seek_to_seconds: initialSnapshot.position, seek_delta_seconds: initialSnapshot.position - pausedPosition });
       }
       pausedPositionRef.current = null;
       void sendEvent(eventType, initialSnapshot);
@@ -435,9 +458,36 @@ export default function WatchPlayer({
         updateSnapshot(snapshot);
         accumulateWatchTime(true);
         if (isYouTube && previousPosition !== null && Math.abs(snapshot.position - previousPosition) >= 8) {
-          void sendEvent("seek", snapshot, previousPosition, { inferred: true, detection: "position_discontinuity" });
+          void sendEvent("seek_completed", snapshot, previousPosition, { inferred: true, detection: "position_discontinuity", seek_from_seconds: previousPosition, seek_to_seconds: snapshot.position, seek_delta_seconds: snapshot.position - previousPosition });
         }
-        void sendEvent("heartbeat", snapshot);
+        if (isYouTube) {
+          const player = youtubePlayerRef.current;
+          const nextRate = player?.getPlaybackRate?.();
+          if (typeof nextRate === "number" && Number.isFinite(nextRate) && nextRate > 0 && nextRate !== lastPlaybackRateRef.current) {
+            const previousRate = lastPlaybackRateRef.current;
+            lastPlaybackRateRef.current = nextRate;
+            void sendEvent("playback_rate_changed", snapshot, null, { previous_rate: previousRate, new_rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate });
+          }
+          const nextVolume = player?.getVolume?.();
+          if (typeof nextVolume === "number" && Number.isFinite(nextVolume) && nextVolume !== lastVolumeRef.current) {
+            const previousVolume = lastVolumeRef.current;
+            lastVolumeRef.current = nextVolume;
+            void sendEvent("volume_changed", snapshot, null, { previous_volume: previousVolume, new_volume: nextVolume });
+          }
+          const nextMuted = player?.isMuted?.();
+          if (typeof nextMuted === "boolean" && nextMuted !== lastMutedRef.current) {
+            const previousMuted = lastMutedRef.current;
+            lastMutedRef.current = nextMuted;
+            void sendEvent("mute_changed", snapshot, null, { previous_muted: previousMuted, new_muted: nextMuted });
+          }
+          const nextQuality = player?.getPlaybackQuality?.();
+          if (typeof nextQuality === "string" && nextQuality && nextQuality !== lastQualityRef.current) {
+            const previousQuality = lastQualityRef.current;
+            lastQualityRef.current = nextQuality;
+            void sendEvent("quality_changed", snapshot, null, { previous_quality: previousQuality, new_quality: nextQuality });
+          }
+        }
+        void sendEvent("playback_progress", snapshot, null, { sampling_interval_ms: 5000, player_state: "playing" });
         maybeRecordCompletion(snapshot);
       }, 5000);
       return true;
@@ -480,8 +530,15 @@ export default function WatchPlayer({
 
   const handleDirectSeeking = useCallback(() => {
     const video = videoRef.current;
-    if (video) seekFromRef.current = video.currentTime;
-  }, []);
+    if (!video) return;
+    seekFromRef.current = video.currentTime;
+    if (sessionIdRef.current && !sessionEndedRef.current) {
+      void sendEvent("seek_started", {
+        position: Math.max(0, video.currentTime),
+        duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
+      }, null, { seek_from_seconds: video.currentTime, player_state: video.paused ? "paused" : "playing" });
+    }
+  }, [sendEvent]);
 
   const handleDirectSeeked = useCallback(() => {
     const video = videoRef.current;
@@ -491,7 +548,8 @@ export default function WatchPlayer({
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
     };
     updateSnapshot(snapshot);
-    void sendEvent("seek", snapshot, seekFromRef.current);
+    const seekFrom = seekFromRef.current;
+    void sendEvent("seek_completed", snapshot, seekFrom, { seek_from_seconds: seekFrom, seek_to_seconds: snapshot.position, seek_delta_seconds: seekFrom === null ? null : snapshot.position - seekFrom });
     seekFromRef.current = null;
   }, [sendEvent, updateSnapshot]);
 
@@ -509,6 +567,7 @@ export default function WatchPlayer({
   const handleDirectEnded = useCallback(() => {
     const video = videoRef.current;
     if (!video || !sessionIdRef.current) return;
+    completionSentRef.current = true;
     const snapshot = {
       position: Math.max(0, video.currentTime),
       duration: Number.isFinite(video.duration) && video.duration > 0 ? video.duration : durationRef.current,
@@ -540,12 +599,15 @@ export default function WatchPlayer({
     if (event.data === api.PlayerState.BUFFERING) {
       if (sessionIdRef.current) {
         if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now();
-        void sendEvent("buffer", snapshot, null, { state: "start" });
+        accumulateWatchTime(false);
+        stopHeartbeat();
+        void sendEvent("buffering_started", snapshot, null, { state: "start", provider_state: "buffering", player_state: "buffering" });
       }
       return;
     }
     if (event.data === api.PlayerState.ENDED) {
       if (!sessionIdRef.current) return;
+      completionSentRef.current = true;
       updateSnapshot({ ...snapshot, position: snapshot.duration ?? snapshot.position });
       void endSession();
     }
@@ -579,7 +641,17 @@ export default function WatchPlayer({
               durationRef.current = initialDuration;
               lastDurationRef.current = initialDuration;
             }
+            lastPlaybackRateRef.current = readyEvent.target.getPlaybackRate?.() ?? null;
+            lastVolumeRef.current = readyEvent.target.getVolume?.() ?? null;
+            lastMutedRef.current = readyEvent.target.isMuted?.() ?? null;
+            lastQualityRef.current = readyEvent.target.getPlaybackQuality?.() ?? null;
             setPlayerReady(true);
+            void startSession().then((started) => {
+              if (!started || sessionEndedRef.current) return;
+              const snapshot = readYouTubeSnapshot() ?? { position: 0, duration: durationRef.current };
+              void sendEvent("player_ready", snapshot, null, { provider_state: "ready", player_state: "unstarted" });
+              void sendEvent("metadata_loaded", snapshot, null, { provider_state: "metadata_loaded", player_state: "unstarted" });
+            });
           },
           onStateChange: handleYouTubeStateChange,
           onError: (providerError) => {
@@ -601,7 +673,23 @@ export default function WatchPlayer({
       player?.destroy();
       youtubePlayerRef.current = null;
     };
-  }, [endSession, handleYouTubeStateChange, isYouTube, reportProviderError, retryNonce, sourceUrl, stopHeartbeat]);
+  }, [endSession, handleYouTubeStateChange, isYouTube, readYouTubeSnapshot, reportProviderError, retryNonce, sendEvent, sourceUrl, startSession, stopHeartbeat]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!sessionIdRef.current || sessionEndedRef.current) return;
+      const video = videoRef.current;
+      const snapshot = isYouTube
+        ? readYouTubeSnapshot()
+        : video
+          ? { position: video.currentTime, duration: durationRef.current }
+          : null;
+      if (!snapshot) return;
+      void sendEvent(document.fullscreenElement ? "fullscreen_entered" : "fullscreen_exited", snapshot, null, { fullscreen: Boolean(document.fullscreenElement) });
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, [isYouTube, readYouTubeSnapshot, sendEvent]);
 
   useEffect(() => {
     const onBeforeUnload = () => { void endSession(); };
@@ -612,7 +700,10 @@ export default function WatchPlayer({
         : videoRef.current
           ? { position: videoRef.current.currentTime, duration: durationRef.current }
           : null;
-      if (snapshot) void sendEvent("visibility_change", snapshot, null, { visibility: document.visibilityState });
+      if (snapshot) {
+        const visibilityEvent = document.visibilityState === "hidden" ? "visibility_hidden" : "visibility_visible";
+        void sendEvent(visibilityEvent, snapshot, null, { previous_visibility: document.visibilityState === "hidden" ? "visible" : "hidden", new_visibility: document.visibilityState });
+      }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -656,14 +747,22 @@ export default function WatchPlayer({
                 lastDurationRef.current = metadataDuration;
               }
               lastPlaybackRateRef.current = event.currentTarget.playbackRate;
+              lastVolumeRef.current = event.currentTarget.volume * 100;
+              lastMutedRef.current = event.currentTarget.muted;
+              const snapshot = { position: Math.max(0, event.currentTarget.currentTime), duration: Number.isFinite(metadataDuration) && metadataDuration > 0 ? metadataDuration : durationRef.current };
+              void startSession().then((started) => {
+                if (started) void sendEvent("metadata_loaded", snapshot, null, { provider_state: "metadata_loaded", player_state: event.currentTarget.paused ? "paused" : "playing" });
+              });
             }}
             onPlay={handleDirectPlay}
             onPause={handleDirectPause}
             onSeeking={handleDirectSeeking}
             onSeeked={handleDirectSeeked}
             onTimeUpdate={handleDirectTimeUpdate}
-            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) { if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now(); void sendEvent("buffer", { position: video.currentTime, duration: durationRef.current }, null, { state: "start" }); } }}
-            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) { const nextRate = event.currentTarget.playbackRate; const previousRate = lastPlaybackRateRef.current; lastPlaybackRateRef.current = nextRate; void sendEvent("rate_change", { position: video.currentTime, duration: durationRef.current }, null, { rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate }); } }}
+            onWaiting={() => { const video = videoRef.current; if (video && sessionIdRef.current) { if (bufferStartedAtRef.current === null) bufferStartedAtRef.current = Date.now(); accumulateWatchTime(false); stopHeartbeat(); void sendEvent("buffering_started", { position: video.currentTime, duration: durationRef.current }, null, { state: "start", player_state: "waiting" }); } }}
+            onCanPlay={() => { const video = videoRef.current; if (video) finishBuffer({ position: video.currentTime, duration: durationRef.current }); }}
+            onRateChange={(event) => { const video = videoRef.current; if (video && sessionIdRef.current) { const nextRate = event.currentTarget.playbackRate; const previousRate = lastPlaybackRateRef.current; lastPlaybackRateRef.current = nextRate; void sendEvent("playback_rate_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_rate: previousRate, new_rate: nextRate }, { playback_rate: nextRate, from_rate: previousRate, to_rate: nextRate }); } }}
+            onVolumeChange={(event) => { const video = event.currentTarget; if (sessionIdRef.current) { const nextVolume = Math.round(video.volume * 100); const previousVolume = lastVolumeRef.current; lastVolumeRef.current = nextVolume; void sendEvent("volume_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_volume: previousVolume, new_volume: nextVolume }); const previousMuted = lastMutedRef.current; if (previousMuted !== video.muted) { lastMutedRef.current = video.muted; void sendEvent("mute_changed", { position: video.currentTime, duration: durationRef.current }, null, { previous_muted: previousMuted, new_muted: video.muted }); } } }}
             onEnded={handleDirectEnded}
             title={title}
           />

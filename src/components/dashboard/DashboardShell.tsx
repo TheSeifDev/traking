@@ -58,6 +58,11 @@ export default function DashboardShell({
     ?? (activeOrganizationId && organizations.some((organization) => organization.id === activeOrganizationId) ? activeOrganizationId : null)
     ?? (requestedOrganizationId && organizations.some((organization) => organization.id === requestedOrganizationId) ? requestedOrganizationId : organizations[0]?.id ?? "");
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? null;
+  const displayedOrganizationRole = selectedOrganization
+    ? selectedOrganization.is_platform_owner
+      ? "owner"
+      : selectedOrganization.membership_role ?? user.role
+    : user.role;
   const hasOrganizationSelector = organizations.length > 1;
   const selectOrganization = (organizationId: string) => {
     router.push(`/dashboard?organization_id=${encodeURIComponent(organizationId)}`);
@@ -172,7 +177,7 @@ export default function DashboardShell({
             <div className="rounded-xl bg-white/4 px-3 py-2">
               <p className="truncate text-sm font-medium text-white/80">{user.name ?? user.email}</p>
               <p className="truncate text-[11px] text-white/40">{user.email}</p>
-              <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-300">{user.role}</span>
+              <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-300">{displayedOrganizationRole}</span>
             </div>
             <form action="/api/auth/logout" method="POST"><button type="submit" className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-white/40 transition-all hover:bg-red-500/10 hover:text-red-400"><LogOut size={15} />Sign out</button></form>
           </div>

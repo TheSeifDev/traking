@@ -2,7 +2,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { isOwner } from "@/src/lib/auth/rbac";
 import { authorizeOrganizationAdmin, authorizeSpaceAdmin, authorizeSpaceMember, getAccessibleSpaces } from "@/src/lib/spaces/access";
 import type { AuthenticatedUser } from "@/src/types/auth";
-import type { Database, SpaceMemberRole, SpaceMemberStatus } from "@/src/types/database";
+import type { Database, OrganizationMemberStatus, SpaceMemberRole, SpaceMemberStatus } from "@/src/types/database";
 import type { AccessibleSpace, Space, SpaceMember } from "@/src/types/space";
 
 const MAX_SPACE_MEMBERS = 500;
@@ -25,8 +25,12 @@ type ProfileSummary = {
   last_seen_at: string | null;
 };
 
+export type OrganizationRoleForView = "owner" | "admin" | "member";
+
 export interface SpaceMemberView extends SpaceMember {
   profile: ProfileSummary;
+  organization_role: OrganizationRoleForView | null;
+  organization_status: OrganizationMemberStatus | null;
 }
 
 export type SpaceMemberCandidate = Pick<ProfileSummary, "id" | "clickup_user_id" | "name" | "email" | "role">;
@@ -205,11 +209,20 @@ export async function searchSpaceMemberCandidates(spaceId: string, user: Authent
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < 2 || normalizedQuery.length > 100) return [];
   try {
-    await authorizeSpaceAdmin(spaceId, user);
+    const access = await authorizeSpaceAdmin(spaceId, user);
     const supabase = createAdminClient();
+    const { data: organizationMembers, error: organizationMemberError } = await supabase
+      .from("organization_members")
+      .select("profile_id")
+      .eq("organization_id", access.space.organization_id)
+      .eq("status", "active")
+      .limit(MAX_SPACE_MEMBERS);
+    if (organizationMemberError) return null;
+    const organizationProfileIds = (organizationMembers ?? []).map((membership) => membership.profile_id);
+    if (organizationProfileIds.length === 0) return [];
     const [{ data: byEmail, error: emailError }, { data: byName, error: nameError }, { data: activeMemberships, error: membershipError }] = await Promise.all([
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, clickup_user_id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, clickup_user_id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
       supabase.from("space_members").select("profile_id").eq("space_id", spaceId).eq("status", "active").limit(MAX_SPACE_MEMBERS),
     ]);
     if (emailError || nameError || membershipError) return null;
@@ -228,7 +241,7 @@ export async function searchSpaceMemberCandidates(spaceId: string, user: Authent
 
 export async function listSpaceMembers(spaceId: string, user: AuthenticatedUser): Promise<SpaceMemberView[] | null> {
   try {
-    await authorizeSpaceAdmin(spaceId, user);
+    const access = await authorizeSpaceAdmin(spaceId, user);
     const supabase = createAdminClient();
     const { data: memberships, error: membershipError } = await supabase
       .from("space_members")
@@ -241,16 +254,32 @@ export async function listSpaceMembers(spaceId: string, user: AuthenticatedUser)
     if (memberships.length === 0) return [];
 
     const profileIds = memberships.map((membership) => membership.profile_id);
-    const { data: profiles, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
-      .in("id", profileIds)
-      .limit(MAX_SPACE_MEMBERS);
-    if (profileError || !profiles) return null;
+    const [{ data: profiles, error: profileError }, { data: organizationMembers, error: organizationMemberError }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+        .in("id", profileIds)
+        .limit(MAX_SPACE_MEMBERS),
+      supabase
+        .from("organization_members")
+        .select("profile_id, role, status")
+        .eq("organization_id", access.space.organization_id)
+        .in("profile_id", profileIds)
+        .limit(MAX_SPACE_MEMBERS),
+    ]);
+    if (profileError || organizationMemberError || !profiles || !organizationMembers) return null;
     const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+    const organizationMembersByProfileId = new Map(organizationMembers.map((member) => [member.profile_id, member]));
     return memberships.flatMap((membership) => {
       const profile = profilesById.get(membership.profile_id);
-      return profile ? [{ ...membership, profile }] : [];
+      const organizationMember = organizationMembersByProfileId.get(membership.profile_id);
+      if (!profile) return [];
+      return [{
+        ...membership,
+        profile,
+        organization_role: profile.role === "owner" ? "owner" : organizationMember?.role ?? null,
+        organization_status: organizationMember?.status ?? null,
+      }];
     });
   } catch {
     return null;
@@ -281,6 +310,25 @@ async function hasAnotherActiveAdmin(spaceId: string, excludedProfileId: string)
   return !error && (count ?? 0) > 0;
 }
 
+async function getOrganizationRoleForProfile(
+  organizationId: string,
+  profileId: string,
+  profileRole: AuthenticatedUser["role"],
+): Promise<{ organization_role: OrganizationRoleForView | null; organization_status: OrganizationMemberStatus | null } | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("organization_members")
+    .select("role, status")
+    .eq("organization_id", organizationId)
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error) return null;
+  return {
+    organization_role: profileRole === "owner" ? "owner" : data?.role ?? null,
+    organization_status: data?.status ?? null,
+  };
+}
+
 export async function addSpaceMember(
   spaceId: string,
   user: AuthenticatedUser,
@@ -289,7 +337,7 @@ export async function addSpaceMember(
 ): Promise<{ success: true; member: SpaceMemberView } | { success: false; error: SpaceMutationError }> {
   if (role !== "admin" && role !== "member") return { success: false, error: "invalid_role" };
   try {
-    await authorizeSpaceAdmin(spaceId, user);
+    const access = await authorizeSpaceAdmin(spaceId, user);
     const supabase = createAdminClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -306,7 +354,9 @@ export async function addSpaceMember(
       ? await supabase.from("space_members").update({ role, status: "active", joined_at: new Date().toISOString() }).eq("id", existing.id).select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at").single()
       : await supabase.from("space_members").insert({ space_id: spaceId, profile_id: profileId, role, status: "active", source: "manual", clickup_user_id: null, last_synced_at: null, joined_at: new Date().toISOString() }).select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at").single();
     if (memberError || !member) return { success: false, error: "database_error" };
-    return { success: true, member: { ...member, profile } };
+    const organizationRole = await getOrganizationRoleForProfile(access.space.organization_id, profile.id, profile.role);
+    if (!organizationRole) return { success: false, error: "database_error" };
+    return { success: true, member: { ...member, profile, ...organizationRole } };
   } catch {
     return { success: false, error: "forbidden" };
   }
@@ -321,7 +371,7 @@ export async function updateSpaceMemberRole(
   if (role !== "admin" && role !== "member") return { success: false, error: "invalid_role" };
   if (profileId === user.id) return { success: false, error: "cannot_modify_self" };
   try {
-    await authorizeSpaceAdmin(spaceId, user);
+    const access = await authorizeSpaceAdmin(spaceId, user);
     const existing = await loadMembership(spaceId, profileId);
     if (!existing || existing.status === "removed") return { success: false, error: "member_not_found" };
     const supabase = createAdminClient();
@@ -343,7 +393,9 @@ export async function updateSpaceMemberRole(
       .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
       .single();
     if (updateError || !member) return { success: false, error: "database_error" };
-    return { success: true, member: { ...member, profile } };
+    const organizationRole = await getOrganizationRoleForProfile(access.space.organization_id, profile.id, profile.role);
+    if (!organizationRole) return { success: false, error: "database_error" };
+    return { success: true, member: { ...member, profile, ...organizationRole } };
   } catch {
     return { success: false, error: "forbidden" };
   }

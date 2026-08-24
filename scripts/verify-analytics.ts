@@ -82,10 +82,37 @@ const unsupported = buildPlaybackHeatmap(realisticPlayback, 120, false);
 equal(unsupported.available, false);
 equal(unsupported.availability, "not_available_from_provider");
 
+const detailedPlayback: WatchEventSummary[] = [
+  event("session-started", "session_started", 0, 0),
+  event("ready", "player_ready", 0, 1),
+  event("metadata", "metadata_loaded", 0, 2),
+  event("play", "play", 0, 3),
+  event("progress-20", "playback_progress", 20, 4),
+  event("pause-20", "pause", 20, 5),
+  event("resume-20", "resume", 20, 6),
+  event("progress-45", "playback_progress", 45, 7),
+  event("seek-start", "seek_started", 45, 8),
+  event("seek-complete", "seek_completed", 90, 9, 45),
+  event("progress-110", "playback_progress", 110, 10),
+  event("pause-110", "pause", 110, 11),
+  event("session-end", "session_ended", 110, 12),
+];
+const detailedRanges = reconstructWatchedRanges(detailedPlayback, 120);
+equal(detailedRanges.reliable, true);
+deepEqual(detailedRanges.ranges, [{ start: 0, end: 45 }, { start: 90, end: 110 }]);
+equal(detailedRanges.ranges.some((range) => range.start < 90 && range.end > 45), false);
+const lifecycleOnly = buildPlaybackHeatmap([
+  event("session-started", "session_started", 0, 0),
+  event("ready", "player_ready", 0, 1),
+  event("metadata", "metadata_loaded", 0, 2),
+], 120, true);
+equal(lifecycleOnly.available, false);
+equal(lifecycleOnly.availability, "no_telemetry");
+
 const grouped = groupTimelineItems([
   event("play", "play", 0, 1),
   event("heartbeat-7", "heartbeat", 7, 2),
-  event("heartbeat-12", "heartbeat", 12, 3),
+  event("progress-12", "playback_progress", 12, 3),
   event("pause", "pause", 12, 4),
   event("heartbeat-18", "heartbeat", 18, 5),
 ]);

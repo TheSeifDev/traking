@@ -6,7 +6,7 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary } from "@/src/types/video";
+import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary, type WatchEventType } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
@@ -72,8 +72,22 @@ function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
   return sourceType === "direct_url" || sourceType === "youtube";
 }
 
+const PLAYBACK_TELEMETRY_EVENTS: readonly WatchEventType[] = [
+  "play",
+  "resume",
+  "pause",
+  "seek",
+  "seek_started",
+  "seek_completed",
+  "heartbeat",
+  "playback_progress",
+  "complete",
+  "ended",
+];
+
 function isValidTelemetryEvent(event: AnalyticsEventRow): boolean {
-  return Number.isFinite(event.position)
+  return PLAYBACK_TELEMETRY_EVENTS.includes(event.event_type)
+    && Number.isFinite(event.position)
     && event.position >= 0
     && event.duration !== null
     && Number.isFinite(event.duration)
