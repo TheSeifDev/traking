@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BarChart3, Building2, Clock3, ExternalLink, Eye, FileSearch, RefreshCw, Search, Server, ShieldAlert, Users, Video, Zap } from "lucide-react";
 import type { ControlRoomData } from "@/src/lib/observability/control-room";
-import { getSafeSpaceDisplayName, hasOrganizationSpaceLabelCollision } from "@/src/lib/spaces/labels";
+import { getSafeSpaceDisplayName, hasOrganizationSpaceLabelCollision, isSelectableChildSpace } from "@/src/lib/spaces/labels";
 
 export type ControlRoomSection = "command" | "organizations" | "spaces" | "users" | "videos" | "playback" | "activity" | "security" | "jobs" | "health" | "api" | "database" | "incidents" | "flags" | "configuration";
 
@@ -119,7 +119,7 @@ export default function OwnerControlRoomPanel({ initialSection = "command" }: { 
   }, [load]);
 
   const selectedOrganization = data?.organizations.find((organization) => organization.id === organizationId);
-  const filteredSpaces = useMemo(() => data?.spaces.filter((space) => !organizationId || space.organization_id === organizationId) ?? [], [data, organizationId]);
+  const filteredSpaces = useMemo(() => data?.spaces.filter((space) => (!organizationId || space.organization_id === organizationId) && isSelectableChildSpace(space, space.organization_name)) ?? [], [data, organizationId]);
   const metrics = data ? [
     ["Organizations", data.metrics.total_organizations, `${data.metrics.active_organizations} active`, Building2],
     ["Spaces", data.metrics.total_spaces, `${data.metrics.active_spaces} active`, Server],
