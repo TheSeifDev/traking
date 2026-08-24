@@ -6,12 +6,12 @@
  * Uses the admin (service-role) client so RLS policies don't block service reads.
  */
 import { createAdminClient } from "@/utils/supabase/admin";
-import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type ViewerAnalytics, type ViewerVideoAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary, type WatchEventType } from "@/src/types/video";
+import { isValidSourceType, type Video, type CreateVideoInput, type UpdateVideoInput, type VideoAnalytics, type WorkspaceAnalytics, type ViewerAnalytics, type ViewerVideoAnalytics, type WatchSessionSummary, type AnalyticsViewerSummary, type WatchEventType, type AnalyticsPeriod, type ViewerSessionAnalytics, type ViewerActivityAnalytics, type ViewerActivityFilters, type ViewerActivityKpi, type ViewerActivityPoint, type CompletionDistributionBucket, type ViewerActivityViewerRow } from "@/src/types/video";
 import type { Database } from "@/src/types/database";
 import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
 import type { AnalyticsDataScope, VideoDataScope } from "@/src/lib/spaces/data-scope";
-import { providerScope, providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
+import { getProviderLabel, providerScope, providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
 
 interface AnalyticsSessionRow {
   id: string;
@@ -845,7 +845,7 @@ export async function associateClickUpTask(
 /**
  * Workspace-level analytics summary.
  */
-export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerProfileId?: string): Promise<WorkspaceAnalytics> {
+export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerProfileId?: string, period?: AnalyticsPeriod): Promise<WorkspaceAnalytics> {
   const empty: WorkspaceAnalytics = {
     total_videos: 0,
     total_views: 0,
@@ -908,6 +908,7 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
       .eq("watch_links.videos.workspace_id", scope.workspaceId);
     if (scope.type === "space") sessionsQuery = sessionsQuery.eq("watch_links.videos.space_id", scope.spaceId);
     if (viewerProfileId) sessionsQuery = sessionsQuery.eq("viewer_profile_id", viewerProfileId);
+    if (period) sessionsQuery = sessionsQuery.gte("started_at", period.from).lt("started_at", period.to);
     const { data: rawSessions, error: sessionsError } = await sessionsQuery
       .order("started_at", { ascending: false })
       .limit(2000);
@@ -1043,6 +1044,210 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
 }
 
 type ViewerVideoSourceInfo = AnalyticsVideoInfo & { source_url: string | null };
+
+const VIEWER_ACTIVITY_PAGE_SIZE = 10;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function defaultViewerActivityPeriod(now = new Date()): AnalyticsPeriod {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const from = new Date(end.getTime() - 7 * DAY_MS);
+  return { from: from.toISOString(), to: end.toISOString() };
+}
+
+export function previousAnalyticsPeriod(period: AnalyticsPeriod): AnalyticsPeriod {
+  const duration = Math.max(DAY_MS, new Date(period.to).getTime() - new Date(period.from).getTime());
+  const to = new Date(period.from);
+  const from = new Date(to.getTime() - duration);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function activityIdentity(session: ViewerSessionAnalytics): string {
+  return session.viewer_profile_id ?? session.viewer_identifier ?? `anonymous:${session.session_id}`;
+}
+
+function activitySearchText(session: ViewerSessionAnalytics): string {
+  return [
+    session.viewer_name,
+    session.viewer_email,
+    session.viewer_profile_id,
+    session.viewer_identifier,
+    session.session_id,
+    session.video_title,
+    getProviderLabelForAnalytics(session.source_type),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getProviderLabelForAnalytics(sourceType: Video["source_type"]): string {
+  return getProviderLabel(sourceType);
+}
+
+function activityDailyMetrics(sessions: ViewerSessionAnalytics[], from: string, to: string): Map<string, { sessions: ViewerSessionAnalytics[]; measuredWatchTime: number; measuredCompletions: number[] }> {
+  const days = new Map<string, { sessions: ViewerSessionAnalytics[]; measuredWatchTime: number; measuredCompletions: number[] }>();
+  const start = new Date(from);
+  const end = new Date(to);
+  for (let cursor = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()); cursor < end.getTime(); cursor += DAY_MS) {
+    const date = new Date(cursor).toISOString().slice(0, 10);
+    days.set(date, { sessions: [], measuredWatchTime: 0, measuredCompletions: [] });
+  }
+  for (const session of sessions) {
+    const date = session.started_at.slice(0, 10);
+    const point = days.get(date);
+    if (!point) continue;
+    point.sessions.push(session);
+    if (session.has_playback_telemetry) {
+      const watchTime = effectiveWatchTime(session);
+      if (watchTime !== null) point.measuredWatchTime += watchTime;
+      if (session.completion_percentage !== null) point.measuredCompletions.push(session.completion_percentage);
+    }
+  }
+  return days;
+}
+
+type ActivityMetricSource = {
+  unique_viewers: number;
+  total_sessions: number;
+  total_measurable_watch_time_seconds: number | null;
+  avg_watch_time_seconds: number | null;
+  avg_completion_percentage: number | null;
+  completion_rate: number | null;
+};
+
+function activityMetricSource(sessions: ViewerSessionAnalytics[]): ActivityMetricSource {
+  const measured = sessions.filter((session) => session.has_playback_telemetry);
+  const watchTimes = measured.map(effectiveWatchTime).filter((value): value is number => value !== null);
+  const completions = measured.map((session) => session.completion_percentage).filter((value): value is number => value !== null);
+  const totalWatchTime = watchTimes.length > 0 ? Math.round(watchTimes.reduce((sum, value) => sum + value, 0)) : null;
+  return {
+    unique_viewers: new Set(sessions.map(activityIdentity)).size,
+    total_sessions: sessions.length,
+    total_measurable_watch_time_seconds: totalWatchTime,
+    avg_watch_time_seconds: watchTimes.length > 0 ? Math.round((totalWatchTime ?? 0) / watchTimes.length) : null,
+    avg_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null,
+    completion_rate: completions.length > 0 ? Math.round((completions.filter((value) => value >= 90).length / completions.length) * 100) : null,
+  };
+}
+
+function activityMetricValue(key: ViewerActivityKpi["key"], analytics: ActivityMetricSource): number | null {
+  if (key === "unique_viewers") return analytics.unique_viewers;
+  if (key === "sessions") return analytics.total_sessions;
+  if (key === "measured_watch_time") return analytics.total_measurable_watch_time_seconds;
+  if (key === "avg_watch_time") return analytics.avg_watch_time_seconds;
+  if (key === "avg_completion") return analytics.avg_completion_percentage;
+  return analytics.completion_rate;
+}
+
+function activityComparison(current: number | null, previous: number | null): { percentage: number | null; previous_value: number | null; available: boolean } {
+  if (current === null || previous === null || previous <= 0) return { percentage: null, previous_value: previous, available: false };
+  return { percentage: Math.round(((current - previous) / previous) * 100), previous_value: previous, available: true };
+}
+
+function activityKpi(
+  key: ViewerActivityKpi["key"],
+  current: ActivityMetricSource,
+  previous: ActivityMetricSource,
+  currentDaily: Map<string, { sessions: ViewerSessionAnalytics[]; measuredWatchTime: number; measuredCompletions: number[] }>,
+): ViewerActivityKpi {
+  const sparkline = Array.from(currentDaily.values()).map((point) => {
+    if (key === "sessions") return point.sessions.length;
+    if (key === "unique_viewers") return new Set(point.sessions.map(activityIdentity)).size;
+    if (key === "measured_watch_time") return Math.round(point.measuredWatchTime);
+    if (key === "avg_watch_time") {
+      const measuredCount = point.sessions.filter((session) => session.has_playback_telemetry).length;
+      return measuredCount > 0 && point.measuredWatchTime > 0 ? Math.round(point.measuredWatchTime / measuredCount) : 0;
+    }
+    if (key === "avg_completion") return point.measuredCompletions.length > 0 ? Math.round(point.measuredCompletions.reduce((sum, value) => sum + value, 0) / point.measuredCompletions.length) : 0;
+    return point.measuredCompletions.length > 0 ? Math.round((point.measuredCompletions.filter((value) => value >= 90).length / point.measuredCompletions.length) * 100) : 0;
+  });
+  return { key, value: activityMetricValue(key, current), comparison: activityComparison(activityMetricValue(key, current), activityMetricValue(key, previous)), sparkline };
+}
+
+function filterActivitySessions(sessions: ViewerSessionAnalytics[], filters: ViewerActivityFilters): ViewerSessionAnalytics[] {
+  const matched = sessions.filter((session) => {
+    if (filters.search && !activitySearchText(session).includes(filters.search.toLowerCase())) return false;
+    if (filters.status === "measured" && session.telemetry_state !== "measured") return false;
+    if (filters.status === "unmeasured" && session.telemetry_state === "measured") return false;
+    return true;
+  });
+  if (filters.minimum_sessions <= 1) return matched;
+  const qualifying = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const session of matched) {
+    const key = activityIdentity(session);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of counts) if (count >= filters.minimum_sessions) qualifying.add(key);
+  return matched.filter((session) => qualifying.has(activityIdentity(session)));
+}
+
+function activityCompletionDistribution(sessions: ViewerSessionAnalytics[]): CompletionDistributionBucket[] {
+  const measured = sessions.filter((session) => session.has_playback_telemetry && session.completion_percentage !== null);
+  const definitions: Array<[CompletionDistributionBucket["key"], string, (value: number) => boolean]> = [
+    ["90_plus", "90%+ completed", (value) => value >= 90],
+    ["50_to_90", "50% – 90%", (value) => value >= 50 && value < 90],
+    ["10_to_50", "10% – 50%", (value) => value >= 10 && value < 50],
+    ["0_to_10", "0% – 10%", (value) => value < 10],
+  ];
+  return definitions.map(([key, label, matches]) => {
+    const count = measured.filter((session) => matches(session.completion_percentage ?? 0)).length;
+    return { key, label, count, percentage: measured.length > 0 ? Math.round((count / measured.length) * 100) : 0 };
+  });
+}
+
+export async function getViewerActivityAnalytics(
+  scope: AnalyticsDataScope,
+  input: Partial<ViewerActivityFilters> & Pick<ViewerActivityFilters, "from" | "to">,
+): Promise<ViewerActivityAnalytics> {
+  const filters: ViewerActivityFilters = {
+    from: input.from,
+    to: input.to,
+    search: input.search?.trim() ?? "",
+    status: input.status ?? "all",
+    minimum_sessions: Math.max(1, Math.min(100, input.minimum_sessions ?? 1)),
+    page: Math.max(1, input.page ?? 1),
+    page_size: Math.max(1, Math.min(1000, input.page_size ?? VIEWER_ACTIVITY_PAGE_SIZE)),
+  };
+  const previousPeriod = previousAnalyticsPeriod(filters);
+  const [current, previous] = await Promise.all([
+    getWorkspaceAnalytics(scope, undefined, { from: filters.from, to: filters.to }),
+    getWorkspaceAnalytics(scope, undefined, previousPeriod),
+  ]);
+  const filteredSessions = filterActivitySessions(current.viewer_sessions, filters);
+  const previousFilteredSessions = filterActivitySessions(previous.viewer_sessions, { ...filters, from: previousPeriod.from, to: previousPeriod.to });
+  const currentMetrics = activityMetricSource(filteredSessions);
+  const previousMetrics = activityMetricSource(previousFilteredSessions);
+  const grouped = buildViewerSummaries(filteredSessions);
+  const viewers = grouped.map((summary): ViewerActivityViewerRow => {
+    const summarySessions = filteredSessions.filter((session) => activityIdentity(session) === summary.viewer_id);
+    const measuredSessions = summarySessions.filter((session) => session.has_playback_telemetry);
+    const completions = measuredSessions.map((session) => session.completion_percentage).filter((value): value is number => value !== null);
+    return {
+      ...summary,
+      measured_sessions: measuredSessions.length,
+      progress_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null,
+      measured_completion_sessions: completions.length,
+    };
+  }).filter((viewer) => viewer.total_sessions >= filters.minimum_sessions);
+  const currentDaily = activityDailyMetrics(filteredSessions, filters.from, filters.to);
+  const sessionsOverTime: ViewerActivityPoint[] = Array.from(currentDaily.entries()).map(([date, point]) => ({ date, sessions: point.sessions.length, unique_viewers: new Set(point.sessions.map(activityIdentity)).size }));
+  const measuredSessions = filteredSessions.filter((session) => session.has_playback_telemetry);
+  const kpiKeys: ViewerActivityKpi["key"][] = ["unique_viewers", "sessions", "measured_watch_time", "avg_watch_time", "avg_completion", "completion_rate"];
+  const kpis = kpiKeys.map((key) => activityKpi(key, currentMetrics, previousMetrics, currentDaily));
+  const start = (filters.page - 1) * filters.page_size;
+  return {
+    filters,
+    previous_period: previousPeriod,
+    total_viewers: viewers.length,
+    total_sessions: filteredSessions.length,
+    kpis,
+    sessions_over_time: sessionsOverTime,
+    completion_distribution: activityCompletionDistribution(filteredSessions),
+    measured_session_count: measuredSessions.filter((session) => session.completion_percentage !== null).length,
+    viewers: viewers.slice(start, start + filters.page_size),
+    total_viewer_rows: viewers.length,
+    has_more_viewers: start + filters.page_size < viewers.length,
+  };
+}
+
 
 export async function getViewerAnalytics(
   viewerId: string,

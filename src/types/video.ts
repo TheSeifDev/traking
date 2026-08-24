@@ -361,3 +361,66 @@ export interface WorkspaceAnalytics {
   viewers?: AnalyticsViewerSummary[];
   telemetry_health?: { measured_sessions: number; missing_sessions: number; unsupported_sessions: number };
 }
+
+export type ViewerActivityStatusFilter = "all" | "measured" | "unmeasured";
+
+export interface ViewerActivityFilters {
+  from: string;
+  to: string;
+  search: string;
+  status: ViewerActivityStatusFilter;
+  minimum_sessions: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AnalyticsComparison {
+  percentage: number | null;
+  previous_value: number | null;
+  available: boolean;
+}
+
+export interface ViewerActivityKpi {
+  key: "unique_viewers" | "sessions" | "measured_watch_time" | "avg_watch_time" | "avg_completion" | "completion_rate";
+  value: number | null;
+  comparison: AnalyticsComparison;
+  sparkline: number[];
+}
+
+export interface ViewerActivityPoint {
+  date: string;
+  sessions: number;
+  unique_viewers: number;
+}
+
+export interface CompletionDistributionBucket {
+  key: "90_plus" | "50_to_90" | "10_to_50" | "0_to_10";
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ViewerActivityViewerRow extends AnalyticsViewerSummary {
+  measured_sessions: number;
+  progress_percentage: number | null;
+  measured_completion_sessions: number;
+}
+
+export interface ViewerActivityAnalytics {
+  filters: ViewerActivityFilters;
+  previous_period: AnalyticsPeriod | null;
+  total_viewers: number;
+  total_sessions: number;
+  kpis: ViewerActivityKpi[];
+  sessions_over_time: ViewerActivityPoint[];
+  completion_distribution: CompletionDistributionBucket[];
+  measured_session_count: number;
+  viewers: ViewerActivityViewerRow[];
+  total_viewer_rows: number;
+  has_more_viewers: boolean;
+}
+
+export interface AnalyticsPeriod {
+  from: string;
+  to: string;
+}
