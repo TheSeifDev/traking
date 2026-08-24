@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { authorizeSpaceAdmin } from "@/src/lib/spaces/access";
 import { getWorkspaceAnalytics } from "@/src/lib/videos/service";
 
 type RouteContext = { params: Promise<{ spaceId: string }> };
 
-export const GET = withAuth(async (_request: NextRequest, user, context) => {
+export const GET = withDashboardAuth(async (_request: NextRequest, user, context) => {
   const { spaceId } = await (context as RouteContext).params;
   if (!spaceId) return NextResponse.json({ error: "missing_space_id" }, { status: 400 });
   try {

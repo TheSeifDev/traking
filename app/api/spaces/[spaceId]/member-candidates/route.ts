@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { searchSpaceMemberCandidates } from "@/src/lib/spaces/service";
 
 type RouteContext = { params: Promise<{ spaceId: string }> };
 
-export const GET = withAuth(async (request: NextRequest, user, context) => {
+export const GET = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { spaceId } = await (context as RouteContext).params;
   const query = new URL(request.url).searchParams.get("q") ?? "";
   if (!spaceId) return NextResponse.json({ error: "missing_space_id" }, { status: 400 });

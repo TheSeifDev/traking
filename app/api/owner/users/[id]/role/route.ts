@@ -22,12 +22,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { withPermission } from "@/src/lib/auth/api-handler";
-import { PERMISSIONS } from "@/src/types/permissions";
+import { withRole } from "@/src/lib/auth/api-handler";
 import { changeUserRole } from "@/src/lib/auth/role-management";
+import { USER_ROLES } from "@/src/types/auth";
 
-export const PATCH = withPermission(
-  PERMISSIONS.ADMINS_MANAGE,
+export const PATCH = withRole(
+  USER_ROLES.OWNER,
   async (request: NextRequest, _user, context) => {
     // Extract [id] from route context
     const routeContext = context as { params: Promise<{ id: string }> | { id: string } };

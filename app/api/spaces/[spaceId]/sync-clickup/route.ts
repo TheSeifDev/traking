@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { authorizeSpaceAdmin } from "@/src/lib/spaces/access";
 import { getClickUpTeamForSync } from "@/src/lib/clickup/client";
 import { syncClickUpAuthorizedTeams } from "@/src/lib/clickup/sync";
@@ -7,7 +7,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 
 type RouteContext = { params: Promise<{ spaceId: string }> };
 
-export const POST = withAuth(async (_request: NextRequest, user, context) => {
+export const POST = withDashboardAuth(async (_request: NextRequest, user, context) => {
   const { spaceId } = await (context as RouteContext).params;
   if (!spaceId) return NextResponse.json({ error: "missing_space_id" }, { status: 400 });
   try {

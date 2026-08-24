@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { authorizeAllSpacesForUser, clearActiveSpacePreference, setActiveSpacePreference, setAllSpacesPreference } from "@/src/lib/spaces/active-space";
 import { getSpaceForUser } from "@/src/lib/spaces/service";
 import { isSelectableChildSpace } from "@/src/lib/spaces/labels";
 
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -43,7 +43,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   }
 });
 
-export const DELETE = withAuth(async () => {
+export const DELETE = withDashboardAuth(async () => {
   await clearActiveSpacePreference();
   return NextResponse.json({ cleared: true });
 });

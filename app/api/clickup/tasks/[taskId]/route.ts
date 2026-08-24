@@ -3,13 +3,13 @@
  * POST { video_id, task_name? } - Associate a ClickUp task with a video
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { resolveSpaceAdminForUser } from "@/src/lib/spaces/access";
 import { associateClickUpTask } from "@/src/lib/videos/service";
 
 type RouteContext = { params: Promise<{ taskId: string }> };
 
-export const POST = withAuth(async (request: NextRequest, user, context) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { taskId } = await (context as RouteContext).params;
   if (!taskId) return NextResponse.json({ error: "missing_task_id" }, { status: 400 });
 

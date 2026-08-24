@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { createSpace } from "@/src/lib/spaces/service";
 import { listOrganizationSpaces } from "@/src/lib/organizations/service";
 
@@ -13,7 +13,7 @@ function statusFor(error: string): number {
   return 400;
 }
 
-export const GET = withAuth(async (_request: NextRequest, user, context) => {
+export const GET = withDashboardAuth(async (_request: NextRequest, user, context) => {
   const { organizationId } = await (context as RouteContext).params;
   if (!organizationId) return NextResponse.json({ error: "missing_organization_id" }, { status: 400 });
   const spaces = await listOrganizationSpaces(organizationId, user);
@@ -21,7 +21,7 @@ export const GET = withAuth(async (_request: NextRequest, user, context) => {
   return NextResponse.json({ spaces });
 });
 
-export const POST = withAuth(async (request: NextRequest, user, context) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { organizationId } = await (context as RouteContext).params;
   if (!organizationId) return NextResponse.json({ error: "missing_organization_id" }, { status: 400 });
   let body: unknown;

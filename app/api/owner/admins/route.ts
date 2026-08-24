@@ -6,9 +6,8 @@
  * changeUserRole().
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withPermission } from "@/src/lib/auth/api-handler";
+import { withRole } from "@/src/lib/auth/api-handler";
 import { changeUserRole } from "@/src/lib/auth/role-management";
-import { PERMISSIONS } from "@/src/types/permissions";
 import { USER_ROLES } from "@/src/types/auth";
 
 function errorResponse(error: string): NextResponse {
@@ -38,8 +37,8 @@ async function readTargetUserId(request: NextRequest): Promise<string | null> {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export const POST = withPermission(
-  PERMISSIONS.ADMINS_MANAGE,
+export const POST = withRole(
+  USER_ROLES.OWNER,
   async (request: NextRequest) => {
     const targetUserId = await readTargetUserId(request);
     if (!targetUserId) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
@@ -50,8 +49,8 @@ export const POST = withPermission(
   },
 );
 
-export const DELETE = withPermission(
-  PERMISSIONS.ADMINS_MANAGE,
+export const DELETE = withRole(
+  USER_ROLES.OWNER,
   async (request: NextRequest) => {
     const targetUserId = await readTargetUserId(request);
     if (!targetUserId) return NextResponse.json({ error: "invalid_body" }, { status: 400 });

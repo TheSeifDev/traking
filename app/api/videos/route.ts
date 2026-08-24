@@ -5,7 +5,7 @@
  * POST – Create a video for the selected Space admin/owner.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { getAccessibleSpaces, resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { authorizeAllSpacesForUser } from "@/src/lib/spaces/active-space";
 import { isSelectableChildSpace } from "@/src/lib/spaces/labels";
@@ -45,7 +45,7 @@ function addLibraryAnalytics(videos: Video[], viewerSessions: WorkspaceAnalytics
 
 const emptySummary = { total_videos: 0, active_links: 0, total_sessions: 0, total_viewers: 0 };
 
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withDashboardAuth(async (request: NextRequest, user) => {
   try {
     const organizationId = request.nextUrl.searchParams.get("organization_id")?.trim() || null;
     if (organizationId) {
@@ -97,7 +97,7 @@ export const GET = withAuth(async (request: NextRequest, user) => {
   }
 });
 
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   let body: unknown;
   try {
     body = await request.json();

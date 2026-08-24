@@ -109,7 +109,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes("viewer_profile_id: viewerIdentity") && !trackingService.includes("viewer_identity_id") && trackingService.includes("deriveViewerClientMetadata"), "new sessions bind only the authenticated profile and coarse client metadata");
   assert(watchPlayer.includes("pendingEventsRef") && watchPlayer.includes("sequenceNumberRef") && watchPlayer.includes("flushEvents") && watchPlayer.includes("client_event_id"), "player batches ordered idempotent events");
   assert(analyticsRanges.includes("reconstructWatchedRanges") && analyticsRanges.includes("aggregateHeatmaps") && analyticsRanges.includes("not_available_from_provider"), "range aggregation has deterministic and honest availability states");
-  assert(viewerAnalyticsRoute.includes("withAuth") && viewerAnalyticsRoute.includes("resolveSpaceAdminForUser") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withAuth") && sessionAnalyticsRoute.includes("resolveSpaceAdminForUser") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce authenticated Space-admin scope");
+  assert(viewerAnalyticsRoute.includes("withDashboardAuth") && viewerAnalyticsRoute.includes("resolveSpaceAdminForUser") && viewerAnalyticsRoute.includes("getVideoViewerAnalytics") && sessionAnalyticsRoute.includes("withDashboardAuth") && sessionAnalyticsRoute.includes("resolveSpaceAdminForUser") && sessionAnalyticsRoute.includes("getVideoSessionAnalytics"), "viewer and session analytics APIs enforce authenticated Space-admin scope");
   assert(videoAnalyticsPage.includes("HeatmapPanel") && viewerAnalyticsPage.includes("ViewerIdentityCard") && sessionAnalyticsPage.includes("SessionTimeline"), "scoped analytics pages render the new detail hierarchy");
 
   section("Watch-link lifecycle and owner mutation checks");
@@ -135,6 +135,8 @@ async function runTests(): Promise<void> {
   const invitationCookie = readFileSync("src/lib/auth/invitation-cookie.ts", "utf8");
   const inviteStartRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
   const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
+  const functionSecurityMigration = readFileSync("supabase/migrations/20260824000011_harden_function_security.sql", "utf8");
+  const legacyRlsMigration = readFileSync("supabase/migrations/20260824000012_harden_legacy_rls_ingestion.sql", "utf8");
   const watchLinksPage = readFileSync("app/(dashboard)/watch-links/page.tsx", "utf8");
   const watchLinksManager = readFileSync("src/components/dashboard/WatchLinksManager.tsx", "utf8");
   const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
@@ -178,8 +180,9 @@ async function runTests(): Promise<void> {
   assert(watchPlayer.includes("youtube_iframe_api") || watchPlayer.includes("YouTube IFrame API"), "YouTube capability messaging is explicit");
   assert(teamManager.includes('fetch("/api/owner/admins"') && teamManager.includes("/api/owner/users/") && teamManager.includes('fetch("/api/admin/users"'), "team UI uses real owner management and invite endpoints");
   assert(teamManager.includes("Send a secure invitation") && teamManager.includes("transactional provider") && teamManager.includes("Resend"), "invite UI exposes real dispatch and lifecycle controls");
-  assert(adminUsersPage.includes("TeamMemberManager") && adminUsersPage.includes("guardAdmin"), "admin UI exposes shared owner/admin team management");
-  assert(adminUsersRoute.includes("createInvitation") && adminUsersRoute.includes("invalid_json") && adminUsersRoute.includes("delivery_not_configured"), "admin invite route validates input and requires real dispatch");
+  assert(adminUsersPage.includes("TeamMemberManager") && adminUsersPage.includes("guardOwner"), "global team-management UI is owner-only");
+  assert(adminUsersRoute.includes("createInvitation") && adminUsersRoute.includes("invalid_json") && adminUsersRoute.includes("delivery_not_configured"), "global invite route validates input and requires real dispatch");
+  assert(invitationService.includes("requirePermission(permission)") && invitationService.includes("PERMISSIONS.USERS_MANAGE"), "global invitation service keeps centralized permission authorization");
   assert(invitationMigration.includes("CREATE TABLE IF NOT EXISTS public.invitations") && invitationMigration.includes("token_hash TEXT NOT NULL UNIQUE") && invitationMigration.includes("invitations_role_check"), "invitation schema persists only hashed single-use token state");
   assert(invitationMigration.includes("last_seen_at TIMESTAMPTZ") && invitationMigration.includes("No direct invitation reads"), "profile presence and invitation RLS are explicit");
   assert(acceptanceMigration.includes("CREATE OR REPLACE FUNCTION public.accept_invitation") && acceptanceMigration.includes("FOR UPDATE") && acceptanceMigration.includes("invitation_email_mismatch"), "acceptance is atomic, locked, and same-email constrained");
@@ -189,7 +192,11 @@ async function runTests(): Promise<void> {
   assert(invitationCookie.includes("tokenHash") && invitationCookie.includes("timingSafeEqual") && !invitationCookie.includes("rawToken"), "OAuth context cookie is signed and contains no raw token");
   assert(inviteStartRoute.includes("createInvitationContextCookie") && inviteStartRoute.includes("hashInvitationToken"), "invite start converts token to signed hashed OAuth context");
   assert(presenceRoute.includes("withAuth") && presenceRoute.includes("user.id") && !presenceRoute.includes("request.json"), "presence route uses only authenticated session identity");
-  assert(roleManagement.includes("isAdminOrOwner") && !roleManagement.includes("createClickUpInvite"), "role management no longer exposes legacy pre-provision invite");
+  assert(roleManagement.includes("isOwner(requester.role)") && !roleManagement.includes("isAdminOrOwner(requester.role)") && !roleManagement.includes("createClickUpInvite"), "global role/status management is owner-only");
+  assert(ownerAdminsRoute.includes("withRole") && ownerAdminsRoute.includes("USER_ROLES.OWNER") && !ownerAdminsRoute.includes("withPermission"), "owner admin mutation route is owner-only at the HTTP boundary");
+  assert(adminUsersPage.includes("guardOwner"), "global user-management page is owner-only at the page boundary");
+  assert(functionSecurityMigration.includes("REVOKE ALL ON FUNCTION public.get_current_user_role() FROM anon, authenticated") && functionSecurityMigration.includes("REVOKE ALL ON FUNCTION public.is_admin_or_owner() FROM anon, authenticated") && functionSecurityMigration.includes("REVOKE ALL ON FUNCTION public.is_owner() FROM anon, authenticated") && functionSecurityMigration.includes("SET search_path = public"), "function security migration revokes exposed helper execution and pins trigger search_path");
+  assert(legacyRlsMigration.includes("No direct workspace reads") && legacyRlsMigration.includes("DROP POLICY IF EXISTS \"Anon can insert watch sessions\"") && legacyRlsMigration.includes("DROP POLICY IF EXISTS \"Anon can insert watch events\"") && legacyRlsMigration.includes("REVOKE ALL ON TABLE public.watch_sessions FROM anon, authenticated"), "legacy RLS migration closes workspace enumeration and anonymous tracking inserts");
 
   section("Provider-aware analytics honesty");
   const analyticsService = readFileSync("src/lib/videos/service.ts", "utf8");
@@ -231,7 +238,9 @@ async function runTests(): Promise<void> {
   const originalRedirectUri = process.env.CLICKUP_REDIRECT_URI;
 
   assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
+  assert(nextConfig.includes('key: "Content-Security-Policy"') && nextConfig.includes("frame-src https://www.youtube.com") && nextConfig.includes("connect-src 'self'"), "CSP is present and allows the internal YouTube IFrame/player network contract");
   assert(nextConfig.includes('key: "Referrer-Policy"') && nextConfig.includes('strict-origin-when-cross-origin'), "YouTube embeds receive a referrer policy required for player configuration");
+  assert(nextConfig.includes('key: "X-Content-Type-Options"') && nextConfig.includes('value: "nosniff"') && nextConfig.includes('key: "X-Frame-Options"') && nextConfig.includes('value: "DENY"') && nextConfig.includes('key: "Permissions-Policy"'), "baseline browser hardening headers are configured");
   assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
   assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
   assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");

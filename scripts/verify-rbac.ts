@@ -83,9 +83,6 @@ assert(
 section("2. Admin permissions");
 
 const ADMIN_EXPECTED = [
-  PERMISSIONS.USERS_READ,
-  PERMISSIONS.USERS_MANAGE,
-  PERMISSIONS.ADMINS_MANAGE,
   PERMISSIONS.VIDEOS_READ,
   PERMISSIONS.VIDEOS_CREATE,
   PERMISSIONS.VIDEOS_UPDATE,
@@ -94,6 +91,9 @@ const ADMIN_EXPECTED = [
 ];
 
 const ADMIN_DENIED = [
+  PERMISSIONS.USERS_READ,
+  PERMISSIONS.USERS_MANAGE,
+  PERMISSIONS.ADMINS_MANAGE,
   PERMISSIONS.SETTINGS_MANAGE,
   PERMISSIONS.SYSTEM_MANAGE,
 ];
@@ -150,8 +150,8 @@ assert(
 );
 
 assert(
-  roleHasPermission(USER_ROLES.ADMIN, PERMISSIONS.ADMINS_MANAGE),
-  "admin can manage team roles without owner escalation"
+  !roleHasPermission(USER_ROLES.ADMIN, PERMISSIONS.ADMINS_MANAGE),
+  "admin cannot manage platform team roles"
 );
 
 assert(

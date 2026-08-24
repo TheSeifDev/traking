@@ -35,7 +35,7 @@ import {
   type ManagedRole,
   type Profile,
 } from "@/src/types/auth";
-import { isAdminOrOwner } from "./rbac";
+import { isOwner } from "./rbac";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -120,8 +120,8 @@ export async function changeUserRole(
     return { success: false, error: "unauthenticated" };
   }
 
-  // ── 3: Requester must be owner ──────────────────────────────────────────
-  if (!isAdminOrOwner(requester.role)) {
+  // ── 3: Requester must be the platform owner ─────────────────────────────
+  if (!isOwner(requester.role)) {
     return { success: false, error: "forbidden" };
   }
 
@@ -225,8 +225,8 @@ export async function setUserActiveStatus(
     return { success: false, error: "unauthenticated" };
   }
 
-  // ── 3: Requester must be owner ────────────────────────────────────────────
-  if (!isAdminOrOwner(requester.role)) {
+  // ── 3: Requester must be the platform owner ───────────────────────────────
+  if (!isOwner(requester.role)) {
     return { success: false, error: "forbidden" };
   }
 
@@ -293,7 +293,7 @@ export async function listAllUsers(): Promise<Profile[] | null> {
     return null;
   }
 
-  if (!isAdminOrOwner(requester.role)) return null;
+  if (!isOwner(requester.role)) return null;
 
   try {
     const supabase = createAdminClient();

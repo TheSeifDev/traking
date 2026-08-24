@@ -5,14 +5,14 @@
  * request is authorized against the authenticated user's Space membership.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { getVideo, updateVideo, deleteVideo } from "@/src/lib/videos/service";
 import { isValidSourceType } from "@/src/types/video";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export const GET = withAuth(async (request: NextRequest, user, context) => {
+export const GET = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
@@ -26,7 +26,7 @@ export const GET = withAuth(async (request: NextRequest, user, context) => {
   }
 });
 
-export const PUT = withAuth(async (request: NextRequest, user, context) => {
+export const PUT = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   let body: unknown;
@@ -62,7 +62,7 @@ export const PUT = withAuth(async (request: NextRequest, user, context) => {
   }
 });
 
-export const DELETE = withAuth(async (request: NextRequest, user, context) => {
+export const DELETE = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {

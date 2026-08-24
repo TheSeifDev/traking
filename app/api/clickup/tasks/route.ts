@@ -3,12 +3,12 @@
  * GET ?q=query&space_id=id - Search ClickUp tasks for the selected Space.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { resolveSpaceAdminForUser } from "@/src/lib/spaces/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { searchClickUpTasks } from "@/src/lib/clickup/client";
 
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withDashboardAuth(async (request: NextRequest, user) => {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
   if (q.trim().length < 1) return NextResponse.json({ tasks: [] });

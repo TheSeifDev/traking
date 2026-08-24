@@ -34,6 +34,7 @@ const PROTECTED_PREFIXES = [
 
 const ADMIN_PREFIXES = ["/admin"];
 const OWNER_PREFIXES = ["/owner"];
+const OWNER_ONLY_ADMIN_PATHS = ["/admin/users"];
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/") return true;
@@ -56,6 +57,10 @@ function isAdminPath(pathname: string): boolean {
 
 function isOwnerPath(pathname: string): boolean {
   return OWNER_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+function isOwnerOnlyAdminPath(pathname: string): boolean {
+  return OWNER_ONLY_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(path + "/"));
 }
 
 interface CookieSession {
@@ -112,7 +117,11 @@ export async function middleware(request: NextRequest) {
 
     const role = session.role;
 
-    if (isOwnerPath(pathname)) {
+    if (isOwnerOnlyAdminPath(pathname)) {
+      if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
+        return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
+      }
+    } else if (isOwnerPath(pathname)) {
       if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
         return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
       }

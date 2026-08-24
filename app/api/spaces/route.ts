@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { createSpace, listSpacesForUser } from "@/src/lib/spaces/service";
 
 function statusFor(error: string): number {
@@ -11,12 +11,12 @@ function statusFor(error: string): number {
   return 400;
 }
 
-export const GET = withAuth(async (_request, user) => {
+export const GET = withDashboardAuth(async (_request, user) => {
   const spaces = await listSpacesForUser(user);
   return NextResponse.json({ spaces });
 });
 
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   let body: unknown;
   try {
     body = await request.json();

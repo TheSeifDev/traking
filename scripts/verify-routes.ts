@@ -76,10 +76,12 @@ function simulateMiddlewareAccess(
   const PROTECTED_PREFIXES = ["/dashboard", "/videos", "/analytics", "/profile", "/admin", "/owner"];
   const ADMIN_PREFIXES = ["/admin"];
   const OWNER_PREFIXES = ["/owner"];
+  const OWNER_ONLY_ADMIN_PATHS = ["/admin/users"];
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAdmin = ADMIN_PREFIXES.some((p) => pathname.startsWith(p));
   const isOwner = OWNER_PREFIXES.some((p) => pathname.startsWith(p));
+  const isOwnerOnlyAdmin = OWNER_ONLY_ADMIN_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
   if (!isProtected) return "allowed";
 
@@ -87,7 +89,7 @@ function simulateMiddlewareAccess(
 
   const role = session.role;
 
-  if (isOwner) {
+  if (isOwnerOnlyAdmin || isOwner) {
     if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
       return "redirect_forbidden";
     }
@@ -122,6 +124,13 @@ function simulateApiHandler(
   if (!isValidRole(user.role)) return 401;
   if (!roleHasPermission(user.role, permission)) return 403;
   return 200;
+}
+
+function simulateDashboardApi(user: AuthenticatedUser | null): 200 | 401 | 403 {
+  if (!user) return 401;
+  if (!user.is_active) return 403;
+  if (!isValidRole(user.role)) return 401;
+  return hasMinimumRole(user.role, USER_ROLES.ADMIN) ? 200 : 403;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,8 +205,8 @@ assert(
   "middleware allows admin to /admin"
 );
 assert(
-  simulateMiddlewareAccess("/admin/users", { role: "admin" }) === "allowed",
-  "middleware allows admin to /admin/users"
+  simulateMiddlewareAccess("/admin/users", { role: "admin" }) === "redirect_forbidden",
+  "middleware blocks admin from owner-only /admin/users"
 );
 assert(
   simulateMiddlewareAccess("/admin/settings", { role: "admin" }) === "allowed",
@@ -283,6 +292,9 @@ assert(
   simulateGuard(inactiveAdmin, USER_ROLES.ADMIN) === "inactive",
   "guardAdmin throws inactive_account for deactivated admin"
 );
+assert(simulateDashboardApi(viewer) === 403, "withDashboardAuth denies viewer");
+assert(simulateDashboardApi(admin) === 200, "withDashboardAuth allows admin");
+assert(simulateDashboardApi(owner) === 200, "withDashboardAuth allows owner");
 assert(
   simulateApiHandler(inactiveAdmin, PERMISSIONS.VIDEOS_READ) === 403,
   "API handler returns 403 for inactive account"
@@ -313,14 +325,14 @@ assert(simulateApiHandler(viewer, PERMISSIONS.VIDEOS_DELETE) === 403, "viewer: v
 assert(simulateApiHandler(admin, PERMISSIONS.VIDEOS_DELETE) === 200, "admin: videos.delete → 200");
 assert(simulateApiHandler(owner, PERMISSIONS.VIDEOS_DELETE) === 200, "owner: videos.delete → 200");
 
-// users.manage – owner and admin; viewer denied
+// users.manage – owner only; admin and viewer denied
 assert(simulateApiHandler(viewer, PERMISSIONS.USERS_MANAGE) === 403, "viewer: users.manage → 403");
-assert(simulateApiHandler(admin, PERMISSIONS.USERS_MANAGE) === 200, "admin: users.manage → 200");
+assert(simulateApiHandler(admin, PERMISSIONS.USERS_MANAGE) === 403, "admin: users.manage → 403");
 assert(simulateApiHandler(owner, PERMISSIONS.USERS_MANAGE) === 200, "owner: users.manage → 200");
 
-// admins.manage – owner and admin; viewer denied
+// admins.manage – owner only; admin and viewer denied
 assert(simulateApiHandler(viewer, PERMISSIONS.ADMINS_MANAGE) === 403, "viewer: admins.manage → 403");
-assert(simulateApiHandler(admin, PERMISSIONS.ADMINS_MANAGE) === 200, "admin: admins.manage → 200");
+assert(simulateApiHandler(admin, PERMISSIONS.ADMINS_MANAGE) === 403, "admin: admins.manage → 403");
 assert(simulateApiHandler(owner, PERMISSIONS.ADMINS_MANAGE) === 200, "owner: admins.manage → 200");
 
 // settings.manage – only owner
@@ -384,15 +396,15 @@ assert(
   "settings reconnect CTA points to the implemented ClickUp OAuth route"
 );
 assert(
-  videoListRoute.includes("withAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("listVideos(access.space.clickup_workspace_id, access.space.id)"),
+  videoListRoute.includes("withDashboardAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("listVideos(access.space.clickup_workspace_id, access.space.id)"),
   "video list route enforces authenticated Space membership and scoped reads"
 );
 assert(
-  videoDetailRoute.includes("withAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("getVideo(id, access.space.clickup_workspace_id, access.space.id)"),
+  videoDetailRoute.includes("withDashboardAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("getVideo(id, access.space.clickup_workspace_id, access.space.id)"),
   "video detail route enforces authenticated Space membership"
 );
 assert(
-  clickupTaskSearchRoute.includes("withAuth") && clickupTaskSearchRoute.includes("resolveSpaceAdminForUser") && clickupTaskSearchRoute.includes("workspace.clickup_team_id"),
+  clickupTaskSearchRoute.includes("withDashboardAuth") && clickupTaskSearchRoute.includes("resolveSpaceAdminForUser") && clickupTaskSearchRoute.includes("workspace.clickup_team_id"),
   "ClickUp task search route enforces Space-admin authorization and selected workspace"
 );
 

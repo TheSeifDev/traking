@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { guardAuth } from "@/src/lib/auth/guards";
+import { guardOwner } from "@/src/lib/auth/guards";
 import { getUser360 } from "@/src/lib/users/service";
 import User360Dashboard from "@/src/components/users/User360Dashboard";
 
 type PageProps = { params: Promise<{ userId: string }> };
 
 export default async function OwnerUserPage({ params }: PageProps) {
-  const user = await guardAuth();
+  const user = await guardOwner();
   const { userId } = await params;
   let data;
   try {

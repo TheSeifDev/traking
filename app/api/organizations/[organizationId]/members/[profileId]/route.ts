@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { getUser360 } from "@/src/lib/users/service";
 import { removeOrganizationMember, updateOrganizationMemberRole } from "@/src/lib/organizations/service";
 
@@ -12,7 +12,7 @@ function statusFor(error: string): number {
   return 400;
 }
 
-export const GET = withAuth(async (_request: NextRequest, user, context) => {
+export const GET = withDashboardAuth(async (_request: NextRequest, user, context) => {
   const { organizationId, profileId } = await (context as RouteContext).params;
   if (!organizationId || !profileId) return NextResponse.json({ error: "missing_member_id" }, { status: 400 });
   try {
@@ -24,7 +24,7 @@ export const GET = withAuth(async (_request: NextRequest, user, context) => {
   }
 });
 
-export const PATCH = withAuth(async (request: NextRequest, user, context) => {
+export const PATCH = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { organizationId, profileId } = await (context as RouteContext).params;
   if (!organizationId || !profileId) return NextResponse.json({ error: "missing_member_id" }, { status: 400 });
   let body: unknown;
@@ -41,7 +41,7 @@ export const PATCH = withAuth(async (request: NextRequest, user, context) => {
   return NextResponse.json(result);
 });
 
-export const DELETE = withAuth(async (_request: NextRequest, user, context) => {
+export const DELETE = withDashboardAuth(async (_request: NextRequest, user, context) => {
   const { organizationId, profileId } = await (context as RouteContext).params;
   if (!organizationId || !profileId) return NextResponse.json({ error: "missing_member_id" }, { status: 400 });
   const result = await removeOrganizationMember(organizationId, user, profileId);

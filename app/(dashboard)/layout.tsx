@@ -2,7 +2,8 @@
  * Dashboard route-group layout
  * DB-validated auth gate + dashboard shell wrapper.
  */
-import { guardAuth } from "@/src/lib/auth/guards";
+import { guardRole } from "@/src/lib/auth/guards";
+import { USER_ROLES } from "@/src/types/auth";
 import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import DashboardShell from "@/src/components/dashboard/DashboardShell";
@@ -12,7 +13,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await guardAuth();
+  const user = await guardRole(USER_ROLES.ADMIN, "/");
   const [workspace, activeSpace] = await Promise.all([
     getPrimaryWorkspace(user.id),
     resolveActiveSpaceForUser(user),

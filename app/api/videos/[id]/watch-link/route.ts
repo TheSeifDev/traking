@@ -4,13 +4,13 @@
  * DELETE - Revoke a watch link for a video in the selected Space
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/src/lib/auth/api-handler";
+import { withDashboardAuth } from "@/src/lib/auth/api-handler";
 import { resolveSpaceAdminForUser } from "@/src/lib/spaces/access";
 import { generateWatchLink, revokeWatchLink } from "@/src/lib/videos/service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export const POST = withAuth(async (request: NextRequest, user, context) => {
+export const POST = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
@@ -24,7 +24,7 @@ export const POST = withAuth(async (request: NextRequest, user, context) => {
   }
 });
 
-export const DELETE = withAuth(async (request: NextRequest, user, context) => {
+export const DELETE = withDashboardAuth(async (request: NextRequest, user, context) => {
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   let body: unknown;
