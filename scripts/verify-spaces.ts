@@ -161,6 +161,7 @@ const videosPage = source("app/(dashboard)/videos/page.tsx");
 const videoList = source("src/components/dashboard/VideoList.tsx");
 const analyticsPage = source("app/(dashboard)/analytics/page.tsx");
 const watchLinksPage = source("app/(dashboard)/watch-links/page.tsx");
+const watchLinksManager = source("src/components/dashboard/WatchLinksManager.tsx");
 const videoDetailPage = source("app/(dashboard)/videos/[id]/page.tsx");
 const analyticsVideoPage = source("app/(dashboard)/analytics/videos/[id]/page.tsx");
 const workspaceAnalyticsDashboard = source("src/components/dashboard/WorkspaceAnalyticsDashboard.tsx");
@@ -175,7 +176,8 @@ assert(activeSpaceRoute.includes("scope === \"all\"") && activeSpaceRoute.includ
 assert(videosRoute.includes("organization_id") && videosRoute.includes("authorizeAllSpacesForUser") && videosRoute.includes("organizationDataScope") && videosRoute.includes("listVideos(scope)") && videosRoute.includes("getWorkspaceAnalytics(scope)"), "organization video GET uses the authorized virtual organization scope");
 assert(videosPage.includes("context.type === \"all\"") && videosPage.includes("spaceCanManage={false}"), "All Spaces video library is read-only until a real Space is selected for mutation");
 assert(analyticsPage.includes("context.type === \"all\"") && analyticsPage.includes("organizationDataScope") && analyticsPage.includes("getWorkspaceAnalytics(scope)") && analyticsPage.includes("listVideos(scope)"), "All Spaces analytics uses the complete authorized organization aggregate");
-assert(watchLinksPage.includes("context.type === \"all\"") && watchLinksPage.includes("organizationDataScope") && watchLinksPage.includes("listVideos(scope)") && watchLinksPage.includes("spaceCanManage={false}"), "All Spaces watch links are read-only and use the complete organization scope");
+assert(watchLinksPage.includes("context.type === \"all\"") && watchLinksPage.includes("organizationDataScope") && watchLinksPage.includes("listVideos(scope)") && watchLinksPage.includes("organizationId={organization.id}") && watchLinksPage.includes("spaceCanManage={false}"), "All Spaces watch links are read-only and use the complete organization scope");
+assert(watchLinksManager.includes("organizationId?: string | null") && watchLinksManager.includes("organizationId = null") && watchLinksManager.includes("organizationId={organizationId}") && watchLinksManager.includes("organization_id=${encodeURIComponent(organizationId)}"), "watch-link detail and audit links preserve organization scope in All Spaces");
 assert(dashboardPage.includes("organizationDataScope") && dashboardPage.includes("getWorkspaceAnalytics(scope)") && dashboardPage.includes("listVideos(scope)"), "dashboard All Spaces aggregates complete organization data");
 assert(videoDetailPage.includes("organizationDataScope") && videoDetailPage.includes("getVideo(id, scope)") && videoDetailPage.includes("getVideoAnalytics(id, scope)"), "Owner All Spaces video detail includes historical organization-owned videos");
 assert(videoList.includes("organizationId={organizationId}") && videoList.includes("organization_id=${encodeURIComponent(organizationId)}"), "All Spaces library detail links preserve organization scope instead of legacy space IDs");

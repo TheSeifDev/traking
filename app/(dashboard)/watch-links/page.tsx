@@ -20,10 +20,11 @@ export default async function WatchLinksPage({ searchParams }: PageProps) {
 
   if (resolution.context.type === "all") {
     const organization = resolution.organization;
-    const scope = organization ? organizationDataScope(organization) : null;
+    if (!organization) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
+    const scope = organizationDataScope(organization);
     if (!scope) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
     const videos = await listVideos(scope);
-    return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} spaceCanManage={false} />;
+    return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} organizationId={organization.id} spaceCanManage={false} />;
   }
 
   if (!resolution.access) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} />;
