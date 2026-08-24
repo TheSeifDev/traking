@@ -246,7 +246,7 @@ async function runTests(): Promise<void> {
   const originalRedirectUri = process.env.CLICKUP_REDIRECT_URI;
 
   assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
-  assert(nextConfig.includes('key: "Content-Security-Policy"') && nextConfig.includes("frame-src https://www.youtube.com") && nextConfig.includes("connect-src 'self'"), "CSP is present and allows the internal YouTube IFrame/player network contract");
+  assert(nextConfig.includes('key: "Content-Security-Policy"') && nextConfig.includes("frame-src https://www.youtube.com") && nextConfig.includes("https://player.vimeo.com") && nextConfig.includes("https://drive.google.com") && nextConfig.includes("https://t.me") && nextConfig.includes("connect-src 'self'"), "CSP is present and allows only the registered provider embed/player network contracts");
   assert(nextConfig.includes('key: "Referrer-Policy"') && nextConfig.includes('strict-origin-when-cross-origin'), "YouTube embeds receive a referrer policy required for player configuration");
   assert(nextConfig.includes('key: "X-Content-Type-Options"') && nextConfig.includes('value: "nosniff"') && nextConfig.includes('key: "X-Frame-Options"') && nextConfig.includes('value: "DENY"') && nextConfig.includes('key: "Permissions-Policy"'), "baseline browser hardening headers are configured");
   assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
