@@ -70,9 +70,18 @@ export default function DashboardShell({
     : persistedSpace;
   const selectedSpaceId = selectedSpace?.id ?? "";
   const canManageActiveSpace = Boolean(selectedSpace?.is_platform_owner || selectedSpace?.membership_role === "admin");
+  const organizationMembersNavItem = selectedOrganizationId
+    ? { label: "Members", href: `/organizations/${encodeURIComponent(selectedOrganizationId)}/members`, icon: UsersRound }
+    : null;
+  const spaceMembersNavItem = selectedSpaceId && canManageActiveSpace
+    ? { label: "Space members", href: `/spaces/${selectedSpaceId}/members`, icon: UsersRound }
+    : null;
   const visibleNavItems = [
-    ...navItems,
-    ...(selectedSpaceId && canManageActiveSpace ? [{ label: "Members", href: `/spaces/${selectedSpaceId}/members`, icon: UsersRound }] : []),
+    navItems[0],
+    navItems[1],
+    ...(organizationMembersNavItem ? [organizationMembersNavItem] : []),
+    ...navItems.slice(2),
+    ...(spaceMembersNavItem ? [spaceMembersNavItem] : []),
     ...(user.role === "owner" ? [ownerNavItem] : []),
   ];
 
@@ -106,6 +115,8 @@ export default function DashboardShell({
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/organizations") return pathname === "/organizations" || (pathname.startsWith("/organizations/") && !pathname.includes("/members"));
+    if (href.includes("/members")) return pathname === href || pathname.startsWith(`${href}/`);
     return pathname.startsWith(href);
   }
 

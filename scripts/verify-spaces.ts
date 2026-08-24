@@ -150,6 +150,7 @@ const membersManager = source("src/components/spaces/SpaceMembersManager.tsx");
 const spacesDirectory = source("src/components/spaces/SpacesDirectory.tsx");
 const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
 const organizationDashboard = source("src/components/organizations/OrganizationDashboard.tsx");
+const organizationMembersPage = source("app/(dashboard)/organizations/[organizationId]/members/page.tsx");
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
 const ownerPage = source("app/owner/page.tsx");
 const activeSpaceRoute = source("app/api/spaces/active/route.ts");
@@ -168,6 +169,9 @@ const workspaceAnalyticsDashboard = source("src/components/dashboard/WorkspaceAn
 const viewerAnalyticsPanel = source("src/components/dashboard/ViewerAnalyticsPanel.tsx");
 const securityModel = source("docs/security-model.md");
 assert(shell.includes("useSearchParams") && shell.includes("activeSpaceId") && shell.includes("isSelectableChildSpace") && shell.includes("Current context") && shell.includes("organizationContext") && shell.includes("displayedSpaceContext") && shell.includes("organizations.length > 1") && shell.includes('aria-label="Select Organization"') && shell.includes("selectOrganization") && !shell.includes('aria-label="Select Space"') && !shell.includes("selectSpace("), "dashboard shell keeps single Organization plain text while allowing selection only for multiple Organizations and keeps Space non-interactive");
+assert(shell.includes("organizationMembersNavItem") && shell.includes('label: "Members"') && shell.includes('`/organizations/${encodeURIComponent(selectedOrganizationId)}/members`') && shell.includes("spaceMembersNavItem") && shell.includes('label: "Space members"'), "primary sidebar separates dynamic Organization Members from Space members using canonical IDs");
+assert(shell.includes('if (href === "/organizations")') && shell.includes('!pathname.includes("/members")') && shell.includes('if (href.includes("/members"))'), "Members active state wins over generic Organizations matching for organization member routes");
+assert(!organizationMembersPage.includes("Open User 360") && !organizationMembersPage.includes('members/${member.profile_id}'), "Organization Members page does not generate a dead User 360 URL without a supported route");
 assert(activeSpaceRoute.includes("withDashboardAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(activeSpaceService.includes('ALL_SPACES_PREFIX = "all:"') && activeSpaceService.includes('type: "all"') && activeSpaceService.includes("setAllSpacesPreference"), "All Spaces is represented by an explicit organization preference, not a fake Space UUID");
 assert(activeSpaceService.includes("isOwner(user.role)") && activeSpaceService.includes("organizationSpaces.length === 1") && activeSpaceService.includes("requiresSelection"), "Owner defaults to All Spaces, one-space users auto-select, and multi-space users require an explicit choice");
@@ -196,6 +200,7 @@ assert(spacesDirectory.includes("All Spaces") && spacesDirectory.includes("selec
 assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");
 assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organizationDashboard.includes("getSafeSpaceDisplayName"), "Organization dashboard renders child Space names directly");
 assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");
+assert(organizationDashboard.includes("Manage members") && organizationDashboard.includes("/organizations/${organization.id}/members"), "Organization dashboard Manage members action uses the real Organization Members route");
 assert(ownerPage.includes("resolveActiveSpaceForUser") && ownerPage.includes("organizations={activeSpace.organizations}") && ownerPage.includes("spaces={activeSpace.spaces}") && ownerPage.includes("activeSpaceContext={activeSpace.context}") && ownerPage.includes("activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}"), "Owner shell receives resolved Organization, Space, and All Spaces context");
 
 console.log(`\n${"=".repeat(56)}`);
