@@ -68,6 +68,7 @@ assert(access.includes("membership.status !== \"active\"") && access.includes("t
 assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpaceMember(explicitSpaceId, user)"), "query selector is followed by authorization");
 assert(access.includes("resolveSpaceAdminForUser") && access.includes("authorizeSpaceAdmin(explicitSpaceId, user)"), "admin selector is followed by admin authorization");
 assert(access.includes("getAccessibleSpaces") && access.includes("from(\"spaces\")") && access.includes("isOwner(user.role)"), "owner directory can enumerate active Spaces without membership fabrication");
+assert(access.includes("hydrateOrganizationWorkspaceIds") && access.includes("organization.clickup_workspace_id") && access.includes("resolvedSpace"), "child Spaces inherit the linked Organization workspace in the trusted access projection");
 assert(access.includes('.filter((membership) => membership.role === "admin")') && access.includes('organizationMembership?.role === "admin"'), "only Organization admins receive organization-wide Space visibility");
 assert(access.includes('organizationMembership?.status === "active" && organizationMembership.role === "admin"'), "ordinary Organization members require direct active Space membership");
 assert(organizationService.includes('from("space_members")') && organizationService.includes('permittedSpaceIds') && organizationService.includes('query.in("id", permittedSpaceIds)'), "Organization Space listing is restricted to explicit direct memberships for ordinary members");

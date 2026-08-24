@@ -37,6 +37,19 @@ function toMember(row: SpaceMemberRow): SpaceMember {
   return row;
 }
 
+async function hydrateOrganizationWorkspaceIds<T extends Space>(spaces: T[]): Promise<T[]> {
+  const organizationIds = [...new Set(spaces.filter((space) => !space.clickup_workspace_id).map((space) => space.organization_id))];
+  if (organizationIds.length === 0) return spaces;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("organizations").select("id, clickup_workspace_id").in("id", organizationIds).limit(MAX_ACCESSIBLE_SPACES);
+  if (error || !data) return spaces;
+  const workspaceByOrganization = new Map(data.map((organization) => [organization.id, organization.clickup_workspace_id]));
+  return spaces.map((space) => {
+    const workspaceId = workspaceByOrganization.get(space.organization_id);
+    return space.clickup_workspace_id || !workspaceId ? space : Object.assign({}, space, { clickup_workspace_id: workspaceId });
+  });
+}
+
 function denied(message = "Space access denied"): AuthError {
   return new AuthError("forbidden", message);
 }
@@ -161,12 +174,13 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
       .order("created_at", { ascending: true })
       .limit(MAX_ACCESSIBLE_SPACES);
     if (error || !data) return [];
-    return data.map((row) => ({
+    const spaces = data.map((row) => ({
       ...toSpace(row),
       membership_role: null,
       membership_status: null,
       is_platform_owner: true,
     }));
+    return hydrateOrganizationWorkspaceIds(spaces);
   }
 
   const { data: organizationMemberships, error: organizationMembershipError } = await supabase
@@ -205,7 +219,7 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
   const uniqueSpaces = [...new Map(allSpaces.map((space) => [space.id, space])).values()].sort((left, right) => left.created_at.localeCompare(right.created_at)).slice(0, MAX_ACCESSIBLE_SPACES);
   const membershipBySpace = new Map((memberships ?? []).map((membership) => [membership.space_id, membership]));
   const organizationMembershipByOrganization = new Map((organizationMemberships ?? []).map((membership) => [membership.organization_id, membership]));
-  return uniqueSpaces.map((space) => {
+  const spaces = uniqueSpaces.map((space) => {
     const membership = membershipBySpace.get(space.id);
     const organizationMembership = organizationMembershipByOrganization.get(space.organization_id);
     return {
@@ -215,6 +229,7 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
       is_platform_owner: false,
     };
   });
+  return hydrateOrganizationWorkspaceIds(spaces);
 }
 
 export async function getAccessibleSpaceIds(user: AuthenticatedUser): Promise<string[]> {
@@ -228,13 +243,16 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
 
   const organization = await getOrganizationById(space.organization_id);
   if (!organization) throw denied();
+  const resolvedSpace = space.clickup_workspace_id || !organization.clickup_workspace_id
+    ? space
+    : { ...space, clickup_workspace_id: organization.clickup_workspace_id };
 
   if (isOwner(user.role)) {
     return {
       user,
       organization,
       organization_membership: null,
-      space,
+      space: resolvedSpace,
       membership: null,
       effective_role: user.role,
       is_platform_owner: true,
@@ -252,7 +270,7 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
     user,
     organization,
     organization_membership: organizationMembership?.status === "active" ? organizationMembership : null,
-    space,
+    space: resolvedSpace,
     membership: hasActiveSpaceAccess ? membership : null,
     effective_role: hasActiveSpaceAccess ? membership.role : organizationMembership?.role ?? "member",
     is_platform_owner: false,
