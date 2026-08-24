@@ -199,6 +199,7 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
     .limit(MAX_ACCESSIBLE_SPACES);
   if (membershipError) return [];
 
+  const activeOrganizationIds = new Set((organizationMemberships ?? []).map((membership) => membership.organization_id));
   const organizationIds = new Set(
     (organizationMemberships ?? [])
       .filter((membership) => membership.role === "admin")
@@ -215,7 +216,8 @@ export async function getAccessibleSpaces(user: AuthenticatedUser): Promise<Acce
     : { data: [], error: null };
   if (directSpaces.error || !directSpaces.data) return [];
 
-  const allSpaces = [...organizationSpaces.data, ...directSpaces.data];
+  const directSpacesWithOrganizationAccess = directSpaces.data.filter((space) => activeOrganizationIds.has(space.organization_id));
+  const allSpaces = [...organizationSpaces.data, ...directSpacesWithOrganizationAccess];
   const uniqueSpaces = [...new Map(allSpaces.map((space) => [space.id, space])).values()].sort((left, right) => left.created_at.localeCompare(right.created_at)).slice(0, MAX_ACCESSIBLE_SPACES);
   const membershipBySpace = new Map((memberships ?? []).map((membership) => [membership.space_id, membership]));
   const organizationMembershipByOrganization = new Map((organizationMemberships ?? []).map((membership) => [membership.organization_id, membership]));
@@ -263,9 +265,10 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
     loadMembership(user.id, space.id),
     loadOrganizationMembership(user.id, organization.id),
   ]);
-  const hasActiveOrganizationAccess = organizationMembership?.status === "active" && organizationMembership.role === "admin";
-  const hasActiveSpaceAccess = membership?.status === "active";
-  if (!hasActiveOrganizationAccess && !hasActiveSpaceAccess) throw denied();
+  const hasActiveOrganizationAccess = organizationMembership?.status === "active";
+  const hasOrganizationAdminAccess = hasActiveOrganizationAccess && organizationMembership?.role === "admin";
+  const hasActiveSpaceAccess = hasActiveOrganizationAccess && membership?.status === "active";
+  if (!hasOrganizationAdminAccess && !hasActiveSpaceAccess) throw denied();
   return {
     user,
     organization,
@@ -279,7 +282,7 @@ export async function authorizeSpaceMember(spaceId: string, user: AuthenticatedU
 
 export async function authorizeSpaceAdmin(spaceId: string, user: AuthenticatedUser): Promise<SpaceAccess> {
   const access = await authorizeSpaceMember(spaceId, user);
-  if (access.is_platform_owner || access.membership?.role === "admin") return access;
+  if (access.is_platform_owner || access.membership?.role === "admin" || access.organization_membership?.role === "admin") return access;
   throw denied();
 }
 

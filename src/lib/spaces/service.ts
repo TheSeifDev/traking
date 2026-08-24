@@ -348,6 +348,16 @@ export async function addSpaceMember(
     if (!profile || !profile.is_active) return { success: false, error: "member_not_found" };
     if (profile.role === "owner") return { success: false, error: "cannot_modify_owner" };
 
+    const { data: organizationMembership, error: organizationMembershipError } = await supabase
+      .from("organization_members")
+      .select("profile_id")
+      .eq("organization_id", access.space.organization_id)
+      .eq("profile_id", profileId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (organizationMembershipError) return { success: false, error: "database_error" };
+    if (!organizationMembership) return { success: false, error: "organization_mismatch" };
+
     const existing = await loadMembership(spaceId, profileId);
     if (existing?.status === "active") return { success: false, error: "membership_exists" };
     const { data: member, error: memberError } = existing

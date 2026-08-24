@@ -354,7 +354,6 @@ export async function getControlRoomData(input: { range?: string | null; query?:
   const users = profiles.map((profile) => {
     const userSessions = sessionCountForProfile.get(profile.id) ?? [];
     const userVideos = new Set(userSessions.map((session) => session.video_id));
-    const completions = userSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
     const userOrgs = new Set(orgMemberships.filter((membership) => membership.profile_id === profile.id && membership.status === "active").map((membership) => membership.organization_id));
     const userSpaces = new Set(spaceMemberships.filter((membership) => membership.profile_id === profile.id && membership.status === "active").map((membership) => membership.space_id));
     const measuredUserSessions = userSessions.filter(isMeasuredSession);
@@ -365,7 +364,6 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     const space = video.space_id ? spaceById.get(video.space_id) : null;
     const org = space ? organizationById.get(space.organization_id) : null;
     const videoSessions = sessionByVideo.get(video.id) ?? [];
-    const completions = videoSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
     const viewers = new Set(videoSessions.map((session) => session.viewer_profile_id ?? session.id));
     const measuredVideoSessions = videoSessions.filter(isMeasuredSession);
     const measuredCompletions = measuredVideoSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");

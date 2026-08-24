@@ -29,6 +29,8 @@ export interface OrganizationMemberView extends OrganizationMember {
   profile: ProfileSummary;
 }
 
+export type OrganizationMemberCandidate = Pick<ProfileSummary, "id" | "clickup_user_id" | "name" | "email" | "role">;
+
 export type OrganizationMutationError =
   | "forbidden"
   | "member_not_found"
@@ -84,6 +86,30 @@ export async function listOrganizationSpaces(organizationId: string, user: Authe
     const { data, error } = await query;
     if (error || !data) return null;
     return data.map(toSpace);
+  } catch {
+    return null;
+  }
+}
+
+export async function searchOrganizationMemberCandidates(organizationId: string, user: AuthenticatedUser, query: string): Promise<OrganizationMemberCandidate[] | null> {
+  const normalizedQuery = query.trim();
+  if (normalizedQuery.length < 2 || normalizedQuery.length > 100) return [];
+  try {
+    await authorizeOrganizationAdmin(organizationId, user);
+    const supabase = createAdminClient();
+    const [{ data: memberships, error: membershipError }, { data: byEmail, error: emailError }, { data: byName, error: nameError }] = await Promise.all([
+      supabase.from("organization_members").select("profile_id").eq("organization_id", organizationId).eq("status", "active").limit(MAX_ORGANIZATION_MEMBERS),
+      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
+    ]);
+    if (membershipError || emailError || nameError) return null;
+    const activeMemberIds = new Set((memberships ?? []).map((membership) => membership.profile_id));
+    const seen = new Set<string>();
+    return [...(byEmail ?? []), ...(byName ?? [])].filter((profile) => {
+      if (activeMemberIds.has(profile.id) || seen.has(profile.id)) return false;
+      seen.add(profile.id);
+      return true;
+    }).slice(0, 25);
   } catch {
     return null;
   }

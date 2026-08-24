@@ -71,14 +71,17 @@ assert(access.includes("if (isOwner(user.role))") && access.includes("is_platfor
 assert(access.includes("membership.status !== \"active\"") && access.includes("throw denied()"), "inactive/suspended/removed memberships fail closed");
 assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpaceMember(explicitSpaceId, user)"), "query selector is followed by authorization");
 assert(access.includes("resolveSpaceAdminForUser") && access.includes("authorizeSpaceAdmin(explicitSpaceId, user)"), "admin selector is followed by admin authorization");
+assert(access.includes("access.organization_membership?.role === \"admin\""), "Organization admins retain Space-admin authority through the Organization hierarchy");
 assert(access.includes("getAccessibleSpaces") && access.includes("from(\"spaces\")") && access.includes("isOwner(user.role)"), "owner directory can enumerate active Spaces without membership fabrication");
 assert(access.includes("hydrateOrganizationWorkspaceIds") && access.includes("organization.clickup_workspace_id") && access.includes("resolvedSpace"), "child Spaces inherit the linked Organization workspace in the trusted access projection");
 assert(access.includes('.filter((membership) => membership.role === "admin")') && access.includes('organizationMembership?.role === "admin"'), "only Organization admins receive organization-wide Space visibility");
-assert(access.includes('organizationMembership?.status === "active" && organizationMembership.role === "admin"'), "ordinary Organization members require direct active Space membership");
+assert(access.includes("hasOrganizationAdminAccess") && access.includes("hasActiveSpaceAccess = hasActiveOrganizationAccess && membership?.status === \"active\""), "ordinary Organization members require direct active Space membership");
 assert(organizationService.includes('from("space_members")') && organizationService.includes('permittedSpaceIds') && organizationService.includes('query.in("id", permittedSpaceIds)'), "Organization Space listing is restricted to explicit direct memberships for ordinary members");
 assert(spaceService.includes("cannot_modify_owner") && spaceService.includes("cannot_modify_self") && spaceService.includes("last_admin_required"), "membership mutations protect platform owner, self, and last admin");
 assert(spaceService.includes("source: \"manual\"") && spaceService.includes("clickup_user_id: null"), "manual membership creation has explicit source metadata");
 assert(spaceService.includes("profiles") && spaceService.includes("is_active") && !spaceService.includes("insert({ email"), "member management uses existing active profiles and does not create guests");
+assert(spaceService.includes('from("organization_members")') && spaceService.includes('eq("organization_id", access.space.organization_id)') && spaceService.includes('eq("status", "active")') && spaceService.includes('error: "organization_mismatch"'), "Space assignment requires an active Organization member server-side");
+assert(access.includes("activeOrganizationIds") && access.includes("directSpacesWithOrganizationAccess") && access.includes("hasOrganizationAdminAccess") && access.includes("hasActiveSpaceAccess = hasActiveOrganizationAccess"), "direct Space access cannot survive inactive Organization membership");
 
 section("Space API route protection and resource IDOR defense");
 const routeContracts: Array<[string, string[]]> = [
@@ -94,6 +97,7 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/organizations/[organizationId]/route.ts", ["withDashboardAuth", "getOrganizationForUser", "listOrganizationSpaces"]],
   ["app/api/organizations/[organizationId]/spaces/route.ts", ["withDashboardAuth", "createSpace", "listOrganizationSpaces"]],
   ["app/api/organizations/[organizationId]/members/route.ts", ["withDashboardAuth", "listOrganizationMembers", "addOrganizationMember"]],
+  ["app/api/organizations/[organizationId]/member-candidates/route.ts", ["withDashboardAuth", "searchOrganizationMemberCandidates"]],
   ["app/api/organizations/[organizationId]/members/[profileId]/route.ts", ["withDashboardAuth", "updateOrganizationMemberRole", "removeOrganizationMember"]],
   ["app/(dashboard)/organizations/[organizationId]/analytics/page.tsx", ["getOrganizationForUser", "listOrganizationSpaces", "getWorkspaceAnalytics"]],
   ["app/(dashboard)/organizations/[organizationId]/settings/page.tsx", ["getOrganizationForUser", "Organization settings"]],
@@ -151,6 +155,7 @@ const spacesDirectory = source("src/components/spaces/SpacesDirectory.tsx");
 const spaceDashboard = source("src/components/spaces/SpaceDashboard.tsx");
 const organizationDashboard = source("src/components/organizations/OrganizationDashboard.tsx");
 const organizationMembersPage = source("app/(dashboard)/organizations/[organizationId]/members/page.tsx");
+const organizationMembersManager = source("src/components/organizations/OrganizationMembersManager.tsx");
 const organizationSpacesPage = source("app/(dashboard)/organizations/[organizationId]/spaces/page.tsx");
 const trackingTypes = source("src/types/tracking.ts");
 const trackingPlayer = source("src/components/watch/WatchPlayer.tsx");
@@ -178,7 +183,9 @@ assert(shell.includes("useSearchParams") && shell.includes("activeSpaceId") && s
 assert(shell.includes("organizationMembersNavItem") && shell.includes('label: "Members"') && shell.includes('`/organizations/${encodeURIComponent(selectedOrganizationId)}/members`') && shell.includes("spaceMembersNavItem") && shell.includes('label: "Space members"'), "primary sidebar separates dynamic Organization Members from Space members using canonical IDs");
 assert(shell.includes('if (href === "/organizations")') && shell.includes('!pathname.includes("/members")') && shell.includes('if (href.includes("/members"))'), "Members active state wins over generic Organizations matching for organization member routes");
 assert(!organizationMembersPage.includes("Open User 360") && !organizationMembersPage.includes('members/${member.profile_id}'), "Organization Members page does not generate a dead User 360 URL without a supported route");
-assert(organizationMembersPage.includes('member.profile.role === "owner"') && organizationMembersPage.includes('member.role === "admin" ? "ADMIN" : "MEMBER"') && organizationMembersPage.includes('roleClasses(role)'), "Organization Members page displays canonical OWNER/ADMIN/MEMBER roles");
+assert(organizationMembersManager.includes('member.profile.role === "owner"') && organizationMembersManager.includes('member.role === "admin" ? "ADMIN" : "MEMBER"') && organizationMembersManager.includes('roleClasses(role)'), "Organization Members manager displays canonical OWNER/ADMIN/MEMBER roles");
+assert(organizationMembersManager.includes("searchOrganizationMemberCandidates") || organizationMembersManager.includes("member-candidates"), "Organization Members manager searches real active profile candidates");
+assert(organizationMembersManager.includes('method: "PATCH"') && organizationMembersManager.includes('method: "DELETE"') && organizationMembersManager.includes("last_admin_required"), "Organization Members manager uses real role/removal mutation states");
 assert(spaceService.includes('from("organization_members")') && spaceService.includes("organization_role") && spaceService.includes("organization_status"), "Space member responses include Organization role separately from Space access");
 assert(membersManager.includes("Organization role") && membersManager.includes("Space access") && membersManager.includes("Make Space admin") && membersManager.includes("Organization role was not changed"), "Space Members UI explicitly separates Organization role from Space access");
 assert(trackingTypes.includes('"session_started"') && trackingTypes.includes('"seek_started"') && trackingTypes.includes('"seek_completed"') && trackingTypes.includes('"playback_progress"') && trackingTypes.includes('"player_error"'), "tracking event contract includes detailed lifecycle and provider telemetry types");
