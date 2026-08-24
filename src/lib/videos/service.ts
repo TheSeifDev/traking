@@ -68,7 +68,7 @@ function firstRelation(value: unknown): Record<string, unknown> | null {
 
 type AnalyticsVideoInfo = { id: string; space_id?: string | null; title: string; source_type: Video["source_type"]; duration: number | null };
 
-function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
+export function supportsPlaybackMetrics(sourceType: Video["source_type"]): boolean {
   return sourceType === "direct_url" || sourceType === "youtube";
 }
 
@@ -84,6 +84,34 @@ const PLAYBACK_TELEMETRY_EVENTS: readonly WatchEventType[] = [
   "complete",
   "ended",
 ];
+
+export type ReliablePlaybackEventEvidence = {
+  event_type: string;
+  position: number | null;
+  duration: number | null;
+};
+
+export function isReliablePlaybackEvent(event: ReliablePlaybackEventEvidence): boolean {
+  return PLAYBACK_TELEMETRY_EVENTS.includes(event.event_type as WatchEventType)
+    && Number.isFinite(event.position)
+    && (event.position ?? -1) >= 0
+    && event.duration !== null
+    && Number.isFinite(event.duration)
+    && (event.duration ?? 0) > 0;
+}
+
+export function hasReliablePlaybackTelemetry(
+  sourceType: Video["source_type"],
+  events: ReliablePlaybackEventEvidence[],
+): boolean {
+  if (!supportsPlaybackMetrics(sourceType)) return false;
+  const hasPlaybackStart = events.some((event) =>
+    (event.event_type === "play" || event.event_type === "resume")
+    && Number.isFinite(event.position)
+    && (event.position ?? -1) >= 0,
+  );
+  return hasPlaybackStart && events.some(isReliablePlaybackEvent);
+}
 
 function isValidTelemetryEvent(event: AnalyticsEventRow): boolean {
   return PLAYBACK_TELEMETRY_EVENTS.includes(event.event_type)

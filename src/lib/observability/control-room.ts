@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { Database } from "@/src/types/database";
 import { CRON_JOB_NAME, CRON_SCHEDULE, getCronExecutionSnapshot } from "@/src/lib/health/cron-executions";
+import { hasReliablePlaybackTelemetry, type ReliablePlaybackEventEvidence } from "@/src/lib/videos/service";
 
 const MAX_ORGANIZATIONS = 500;
 const MAX_SPACES = 1000;
@@ -256,7 +257,7 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     supabase.from("watch_links").select("id, video_id, created_by, expires_at, revoked_at, created_at").order("created_at", { ascending: false }).limit(MAX_LINKS),
     supabase.from("watch_sessions").select("id, watch_link_id, viewer_profile_id, started_at, last_seen_at, ended_at, watch_time_seconds, completion_percentage").gte("started_at", startIso).lt("started_at", endIso).order("started_at", { ascending: false }).limit(MAX_SESSIONS),
     previousStartIso ? supabase.from("watch_sessions").select("id, watch_link_id, viewer_profile_id, started_at, last_seen_at, ended_at, watch_time_seconds, completion_percentage").gte("started_at", previousStartIso).lt("started_at", startIso).order("started_at", { ascending: false }).limit(MAX_SESSIONS) : Promise.resolve({ data: [], error: null }),
-    supabase.from("watch_events").select("id, session_id, received_at").gte("received_at", startIso).lt("received_at", endIso).limit(MAX_EVENTS),
+    supabase.from("watch_events").select("id, session_id, event_type, position, duration, received_at").gte("received_at", startIso).lt("received_at", endIso).limit(MAX_EVENTS),
     supabase.from("owner_logs").select("id, created_at, level, category, action, user_id, video_id, session_id, route, status, duration_ms, metadata").gte("created_at", startIso).lt("created_at", endIso).order("created_at", { ascending: false }).limit(MAX_LOGS),
     supabase.from("organization_members").select("organization_id, profile_id, role, status").neq("status", "removed").limit(MAX_USERS * 2),
     supabase.from("space_members").select("space_id, profile_id, role, status").neq("status", "removed").limit(MAX_USERS * 2),
@@ -303,9 +304,19 @@ export async function getControlRoomData(input: { range?: string | null; query?:
   const scopedVideoIds = new Set(scopedVideos.map((video) => video.id));
   const scopedSessions = sessionsView.filter((session) => scopedVideoIds.has(session.video_id));
   const scopedPreviousSessions = previousSessionsView.filter((session) => scopedVideoIds.has(session.video_id));
+  const playbackEventsBySession = new Map<string, ReliablePlaybackEventEvidence[]>();
+  for (const event of trackingEvents) {
+    const evidence: ReliablePlaybackEventEvidence = { event_type: event.event_type, position: event.position, duration: event.duration };
+    playbackEventsBySession.set(event.session_id, [...(playbackEventsBySession.get(event.session_id) ?? []), evidence]);
+  }
+  const isMeasuredSession = (session: SessionView): boolean => {
+    const video = videoById.get(session.video_id);
+    if (!video || (video.source_type !== "direct_url" && video.source_type !== "youtube")) return false;
+    return hasReliablePlaybackTelemetry(video.source_type, playbackEventsBySession.get(session.id) ?? []);
+  };
   const todayStart = rangeStart("today", now).getTime();
   const sevenDayStart = rangeStart("7d", now).getTime();
-  const measuredSessions = scopedSessions.filter((session) => session.watch_time_seconds !== null);
+  const measuredSessions = scopedSessions.filter(isMeasuredSession);
   const completionValues = measuredSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
   const totalMeasuredWatchTime = measuredSessions.length > 0 ? Math.round(measuredSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null;
   const sessionByVideo = new Map<string, SessionView[]>();
@@ -334,8 +345,8 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     if (spaceStat) { spaceStat.video_count += 1; spaceStat.active_watch_links += activeLinksForVideo; }
     for (const session of sessionByVideo.get(video.id) ?? []) {
       const targetOrg = orgStats.get(space.organization_id);
-      if (targetOrg) { targetOrg.sessions += 1; targetOrg.views += 1; if (session.watch_time_seconds !== null) { targetOrg.watch += session.watch_time_seconds; targetOrg.measured = true; targetOrg.measured_sessions += 1; } targetOrg.last = !targetOrg.last || session.last_seen_at > targetOrg.last ? session.last_seen_at : targetOrg.last; }
-      if (spaceStat) { spaceStat.sessions += 1; const viewer = session.viewer_profile_id ?? session.id; spaceStat.viewers.add(viewer); if (session.watch_time_seconds !== null) { spaceStat.watch += session.watch_time_seconds; spaceStat.measured = true; spaceStat.measured_sessions += 1; } if (session.completion_percentage !== null) spaceStat.completions.push(session.completion_percentage); spaceStat.last = !spaceStat.last || session.last_seen_at > spaceStat.last ? session.last_seen_at : spaceStat.last; }
+      if (targetOrg) { targetOrg.sessions += 1; targetOrg.views += 1; if (isMeasuredSession(session) && session.watch_time_seconds !== null) { targetOrg.watch += session.watch_time_seconds; targetOrg.measured = true; targetOrg.measured_sessions += 1; } targetOrg.last = !targetOrg.last || session.last_seen_at > targetOrg.last ? session.last_seen_at : targetOrg.last; }
+      if (spaceStat) { spaceStat.sessions += 1; const viewer = session.viewer_profile_id ?? session.id; spaceStat.viewers.add(viewer); if (isMeasuredSession(session) && session.watch_time_seconds !== null) { spaceStat.watch += session.watch_time_seconds; spaceStat.measured = true; spaceStat.measured_sessions += 1; } if (isMeasuredSession(session) && session.completion_percentage !== null) spaceStat.completions.push(session.completion_percentage); spaceStat.last = !spaceStat.last || session.last_seen_at > spaceStat.last ? session.last_seen_at : spaceStat.last; }
     }
   }
   const sessionCountForProfile = new Map<string, SessionView[]>();
@@ -346,7 +357,9 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     const completions = userSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
     const userOrgs = new Set(orgMemberships.filter((membership) => membership.profile_id === profile.id && membership.status === "active").map((membership) => membership.organization_id));
     const userSpaces = new Set(spaceMemberships.filter((membership) => membership.profile_id === profile.id && membership.status === "active").map((membership) => membership.space_id));
-    return { id: profile.id, name: profile.name, email: profile.email, clickup_user_id: profile.clickup_user_id, role: profile.role, is_active: profile.is_active, created_at: profile.created_at, last_seen_at: profile.last_seen_at, organization_count: userOrgs.size, space_count: userSpaces.size, sessions: userSessions.length, videos_watched: userVideos.size, watch_time_seconds: userSessions.length > 0 ? Math.round(userSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null, last_watched_at: userSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
+    const measuredUserSessions = userSessions.filter(isMeasuredSession);
+    const measuredCompletions = measuredUserSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
+    return { id: profile.id, name: profile.name, email: profile.email, clickup_user_id: profile.clickup_user_id, role: profile.role, is_active: profile.is_active, created_at: profile.created_at, last_seen_at: profile.last_seen_at, organization_count: userOrgs.size, space_count: userSpaces.size, sessions: userSessions.length, videos_watched: userVideos.size, watch_time_seconds: measuredUserSessions.length > 0 ? Math.round(measuredUserSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: measuredCompletions.length > 0 ? Math.round(measuredCompletions.reduce((sum, value) => sum + value, 0) / measuredCompletions.length) : null, last_watched_at: userSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
   }).filter((user) => !queryText || [user.name, user.email, user.clickup_user_id].some((value) => value?.toLocaleLowerCase().includes(queryText)));
   const videoViews = scopedVideos.map((video) => {
     const space = video.space_id ? spaceById.get(video.space_id) : null;
@@ -354,7 +367,9 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     const videoSessions = sessionByVideo.get(video.id) ?? [];
     const completions = videoSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
     const viewers = new Set(videoSessions.map((session) => session.viewer_profile_id ?? session.id));
-    return { id: video.id, title: video.title, source_type: video.source_type, organization_id: org?.id ?? "", organization_name: org?.name ?? "Unknown Organization", space_id: space?.id ?? "", space_name: space?.name ?? "Unknown Space", duration: video.duration, created_at: video.created_at, total_views: videoSessions.length, unique_viewers: viewers.size, sessions: videoSessions.length, measured_sessions: videoSessions.filter((session) => session.watch_time_seconds !== null).length, unavailable_sessions: videoSessions.filter((session) => session.watch_time_seconds === null).length, watch_time_seconds: videoSessions.length > 0 ? Math.round(videoSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: completions.length > 0 ? Math.round(completions.reduce((sum, value) => sum + value, 0) / completions.length) : null, last_activity_at: videoSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
+    const measuredVideoSessions = videoSessions.filter(isMeasuredSession);
+    const measuredCompletions = measuredVideoSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
+    return { id: video.id, title: video.title, source_type: video.source_type, organization_id: org?.id ?? "", organization_name: org?.name ?? "Unknown Organization", space_id: space?.id ?? "", space_name: space?.name ?? "Unknown Space", duration: video.duration, created_at: video.created_at, total_views: videoSessions.length, unique_viewers: viewers.size, sessions: videoSessions.length, measured_sessions: measuredVideoSessions.length, unavailable_sessions: videoSessions.length - measuredVideoSessions.length, watch_time_seconds: measuredVideoSessions.length > 0 ? Math.round(measuredVideoSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: measuredCompletions.length > 0 ? Math.round(measuredCompletions.reduce((sum, value) => sum + value, 0) / measuredCompletions.length) : null, last_activity_at: videoSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
   }).filter((video) => !queryText || [video.title, video.organization_name, video.space_name, video.id].some((value) => value.toLocaleLowerCase().includes(queryText))).sort((left, right) => right.total_views - left.total_views);
   const activity = logs.map((log) => {
     const video = log.video_id ? videoById.get(log.video_id) : null;

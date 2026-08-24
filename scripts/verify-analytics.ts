@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { buildPlaybackHeatmap, mergeWatchedRanges, reconstructWatchedRanges } from "../src/lib/analytics/ranges";
 import type { WatchEventSummary } from "../src/types/video";
 import { groupTimelineItems } from "../src/components/analytics/GroupedSessionTimeline";
+import { hasReliablePlaybackTelemetry, isReliablePlaybackEvent } from "../src/lib/videos/service";
 
 let checks = 0;
 
@@ -124,5 +125,17 @@ equal(grouped[2]?.kind, "event");
 if (grouped[2]?.kind === "event") equal(grouped[2].event.event_type, "pause");
 equal(grouped[3]?.kind, "progress");
 if (grouped[3]?.kind === "progress") equal(grouped[3].events.length, 1);
+
+const reliableEvidence = [
+  { event_type: "play", position: 0, duration: 90 },
+  { event_type: "playback_progress", position: 20, duration: 90 },
+];
+equal(isReliablePlaybackEvent(reliableEvidence[0]!), true);
+equal(hasReliablePlaybackTelemetry("youtube", reliableEvidence), true);
+equal(hasReliablePlaybackTelemetry("youtube", [
+  { event_type: "session_started", position: 0, duration: 90 },
+  { event_type: "player_error", position: 0, duration: 90 },
+]), false);
+equal(hasReliablePlaybackTelemetry("google_drive", reliableEvidence), false);
 
 console.log(`Analytics Verification: ${checks}/${checks} passed`);

@@ -158,6 +158,7 @@ const trackingRanges = source("src/lib/analytics/ranges.ts");
 const trackingServiceSource = source("src/lib/tracking/service.ts");
 const detailedTelemetryMigration = source("supabase/migrations/20260824000013_add_detailed_playback_events.sql");
 const ownerPage = source("app/owner/page.tsx");
+const controlRoom = source("src/lib/observability/control-room.ts");
 const activeSpaceRoute = source("app/api/spaces/active/route.ts");
 const activeSpaceService = source("src/lib/spaces/active-space.ts");
 const dataScope = source("src/lib/spaces/data-scope.ts");
@@ -215,6 +216,7 @@ assert(organizationDashboard.includes("getSpaceDisplayName(space)") && !organiza
 assert(organizationSpacesPage.includes("getSpaceDisplayName(space)") && !organizationSpacesPage.includes("getSafeSpaceDisplayName"), "Organization-scoped Space directory renders child names directly");
 assert(organizationDashboard.includes("Manage members") && organizationDashboard.includes("/organizations/${organization.id}/members"), "Organization dashboard Manage members action uses the real Organization Members route");
 assert(ownerPage.includes("resolveActiveSpaceForUser") && ownerPage.includes("organizations={activeSpace.organizations}") && ownerPage.includes("spaces={activeSpace.spaces}") && ownerPage.includes("activeSpaceContext={activeSpace.context}") && ownerPage.includes("activeSpaceNeedsPersistence={activeSpace.activeSpaceNeedsPersistence}"), "Owner shell receives resolved Organization, Space, and All Spaces context");
+assert(controlRoom.includes("hasReliablePlaybackTelemetry") && controlRoom.includes("isMeasuredSession") && controlRoom.includes("event_type, position, duration") && !controlRoom.includes("scopedSessions.filter((session) => session.watch_time_seconds !== null)"), "Owner Control Room uses canonical persisted playback evidence for measured state");
 
 console.log(`\n${"=".repeat(56)}`);
 console.log(`TrackUp Spaces: ${passed}/${passed + failed} tests passed`);
