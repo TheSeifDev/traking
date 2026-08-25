@@ -7,8 +7,8 @@ const IntegrationsCTA = () => {
         <div>
           <h2 className="text-base font-semibold">Ready to connect your tools?</h2>
           <p className="mt-2 text-xs text-white/50">
-            Join hundreds of teams that use TrackUp to track video engagement
-            inside their favorite tools.
+            Connect an authorized ClickUp workspace and keep provider-aware video
+            activity inside TrackUp.
           </p>
         </div>
 

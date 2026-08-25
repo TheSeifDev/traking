@@ -6,6 +6,7 @@ type IntegrationCardProps = {
   description: string;
   features: string[];
   connected?: boolean;
+  statusLabel?: string;
 };
 
 const IntegrationCard = ({
@@ -14,6 +15,7 @@ const IntegrationCard = ({
   description,
   features,
   connected = false,
+  statusLabel,
 }: IntegrationCardProps) => {
   return (
     <div className="group rounded-xl border border-white/9 bg-white/1.5 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[#7040ff]/30 hover:bg-[#5424ff]/[0.035]">
@@ -40,7 +42,7 @@ const IntegrationCard = ({
             : "border-white/10 text-white/60"
         }`}
       >
-        {connected ? "●  Connected" : "◌  Connect"}
+        {connected ? "●  Connected" : `◌  ${statusLabel ?? "Provider-dependent"}`}
       </div>
     </div>
   );

@@ -78,11 +78,13 @@ export default function User360Dashboard({ data, backHref, analyticsScopeQuery =
           </div>
           {data.videos.length === 0 ? <div className="rounded-3xl border border-dashed border-white/12 p-10 text-center text-sm text-white/40">No persisted video activity in this authorized scope.</div> : (
             <div className="grid gap-4 lg:grid-cols-2">
-              {data.videos.map((video) => (
+              {data.videos.map((video) => {
+                const videoAnalyticsScope = analyticsScopeQuery || `?organization_id=${encodeURIComponent(video.organization_id)}`;
+                return (
                 <article key={video.video_id} className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><h3 className="break-words text-base font-semibold text-white">{video.video_title}</h3><p className="mt-1 break-all text-xs text-white/40">Organization {video.organization_id} · Space {video.space_id}</p></div>
-                    <Link href={`/analytics/videos/${video.video_id}/viewers/${data.profile.id}${analyticsScopeQuery}`} className="shrink-0 text-xs text-violet-200 hover:text-violet-100">Open detail →</Link>
+                    <Link href={`/analytics/videos/${video.video_id}/viewers/${data.profile.id}${videoAnalyticsScope}`} className="shrink-0 text-xs text-violet-200 hover:text-violet-100">Open detail →</Link>
                   </div>
                   <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Detail label="Watch time" value={secondsLabel(video.total_watch_time_seconds)} />
@@ -94,7 +96,8 @@ export default function User360Dashboard({ data, backHref, analyticsScopeQuery =
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/7 pt-4 text-xs text-white/45"><span>Pauses {video.pauses}</span><span>Resumes {video.resumes}</span><span>Seeks {video.seeks}</span><span>Speed changes {video.speed_changes}</span><span>Speeds {video.speed_values.length > 0 ? video.speed_values.map((value) => `${value}x`).join(", ") : "Not available from provider"}</span><span>Final speed {video.final_playback_rate === null ? "Not available" : `${video.final_playback_rate}x`}</span><span>Buffering {video.buffering_events}</span><span>Visibility {video.visibility_changes}</span></div>
                   <p className="mt-4 text-xs text-white/35">Watched ranges: {video.heatmap_availability === "measured" ? `${video.watched_ranges.length} reconstructed` : video.heatmap_availability === "not_available_from_provider" ? "Not available from provider" : "Unavailable or insufficient data"} · First watched {dateLabel(video.first_watched_at)} · Last watched {dateLabel(video.last_watched_at)}</p>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

@@ -1,10 +1,10 @@
 import { Clock3, Lock, Target, Users } from "lucide-react";
 
 const benefits = [
-  { icon: Target, title: "Know What Works", description: "See which videos engage your audience and which parts matter most." },
-  { icon: Clock3, title: "Save Time", description: "Automate tracking and reporting so you can focus on creating better content." },
-  { icon: Users, title: "Improve Learning", description: "Understand how your team learns and optimize training effectiveness." },
-  { icon: Lock, title: "Secure & Private", description: "Your data is encrypted and always protected. We respect your privacy." },
+  { icon: Target, title: "Know What Works", description: "See which videos receive views and where measurable playback evidence exists." },
+  { icon: Clock3, title: "Save Time", description: "Keep viewing activity and scoped reporting in one workspace instead of chasing manual updates." },
+  { icon: Users, title: "Improve Learning", description: "Use observed viewing activity to identify where follow-up or clarification may be useful." },
+  { icon: Lock, title: "Secure & Private", description: "Signed sessions and server-side scope checks protect access, while provider telemetry stays within its real limits." },
 ];
 
 const WhyItMatters = () => {

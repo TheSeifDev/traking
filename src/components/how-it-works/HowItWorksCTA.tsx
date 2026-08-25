@@ -14,7 +14,7 @@ const HowItWorksCTA = () => {
           <div>
             <h2 className="text-xl font-bold md:text-2xl">Ready to See It in Action?</h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
-              Join hundreds of teams already using TrackUp to track, understand, and improve with confidence.
+              Start with your ClickUp account and use TrackUp&apos;s provider-aware viewer links and measured activity where supported.
             </p>
           </div>
 
@@ -27,9 +27,9 @@ const HowItWorksCTA = () => {
               Continue with ClickUp
             </Link>
 
-            <Link href="#" className="flex items-center gap-2 text-xs font-medium text-white/70 transition-colors hover:text-white">
+            <Link href="/features" className="flex items-center gap-2 text-xs font-medium text-white/70 transition-colors hover:text-white">
               <Play size={14} />
-              Watch Demo
+              Explore capabilities
             </Link>
           </div>
         </div>

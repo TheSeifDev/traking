@@ -3,9 +3,9 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle, Play, Eye, CheckCircle2 } from "lucide-react";
 
 const heroFeatures = [
-  "Full Video Tracking",
+  "Scoped Viewer Links",
   "ClickUp Integration",
-  "Real Engagement Data",
+  "Provider-Aware Analytics",
 ];
 
 const Hero = () => {
@@ -49,9 +49,9 @@ const Hero = () => {
 
           {/* Description */}
           <p className="mt-7 max-w-162.5 text-base leading-7 text-white/65 sm:text-lg">
-            Track exactly who watched your videos, when they watched them,
-            how many times, and which parts they viewed — all connected
-            with ClickUp.
+            Track real viewing sessions with ClickUp-connected access and
+            provider-aware playback evidence, while unsupported metrics stay
+            explicitly unavailable.
           </p>
 
           {/* Features */}
@@ -142,8 +142,8 @@ const Hero = () => {
                   <Eye size={16} className="text-[#a68bff]" />
                 </span>
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-white">2,481 views</p>
-                  <p className="text-xs text-white/50">this week</p>
+                  <p className="text-sm font-semibold text-white">Illustrative preview</p>
+                  <p className="text-xs text-white/50">not live telemetry</p>
                 </div>
               </div>
 
@@ -156,8 +156,8 @@ const Hero = () => {
                   <CheckCircle2 size={16} className="text-emerald-400" />
                 </span>
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-white">Synced to ClickUp</p>
-                  <p className="text-xs text-white/50">task #482 updated</p>
+                  <p className="text-sm font-semibold text-white">Provider-aware</p>
+                  <p className="text-xs text-white/50">capability state visible</p>
                 </div>
               </div>
             </div>

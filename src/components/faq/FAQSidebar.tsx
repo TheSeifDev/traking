@@ -18,7 +18,7 @@ const FAQSidebar = () => {
         </h2>
 
         <p className="mt-3 text-sm leading-6 text-white/55">
-          Our support team is ready to help you get the most out of TrackUp.
+          Use the support resources and product guidance to get the most out of TrackUp.
         </p>
 
         <Link
@@ -39,8 +39,7 @@ const FAQSidebar = () => {
         </h2>
 
         <p className="mt-4 max-w-47.5 text-sm leading-6 text-white/50">
-          Join hundreds of teams who use TrackUp to understand video
-          engagement and improve learning outcomes.
+          See how TrackUp brings viewer links, provider-aware measurement, and scoped engagement evidence together.
         </p>
 
         {/* Image - Fixed and enlarged */}

@@ -23,8 +23,7 @@ const FAQCTA = () => {
                 </span>
               </h2>
               <p className="mt-2 max-w-xl text-sm text-white/55">
-                Join hundreds of teams who trust TrackUp to understand their
-                video engagement.
+                Review how TrackUp handles viewer links, provider capabilities, and measured video engagement.
               </p>
             </div>
           </div>

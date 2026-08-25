@@ -19,28 +19,28 @@ export const faqItems: FAQItem[] = [
     id: 1,
     question: "What is TrackUp?",
     answer:
-      "TrackUp is a video tracking and analytics platform that helps teams understand how their videos are watched. You can see who watched, when, how much, and which parts they viewed — all connected with ClickUp.",
+      "TrackUp is a ClickUp-connected video access and analytics application. It provides scoped viewer links, persisted viewer sessions, and workspace, video, viewer, and session views based on the evidence stored by the current provider integration.",
     category: "Getting Started",
   },
   {
     id: 2,
     question: "How does video tracking work?",
     answer:
-      "TrackUp records video engagement data so you can understand viewing behavior, completion rates, watch time, and which parts of a video receive the most attention.",
+      "TrackUp records server-created viewer sessions and provider playback events. Playhead position, duration, watch time, completion, and watched ranges appear only when the provider exposes reliable telemetry and the corresponding events are persisted; otherwise the UI marks the metric unavailable.",
     category: "Tracking",
   },
   {
     id: 3,
     question: "Which video sources are supported?",
     answer:
-      "You can share videos from supported platforms such as YouTube, Google Drive, Telegram, or upload your own video files.",
+      "The current provider registry supports YouTube, Vimeo, browser-playable direct media URLs, Google Drive, and Telegram. Google Drive and Telegram are session-only in the current implementation, and TrackUp does not claim upload support.",
     category: "Tracking",
   },
   {
     id: 4,
     question: "How does ClickUp integration work?",
     answer:
-      "Connect your ClickUp workspace and link videos to tasks. Track learning progress and engagement directly alongside your team's workflow.",
+      "ClickUp OAuth connects the authorized workspace identity to TrackUp. The current app supports workspace discovery and authorized task operations; video access and provider-aware playback evidence remain inside TrackUp’s scoped surfaces.",
     category: "ClickUp Integration",
   },
   {
@@ -54,7 +54,7 @@ export const faqItems: FAQItem[] = [
     id: 6,
     question: "How accurate is the tracking data?",
     answer:
-      "TrackUp is designed to provide detailed engagement information, including watch time, viewing frequency, completion, and the specific parts of a video that were watched.",
+      "Accuracy is evidence-dependent. TrackUp reports persisted sessions and events, while watch time, completion, position, and ranges are shown only for provider sessions with sufficient reliable telemetry. It does not infer playback from a page open or session record alone.",
     category: "Tracking",
   },
   {
@@ -68,7 +68,7 @@ export const faqItems: FAQItem[] = [
     id: 8,
     question: "What kind of analytics will I get?",
     answer:
-      "You can analyze watch time, completion rates, viewer activity, engagement patterns, and other video performance metrics.",
+      "You can review persisted workspace, video, viewer, and session activity, including event timelines and measured watch/completion fields where the provider contract and stored telemetry qualify them. Unsupported values remain explicitly unavailable.",
     category: "Tracking",
   },
   {
@@ -82,28 +82,28 @@ export const faqItems: FAQItem[] = [
     id: 10,
     question: "What happens if someone watches a video multiple times?",
     answer:
-      "Repeated viewing is tracked as engagement activity, allowing you to understand how frequently viewers return to specific content.",
+      "Each authorized viewing visit can produce its own persisted session. Session counts and lifecycle activity can be reviewed, while detailed playback metrics for each visit still depend on the provider’s available telemetry.",
     category: "Tracking",
   },
   {
     id: 11,
     question: "Can I use TrackUp on mobile devices?",
     answer:
-      "TrackUp is designed to provide a responsive experience across desktop and mobile devices.",
+      "The TrackUp application uses responsive layouts across desktop and mobile-sized screens. Actual embedded-provider playback and telemetry can still vary by provider, browser, device, and provider environment.",
     category: "Getting Started",
   },
   {
     id: 12,
     question: "How is pricing determined?",
     answer:
-      "Pricing depends on the plan and the features available for your workspace. Check the latest pricing information before subscribing.",
+      "The current repository does not expose a public pricing page or subscription workflow. Contact the project maintainers for deployment-specific commercial terms before using TrackUp in a paid arrangement.",
     category: "Billing",
   },
   {
     id: 13,
     question: "Can I cancel my plan anytime?",
     answer:
-      "Yes. You can manage your subscription and cancellation from your account settings.",
+      "Subscription management and cancellation are not implemented in the current TrackUp application. Use the project support path for deployment-specific account or commercial questions.",
     category: "Billing",
   },
 ];

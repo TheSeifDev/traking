@@ -24,8 +24,8 @@ const timeline = [
 
 const sources = [
   { icon: YoutubeIcon, title: "YouTube", description: "Add any public or unlisted YouTube video." },
-  { icon: Cloud, title: "Google Drive", description: "Add videos from your Drive instantly." },
-  { icon: Send, title: "Telegram", description: "Track videos shared in your Telegram channels." },
+  { icon: Cloud, title: "Google Drive", description: "Add a Drive source for scoped, session-level viewing records." },
+  { icon: Send, title: "Telegram", description: "Add a supported Telegram source for session-level access records." },
   { icon: Play, title: "Direct media URL", description: "Use a browser-playable media URL with native HTML5 telemetry." },
 ];
 
@@ -100,7 +100,7 @@ const DetailedWorkflow = () => {
                     <ShieldCheck size={17} className="text-[#9c6cff]" />
                   </div>
                   <p className="text-[11px] leading-5 text-white/50">
-                    We support a wide range of video formats and ensure secure tracking without compromising visibility.
+                    TrackUp stores source metadata and enforces server-side access checks. Detailed playback telemetry remains provider-dependent.
                   </p>
                 </div>
               </div>

@@ -33,8 +33,8 @@ const FeaturedIntegration = () => {
               <div className="mt-5 space-y-3">
                 {[
                   "Link videos to ClickUp tasks",
-                  "Auto-sync task assignments",
-                  "Track progress directly in ClickUp",
+                  "Search and connect authorized tasks",
+                  "Review provider-aware progress in TrackUp",
                   "Save time and stay aligned",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-xs text-white/65">
@@ -52,18 +52,20 @@ const FeaturedIntegration = () => {
                   Connect with ClickUp
                 </Link>
 
-                <button
-                  type="button"
+                <Link
+                  href="/how-it-works"
                   className="flex h-10 items-center gap-2 rounded-lg border border-white/15 px-4 text-xs text-white/75 transition hover:bg-white/5"
                 >
                   <Play size={13} />
                   Learn More
-                </button>
+                </Link>
               </div>
             </div>
 
             {/* Right visual */}
-            <div className="grid items-center gap-3 md:grid-cols-[1fr_60px_1fr]">
+            <div className="min-w-0">
+              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-violet-200/55">Illustrative UI · values are examples, not live workspace telemetry</p>
+              <div className="grid items-center gap-3 md:grid-cols-[1fr_60px_1fr]">
               <div className="rounded-xl border border-white/10 bg-[#050817] p-5">
                 <div className="flex items-center gap-2 text-xs font-medium">
                   <span className="text-[#ff66c4]">◆</span>
@@ -125,9 +127,10 @@ const FeaturedIntegration = () => {
                   </div>
                 </div>
 
-                <button type="button" className="mt-5 h-8 w-full rounded-md bg-[#4120b8] text-[10px]">
-                  View Full Analytics
-                </button>
+                <Link href="/features" className="mt-5 flex h-8 w-full items-center justify-center rounded-md bg-[#4120b8] text-[10px] transition hover:bg-[#5430d8]">
+                  View Feature Details
+                </Link>
+              </div>
               </div>
             </div>
           </div>

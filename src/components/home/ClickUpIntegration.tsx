@@ -19,8 +19,8 @@ const ClickUpWordmark = () => (
 
 const benefits = [
   "Connect your workspace",
-  "Link videos to tasks",
-  "Track real engagement",
+  "Keep video links in workspace context",
+  "Review measured engagement where supported",
 ];
 
 const ClickUpIntegration = () => {
@@ -69,9 +69,9 @@ const ClickUpIntegration = () => {
 
           {/* Description */}
           <p className="mt-4 max-w-170 text-[15px] leading-6 text-white/65">
-            Enhance your ClickUp workspace with intelligent video tracking.
-            Assign videos, track progress, and make sure knowledge really
-            sticks.
+            Enhance your ClickUp workspace with provider-aware video tracking.
+            Share internal viewer links, keep access scoped, and review real
+            engagement evidence where the source supports measurement.
           </p>
 
           {/* Benefits */}
