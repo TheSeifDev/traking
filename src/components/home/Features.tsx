@@ -84,24 +84,25 @@ const statusCopy: Record<FeatureItem["status"], { label: string; className: stri
   roadmap: { label: "Not implemented", className: "text-white/40" },
 };
 
-export default function Features({ showIntegration = true }: { showIntegration?: boolean }) {
+export default function Features({ showIntegration = true, compact = false }: { showIntegration?: boolean; compact?: boolean }) {
   return (
-    <section id="features" className="relative px-6 py-10 sm:py-14 lg:px-10 lg:py-16">
+    <section id="features" className={`relative px-5 sm:px-6 lg:px-10 ${compact ? "pb-8 pt-10 sm:pb-12 sm:pt-14 lg:pb-16 lg:pt-16" : "py-10 sm:py-14 lg:py-16"}`}>
       <div className="mx-auto max-w-[90rem]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {compact && <div className="mx-auto mb-8 max-w-2xl text-center"><p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-violet-300/75">Powerful features</p><h2 className="mt-3 text-2xl font-semibold tracking-[-0.045em] text-white sm:text-3xl">Everything you need to <span className="bg-linear-to-r from-[#b83cff] via-[#8065ff] to-[#4ca8ff] bg-clip-text text-transparent">track, understand,</span> and improve.</h2><p className="mx-auto mt-3 max-w-xl text-xs leading-5 text-white/45 sm:text-sm">Provider-aware tracking, ClickUp-connected access, and scoped analytics in one focused workspace.</p></div>}
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${compact ? "lg:grid-cols-4" : "lg:grid-cols-4"}`}>
           {features.map(({ title, description, icon: Icon, iconClass, bullets, status }) => {
             const statusInfo = statusCopy[status];
             return (
-              <article key={title} className="group flex min-h-[18rem] flex-col rounded-2xl border border-[#252652] bg-[#0a0c25]/85 p-5 text-left shadow-[0_20px_70px_rgba(0,0,0,0.18)] backdrop-blur-sm transition duration-200 hover:-translate-y-1 hover:border-violet-400/45 hover:bg-[#0d1030] hover:shadow-[0_24px_80px_rgba(79,55,220,0.16)] sm:p-5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-400/25 bg-linear-to-br from-violet-500/20 to-indigo-500/10 shadow-[0_0_28px_rgba(105,65,255,0.14)]">
+              <article key={title} className={`group flex flex-col rounded-xl border border-[#252652] bg-[#0a0c25]/85 text-left shadow-[0_20px_70px_rgba(0,0,0,0.18)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:border-violet-400/45 hover:bg-[#0d1030] hover:shadow-[0_24px_80px_rgba(79,55,220,0.16)] ${compact ? "min-h-[15.5rem] p-4" : "min-h-[18rem] p-5 sm:p-5"}`}>
+                <div className={`flex items-center justify-center rounded-xl border border-violet-400/25 bg-linear-to-br from-violet-500/20 to-indigo-500/10 shadow-[0_0_28px_rgba(105,65,255,0.14)] ${compact ? "size-10" : "h-12 w-12 rounded-2xl"}`}>
                   {Icon === "clickup" ? <ClickUpIcon size={27} /> : <Icon size={26} strokeWidth={1.8} className={iconClass} />}
                 </div>
-                <h2 className="mt-5 text-[15px] font-semibold leading-5 text-white">{title}</h2>
-                <p className="mt-2 text-xs leading-5 text-white/55">{description}</p>
-                <ul className="mt-4 space-y-2 border-t border-white/7 pt-4">
-                  {bullets.map((bullet) => <li key={bullet} className="flex items-start gap-2 text-[11px] leading-4 text-white/55"><CheckCircle2 size={13} className="mt-0.5 shrink-0 text-violet-300" />{bullet}</li>)}
+                <h2 className={`${compact ? "mt-4 text-[13px]" : "mt-5 text-[15px]"} font-semibold leading-5 text-white`}>{title}</h2>
+                <p className={`${compact ? "mt-2 text-[10px] leading-4" : "mt-2 text-xs leading-5"} text-white/55`}>{description}</p>
+                <ul className={`${compact ? "mt-3 space-y-1.5 pt-3" : "mt-4 space-y-2 pt-4"} border-t border-white/7`}>
+                  {bullets.map((bullet) => <li key={bullet} className={`flex items-start gap-2 text-white/55 ${compact ? "text-[10px] leading-3.5" : "text-[11px] leading-4"}`}><CheckCircle2 size={compact ? 11 : 13} className="mt-0.5 shrink-0 text-violet-300" />{bullet}</li>)}
                 </ul>
-                <p className={`mt-auto pt-4 text-[10px] font-medium ${statusInfo.className}`}>{statusInfo.label}</p>
+                <p className={`mt-auto text-[10px] font-medium ${compact ? "pt-3" : "pt-4"} ${statusInfo.className}`}>{statusInfo.label}</p>
               </article>
             );
           })}
