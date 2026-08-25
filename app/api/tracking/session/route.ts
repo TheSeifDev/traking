@@ -29,7 +29,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const session = await createWatchSession(resolved.watch_link_id, user.id, request.headers.get("user-agent"));
+  const session = await createWatchSession(
+    resolved.watch_link_id,
+    user.id,
+    request.headers.get("user-agent"),
+    request.headers.get("referer"),
+  );
   if (!session) return NextResponse.json({ error: "session_creation_failed" }, { status: 500 });
 
   return NextResponse.json(

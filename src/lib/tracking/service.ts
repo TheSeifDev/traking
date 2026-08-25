@@ -9,13 +9,25 @@
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type { TrackingEventPayload, TrackingEventType } from "@/src/types/tracking";
-import type { VideoSourceType } from "@/src/types/video";
+import { isValidSourceType, type VideoSourceType, type WatchEventSummary } from "@/src/types/video";
+import { buildPlaybackHeatmap } from "@/src/lib/analytics/ranges";
+import { providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
 import { writeOwnerLog } from "@/src/lib/observability/logger";
 
 export interface ViewerClientMetadata {
   device_type: string | null;
   browser: string | null;
   os: string | null;
+}
+
+function safeReferrerOrigin(referrer: string | null): string | null {
+  if (!referrer) return null;
+  try {
+    const parsed = new URL(referrer);
+    return parsed.origin.slice(0, 200);
+  } catch {
+    return null;
+  }
 }
 
 export function deriveViewerClientMetadata(userAgent: string | null): ViewerClientMetadata {
@@ -101,6 +113,7 @@ export async function createWatchSession(
   watchLinkId: string,
   viewerIdentity: string,
   userAgent: string | null = null,
+  referrer: string | null = null,
 ): Promise<{ id: string; sessionToken: string } | null> {
   try {
     const supabase = createAdminClient();
@@ -125,6 +138,7 @@ export async function createWatchSession(
 
     const viewerIdentifier = await hashViewerIdentity(viewerIdentity);
     const viewerMetadata = deriveViewerClientMetadata(userAgent);
+    const referrerOrigin = safeReferrerOrigin(referrer);
 
     const { data, error } = await supabase
       .from("watch_sessions")
@@ -161,7 +175,7 @@ export async function createWatchSession(
       client_event_id: `session-start:${data.id}`,
       sequence_number: 0,
       occurred_at: data.started_at,
-      metadata: { source: "server", lifecycle: "session_started" },
+      metadata: { source: "server", lifecycle: "session_started", referrer_origin: referrerOrigin },
     }, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
     if (lifecycleEventError) {
       void writeOwnerLog({
@@ -206,6 +220,39 @@ async function hashViewerIdentity(viewerIdentity: string): Promise<string> {
     .slice(0, 8)
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export interface TrustedSessionMetricsInput {
+  sourceType: VideoSourceType;
+  duration: number | null;
+  events: WatchEventSummary[];
+}
+
+export interface TrustedSessionMetrics {
+  watchTimeSeconds: number;
+  completionPercentage: number;
+  measured: boolean;
+}
+
+/**
+ * Derives final session metrics from the events that are actually persisted.
+ * Client-reported final values may only lower the completion value; they cannot
+ * create measured watch time or completion without provider-backed evidence.
+ */
+export function deriveTrustedSessionMetrics(input: TrustedSessionMetricsInput): TrustedSessionMetrics {
+  const heatmap = buildPlaybackHeatmap(input.events, input.duration, providerSupportsDetailedTelemetry(input.sourceType));
+  if (!heatmap.available) return { watchTimeSeconds: 0, completionPercentage: 0, measured: false };
+
+  const uniqueWatchedSeconds = heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0);
+  const maximumReachedPosition = heatmap.ranges.reduce((max, range) => Math.max(max, range.end), 0);
+  const evidenceCompletion = input.duration && input.duration > 0
+    ? Math.min(100, Math.max(0, (maximumReachedPosition / input.duration) * 100))
+    : 0;
+  return {
+    watchTimeSeconds: Math.round(uniqueWatchedSeconds),
+    completionPercentage: Math.round(evidenceCompletion),
+    measured: true,
+  };
 }
 
 export async function getTrackingSessionSpaceId(sessionId: string, viewerIdentity: string): Promise<string | null> {
@@ -401,12 +448,25 @@ export async function endWatchSession(
     const supabase = createAdminClient();
     const { data: existingSession, error: existingSessionError } = await supabase
       .from("watch_sessions")
-      .select("id, viewer_identifier, viewer_profile_id, ended_at")
+      .select("id, watch_link_id, viewer_identifier, viewer_profile_id, ended_at")
       .eq("id", sessionId)
       .eq("session_token", sessionToken)
       .maybeSingle();
     if (existingSessionError || !existingSession || existingSession.viewer_profile_id !== viewerIdentity || existingSession.viewer_identifier !== await hashViewerIdentity(viewerIdentity)) return false;
     if (existingSession.ended_at) return true;
+
+    const { data: link, error: linkError } = await supabase
+      .from("watch_links")
+      .select("video_id")
+      .eq("id", existingSession.watch_link_id)
+      .maybeSingle();
+    if (linkError || !link) return false;
+    const { data: video, error: videoError } = await supabase
+      .from("videos")
+      .select("source_type, duration")
+      .eq("id", link.video_id)
+      .maybeSingle();
+    if (videoError || !video || !isValidSourceType(video.source_type)) return false;
 
     const finalEventId = finalEvent.client_event_id ?? `session-end:${sessionId}`;
     const finalSequence = finalEvent.sequence_number ?? null;
@@ -438,13 +498,31 @@ export async function endWatchSession(
     const { error: eventError } = await supabase.from("watch_events").upsert(lifecycleRows, { onConflict: "session_id,client_event_id", ignoreDuplicates: true });
     if (eventError) return false;
 
+    const { data: persistedEvents, error: persistedEventsError } = await supabase
+      .from("watch_events")
+      .select("id, event_type, position, from_position, duration, sequence_number, occurred_at, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(1000);
+    if (persistedEventsError) return false;
+    const persistedEventSummaries = (persistedEvents ?? []) as WatchEventSummary[];
+    const persistedDuration = persistedEventSummaries.reduce<number | null>((maximum, event) => {
+      if (typeof event.duration !== "number" || !Number.isFinite(event.duration) || event.duration <= 0) return maximum;
+      return maximum === null ? event.duration : Math.max(maximum, event.duration);
+    }, typeof video.duration === "number" && video.duration > 0 ? video.duration : null);
+    const trustedMetrics = deriveTrustedSessionMetrics({
+      sourceType: video.source_type,
+      duration: persistedDuration,
+      events: persistedEventSummaries,
+    });
+
     const { data, error } = await supabase
       .from("watch_sessions")
       .update({
         ended_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
-        watch_time_seconds: Math.round(watchTimeSeconds),
-        completion_percentage: Math.min(100, Math.max(0, completionPercentage)),
+        watch_time_seconds: trustedMetrics.watchTimeSeconds,
+        completion_percentage: trustedMetrics.completionPercentage,
       })
       .eq("id", sessionId)
       .eq("session_token", sessionToken)

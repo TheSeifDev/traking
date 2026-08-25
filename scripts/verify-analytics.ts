@@ -3,6 +3,7 @@ import { buildPlaybackHeatmap, mergeWatchedRanges, reconstructWatchedRanges } fr
 import type { WatchEventSummary } from "../src/types/video";
 import { groupTimelineItems } from "../src/components/analytics/GroupedSessionTimeline";
 import { hasReliablePlaybackTelemetry, isReliablePlaybackEvent } from "../src/lib/videos/service";
+import { deriveTrustedSessionMetrics } from "../src/lib/tracking/service";
 import { getProviderAdapter, providerSupportsDetailedTelemetry } from "../src/lib/playback/providers";
 import { UniversalTrackingEngine } from "../src/lib/playback/tracking-engine";
 
@@ -139,6 +140,10 @@ equal(hasReliablePlaybackTelemetry("youtube", [
   { event_type: "player_error", position: 0, duration: 90 },
 ]), false);
 equal(hasReliablePlaybackTelemetry("google_drive", reliableEvidence), false);
+const trustedYoutube = deriveTrustedSessionMetrics({ sourceType: "youtube", duration: 120, events: realisticPlayback });
+deepEqual(trustedYoutube, { watchTimeSeconds: 65, completionPercentage: 92, measured: true });
+const trustedUnsupported = deriveTrustedSessionMetrics({ sourceType: "google_drive", duration: 120, events: realisticPlayback });
+deepEqual(trustedUnsupported, { watchTimeSeconds: 0, completionPercentage: 0, measured: false });
 
 equal(providerSupportsDetailedTelemetry("direct_url"), true);
 equal(providerSupportsDetailedTelemetry("youtube"), true);
@@ -173,6 +178,8 @@ async function runEngineChecks(): Promise<void> {
   deepEqual(engineEvents, ["play", "playback_progress", "pause", "seek_started", "seek_completed", "playback_progress", "complete"]);
   equal(endArguments.completed, true);
   assert.ok(endArguments.watchTimeSeconds >= 0);
+  await engine.handle({ type: "play", snapshot: { position: 0, duration: 120 } });
+  equal(ensureSessionCalls, 2);
 }
 
 runEngineChecks()

@@ -126,7 +126,7 @@ const trackingEnd = source("app/api/tracking/session/[sessionId]/end/route.ts");
 const providerError = source("app/api/tracking/provider-error/route.ts");
 const trackingService = source("src/lib/tracking/service.ts");
 assert(watchPage.includes("getCurrentUser") && watchPage.includes("authorizeSpaceMember") && watchPage.includes("if (!resolved.space_id)"), "watch page requires authenticated Space membership before player render");
-assert(trackingSession.includes("authorizeSpaceMember(resolved.space_id, user)") && trackingSession.includes("createWatchSession(resolved.watch_link_id, user.id"), "session creation adds Space auth without replacing profile identity");
+assert(trackingSession.includes("authorizeSpaceMember(resolved.space_id, user)") && trackingSession.includes("createWatchSession(") && trackingSession.includes("resolved.watch_link_id") && trackingSession.includes("user.id"), "session creation adds Space auth without replacing profile identity");
 assert(trackingEvent.includes("getTrackingSessionSpaceId(sessionId, user.id)") && trackingEvent.includes("recordTrackingEvents") && trackingEvent.includes("user.id"), "event ingestion preserves exact authenticated profile binding");
 assert(trackingEnd.includes("getTrackingSessionSpaceId(sessionId, user.id)") && trackingEnd.includes("endWatchSession(sessionId, sessionToken, user.id"), "session end preserves capability and profile checks");
 assert(providerError.includes("getTrackingSessionSpaceId(sessionId, user.id)") && providerError.includes("recordProviderError"), "provider-error path is also Space-scoped");

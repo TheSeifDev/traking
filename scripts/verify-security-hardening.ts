@@ -69,7 +69,7 @@ async function runTests(): Promise<void> {
   assert(capabilityMigration.includes("gen_random_bytes(32)"), "existing watch sessions receive random backfill tokens");
   assert(capabilityMigration.includes("ALTER COLUMN session_token SET NOT NULL"), "session token is mandatory after backfill");
   assert(capabilityMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token"), "session token has a unique index");
-  assert(sessionRoute.includes("withAuth") && sessionRoute.includes("createWatchSession(resolved.watch_link_id, user.id"), "session creation requires an authenticated TrackUp profile");
+  assert(sessionRoute.includes("withAuth") && sessionRoute.includes("createWatchSession(") && sessionRoute.includes("resolved.watch_link_id") && sessionRoute.includes("user.id"), "session creation requires an authenticated TrackUp profile");
   assert(sessionRoute.includes("session_token: session.sessionToken"), "session creation route returns the private capability");
   assert(eventRoute.includes("withAuth") && eventRoute.includes("recordTrackingEvents(\n    sessionId") && eventRoute.includes("user.id"), "event route requires the authenticated TrackUp profile");
   assert(eventRoute.includes("missing_session_token") && eventRoute.includes("const sessionToken") && eventRoute.includes("recordTrackingEvents"), "event route requires and forwards the capability");
