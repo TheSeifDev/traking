@@ -6,7 +6,7 @@ type FinalCTAProps = {
   description?: string;
 };
 
-const FinalCTA = ({ title = "Start Tracking Smarter Today", description = "Turn passive watching into measurable, actionable progress." }: FinalCTAProps) => {
+const FinalCTA = ({ title = "Start Tracking Smarter Today", description = "Turn authorized viewing activity into provider-aware evidence where measurement is supported." }: FinalCTAProps) => {
   return (
     <section className="relative px-4 py-12 sm:px-6 lg:px-8">
       <div className="relative mx-auto max-w-[75rem] overflow-hidden rounded-[24px] border border-[#40388a] bg-[#0d0d32]/80 px-6 py-7 shadow-[0_0_80px_rgba(70,50,220,0.08)] sm:px-8 lg:px-10">

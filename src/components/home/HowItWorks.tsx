@@ -29,9 +29,9 @@ const steps: Step[] = [
     title: "Add & Share Videos",
     description: (
       <>
-        Send YouTube, Drive, Telegram or
+        Add YouTube, Vimeo, or direct media,
         <br className="hidden sm:block" />
-        upload your own videos.
+        plus supported Drive and Telegram sources.
       </>
     ),
     type: "play",

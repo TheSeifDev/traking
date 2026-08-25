@@ -2,7 +2,7 @@ import { BarChart3, CheckCircle2, Grid2X2, Link2 } from "lucide-react";
 
 const steps = [
   { icon: Grid2X2, title: "Connect your tools", description: "Link the platforms you already use." },
-  { icon: Link2, title: "Sync your content", description: "Bring your videos and tasks together in TrackUp." },
+  { icon: Link2, title: "Connect your content", description: "Bring video sources and authorized task context into TrackUp." },
   { icon: BarChart3, title: "Track & analyze", description: "Review persisted activity and provider-backed metrics." },
   { icon: CheckCircle2, title: "Improve & grow", description: "Use data to make smarter decisions and grow faster." },
 ];
