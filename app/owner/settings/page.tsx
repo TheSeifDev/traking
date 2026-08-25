@@ -1,8 +1,9 @@
-/** /owner/settings – owner only (guard inherited from owner layout) */
-export default async function OwnerSettingsPage() {
-  return (
-    <main>
-      <h1>Owner – System Settings</h1>
-    </main>
-  );
+import { redirect } from "next/navigation";
+
+/**
+ * Compatibility route: TrackUp keeps one canonical settings surface.
+ * The parent /owner layout enforces the owner-only boundary before redirecting.
+ */
+export default function OwnerSettingsPage() {
+  redirect("/settings");
 }

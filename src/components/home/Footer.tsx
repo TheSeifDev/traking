@@ -15,16 +15,16 @@ const footerColumns = [
   {
     title: "Product",
     links: [
-      { label: "Features", href: "features" },
-      { label: "Integrations", href: "integrations" },
-      { label: "How It Works", href: "how-it-works" },
+      { label: "Features", href: "/features" },
+      { label: "Integrations", href: "/integrations" },
+      { label: "How It Works", href: "/how-it-works" },
     ],
   },
   {
     title: "Legal",
     links: [
-      { label: "Privacy Policy", href: "privacy" },
-      { label: "Terms of Service", href: "#terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
     ],
   },
 ];

@@ -15,5 +15,5 @@ export default async function SpaceUserPage({ params }: PageProps) {
     notFound();
   }
   if (!data) notFound();
-  return <User360Dashboard data={data} backHref={`/spaces/${spaceId}/members`} />;
+  return <User360Dashboard data={data} backHref={`/spaces/${spaceId}/members`} analyticsScopeQuery={`?space_id=${encodeURIComponent(spaceId)}`} />;
 }

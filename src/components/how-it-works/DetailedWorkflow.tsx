@@ -5,7 +5,6 @@ import {
   Play,
   Send,
   ShieldCheck,
-  Upload,
   Users,
 } from "lucide-react";
 
@@ -19,7 +18,7 @@ const YoutubeIcon = ({ size = 24, ...props }: { size?: number } & React.SVGProps
 const timeline = [
   { icon: Link2, title: "Add Video", description: "Import videos from multiple sources." },
   { icon: Users, title: "Share & Assign", description: "Generate tracking links or assign to ClickUp tasks." },
-  { icon: Play, title: "Track in Real-time", description: "We capture every play, pause, seek, and view." },
+  { icon: Play, title: "Track playback evidence", description: "Supported players report play, pause, seek, progress, and lifecycle events when available." },
   { icon: BarChart3, title: "Analyze & Improve", description: "Get powerful insights and optimize your content." },
 ];
 
@@ -27,7 +26,7 @@ const sources = [
   { icon: YoutubeIcon, title: "YouTube", description: "Add any public or unlisted YouTube video." },
   { icon: Cloud, title: "Google Drive", description: "Add videos from your Drive instantly." },
   { icon: Send, title: "Telegram", description: "Track videos shared in your Telegram channels." },
-  { icon: Upload, title: "Upload Video", description: "Upload your video files and host securely." },
+  { icon: Play, title: "Direct media URL", description: "Use a browser-playable media URL with native HTML5 telemetry." },
 ];
 
 const DetailedWorkflow = () => {

@@ -18,7 +18,7 @@ function secondsLabel(value: number | null): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
-export default function User360Dashboard({ data, backHref }: { data: User360Data; backHref: string }) {
+export default function User360Dashboard({ data, backHref, analyticsScopeQuery = "" }: { data: User360Data; backHref: string; analyticsScopeQuery?: string }) {
   return (
     <div className="min-h-full bg-[#08081f] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-[1200px] space-y-7">
@@ -82,7 +82,7 @@ export default function User360Dashboard({ data, backHref }: { data: User360Data
                 <article key={video.video_id} className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><h3 className="break-words text-base font-semibold text-white">{video.video_title}</h3><p className="mt-1 break-all text-xs text-white/40">Organization {video.organization_id} · Space {video.space_id}</p></div>
-                    <Link href={`/analytics/videos/${video.video_id}/viewers/${data.profile.id}`} className="shrink-0 text-xs text-violet-200 hover:text-violet-100">Open detail →</Link>
+                    <Link href={`/analytics/videos/${video.video_id}/viewers/${data.profile.id}${analyticsScopeQuery}`} className="shrink-0 text-xs text-violet-200 hover:text-violet-100">Open detail →</Link>
                   </div>
                   <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Detail label="Watch time" value={secondsLabel(video.total_watch_time_seconds)} />

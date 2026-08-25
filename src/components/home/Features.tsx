@@ -11,7 +11,7 @@ const features: {
   {
     title: "Precise Video Tracking",
     description:
-      "Know exactly who watched what, when, how many times and which parts — with second-level accuracy.",
+      "See who watched, when a session started, and the playback evidence available for each supported provider — without overstating what the source can prove.",
     icon: PlaySquare,
     iconClass: "text-[#6366ff]",
   },
@@ -24,7 +24,7 @@ const features: {
   {
     title: "Powerful Analytics",
     description:
-      "Get clear insights with beautiful charts, heatmaps and engagement metrics.",
+      "Get clear insights from persisted sessions and provider-backed playback telemetry, with coverage shown only when the data is sufficient.",
     icon: BarChart3,
     iconClass: "text-[#6366ff]",
   },

@@ -35,6 +35,7 @@ const navItems = [
 ];
 
 const ownerNavItem = { label: "Owner console", href: "/owner", icon: ShieldCheck };
+const ownerTeamNavItem = { label: "Team members", href: "/owner/admins", icon: UsersRound };
 
 export default function DashboardShell({
   children,
@@ -87,7 +88,7 @@ export default function DashboardShell({
     ...(organizationMembersNavItem ? [organizationMembersNavItem] : []),
     ...navItems.slice(2),
     ...(spaceMembersNavItem ? [spaceMembersNavItem] : []),
-    ...(user.role === "owner" ? [ownerNavItem] : []),
+    ...(user.role === "owner" ? [ownerNavItem, ownerTeamNavItem] : []),
   ];
 
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function DashboardShell({
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     if (href === "/spaces") return selectedOrganizationId ? `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}` : href;
-    if (!selectedSpaceId && activeSpaceContext.type === "all" && selectedOrganizationId && ["/dashboard", "/videos", "/analytics", "/watch-links"].includes(href)) {
+    if (!selectedSpaceId && activeSpaceContext.type === "all" && selectedOrganizationId && ["/dashboard", "/videos", "/analytics", "/watch-links", "/settings"].includes(href)) {
       return `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}`;
     }
     if (!selectedSpaceId) return href;

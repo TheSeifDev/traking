@@ -17,5 +17,5 @@ export default async function OrganizationMemberProfilePage({ params }: PageProp
     notFound();
   }
   if (!data) notFound();
-  return <User360Dashboard data={data} backHref={`/organizations/${encodeURIComponent(organizationId)}/members`} />;
+  return <User360Dashboard data={data} backHref={`/organizations/${encodeURIComponent(organizationId)}/members`} analyticsScopeQuery={`?organization_id=${encodeURIComponent(organizationId)}`} />;
 }

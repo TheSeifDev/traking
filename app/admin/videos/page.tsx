@@ -1,8 +1,9 @@
-/** /admin/videos – admin + owner (guard inherited from admin layout) */
-export default async function AdminVideosPage() {
-  return (
-    <main>
-      <h1>Admin – Videos</h1>
-    </main>
-  );
+import { redirect } from "next/navigation";
+
+/**
+ * Compatibility route: Videos has one canonical dashboard library.
+ * The parent /admin layout still enforces authenticated admin/owner access.
+ */
+export default function AdminVideosPage() {
+  redirect("/videos");
 }

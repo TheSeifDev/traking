@@ -41,10 +41,10 @@ const steps: Step[] = [
     title: "Track & Analyze",
     description: (
       <>
-        See exactly who watched, when, how
+        See who watched and when, then review
         <br className="hidden sm:block" />
-        much and which parts — with detailed
-        insights.
+        the playback evidence each provider
+        can reliably expose.
       </>
     ),
     type: "analytics",
