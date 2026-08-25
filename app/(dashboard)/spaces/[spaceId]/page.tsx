@@ -24,7 +24,7 @@ export default async function SpaceDashboardPage({ params }: PageContext) {
 
   const [videos, analytics] = await Promise.all([
     listVideos(scope),
-    canManage ? getWorkspaceAnalytics(scope) : Promise.resolve(null),
+      canManage ? getWorkspaceAnalytics(scope, undefined, undefined, false) : Promise.resolve(null),
   ]);
   if (!access.space) notFound();
   return <SpaceDashboard organization={access.organization} space={{ ...access.space, membership_role: access.membership?.role ?? null, membership_status: access.membership?.status ?? null, is_platform_owner: access.is_platform_owner }} analytics={analytics} videoCount={videos.length} canManage={canManage} />;

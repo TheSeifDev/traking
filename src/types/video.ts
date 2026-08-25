@@ -236,6 +236,8 @@ export interface ViewerSessionAnalytics {
   ended_at: string | null;
   watch_time_seconds: number | null;
   completion_percentage: number | null;
+  /** Latest persisted event type retained for bounded overview projections. */
+  last_event_type?: WatchEventType | null;
   playback_events: WatchEventSummary[];
   last_position: number | null;
   last_duration: number | null;

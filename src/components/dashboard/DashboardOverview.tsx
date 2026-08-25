@@ -86,14 +86,14 @@ function telemetryNote(measured: number, total: number): string {
 }
 
 function actionLabel(session: ViewerSessionAnalytics): string {
-  const latest = session.playback_events[session.playback_events.length - 1];
-  if (!latest) return "Opened viewer";
-  if (latest.event_type === "complete") return "Completed video";
-  if (latest.event_type === "ended") return "Left viewer";
-  if (latest.event_type === "resume") return "Resumed playback";
-  if (latest.event_type === "pause") return "Paused playback";
-  if (latest.event_type === "seek") return "Seeked playback";
-  if (latest.event_type === "heartbeat") return "Watched video";
+  const latestEventType = session.last_event_type ?? session.playback_events[session.playback_events.length - 1]?.event_type;
+  if (!latestEventType) return "Opened viewer";
+  if (latestEventType === "complete") return "Completed video";
+  if (latestEventType === "ended") return "Left viewer";
+  if (latestEventType === "resume") return "Resumed playback";
+  if (latestEventType === "pause") return "Paused playback";
+  if (latestEventType === "seek" || latestEventType === "seek_completed") return "Seeked playback";
+  if (latestEventType === "heartbeat" || latestEventType === "playback_progress") return "Watched video";
   return "Started playback";
 }
 
@@ -260,7 +260,7 @@ function VideoThumb({ video, compact = false }: { video: Video; compact?: boolea
 }
 
 function ActivityRow({ session, now }: { session: ViewerSessionAnalytics; now: number }) {
-  const event = session.playback_events[session.playback_events.length - 1];
+  const event = session.last_event_type ?? session.playback_events[session.playback_events.length - 1]?.event_type;
   const action = actionLabel(session);
   const viewerName = session.viewer_name?.trim() || session.viewer_email?.trim() || (session.viewer_status === "identified" ? "Authenticated viewer" : "Legacy viewer");
   const viewerId = session.viewer_profile_id ?? session.viewer_identifier ?? "—";

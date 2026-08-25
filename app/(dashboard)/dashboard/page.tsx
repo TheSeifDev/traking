@@ -47,7 +47,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     let error: string | null = null;
     try {
       const [loadedAnalytics, loadedVideos] = await Promise.all([
-        getWorkspaceAnalytics(scope),
+        getWorkspaceAnalytics(scope, undefined, undefined, false),
         listVideos(scope),
       ]);
       analytics = loadedAnalytics;

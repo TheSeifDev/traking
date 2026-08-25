@@ -292,6 +292,7 @@ function buildViewerSessionAnalytics(
         ended_at: session.ended_at,
         watch_time_seconds: hasPlaybackTelemetry ? Math.max(0, heatmap.available ? Math.round(heatmap.ranges.reduce((sum, range) => sum + Math.max(0, range.end - range.start), 0)) : Number(session.watch_time_seconds ?? 0)) : null,
         completion_percentage: reachedPercentage,
+        last_event_type: playbackEvents[playbackEvents.length - 1]?.event_type ?? null,
         playback_events: playbackEvents,
         last_position: hasPlaybackTelemetry ? lastPosition : null,
         last_duration: hasPlaybackTelemetry ? lastDuration : null,
@@ -412,7 +413,15 @@ export async function getVideo(videoId: string, scope: VideoDataScope): Promise<
       .select(`
         *,
         video_clickup_tasks(*),
-        watch_links(id, token, created_by, expires_at, revoked_at, created_at)
+        watch_links(
+          id,
+          token,
+          created_by,
+          expires_at,
+          revoked_at,
+          created_at,
+          watch_sessions(id, viewer_identifier, viewer_profile_id, started_at, last_seen_at, completion_percentage)
+        )
       `)
       .eq("id", videoId)
       .eq("workspace_id", scope.workspaceId);
@@ -430,14 +439,43 @@ export async function getVideo(videoId: string, scope: VideoDataScope): Promise<
 
     if (error || !data) return null;
 
+    const rawWatchLinks = (data.watch_links ?? []) as Array<{
+      id: string;
+      token: string;
+      created_by: string | null;
+      expires_at: string | null;
+      revoked_at: string | null;
+      created_at: string;
+      watch_sessions?: Array<{
+        id: string;
+        viewer_identifier: string | null;
+        viewer_profile_id: string | null;
+        started_at: string;
+        last_seen_at: string;
+        completion_percentage: number | null;
+      }>;
+    }>;
+
     return {
       ...data,
       source_type: data.source_type as Video["source_type"],
       clickup_tasks: data.video_clickup_tasks,
-      watch_links: data.watch_links?.map((wl: { id: string; token: string; created_by: string | null; expires_at: string | null; revoked_at: string | null; created_at: string }) => ({
-        ...wl,
-        video_id: data.id,
-      })),
+      watch_links: rawWatchLinks.map(({ watch_sessions: linkSessions = [], ...link }) => {
+        const orderedSessions = [...linkSessions].sort(
+          (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
+        );
+        const lastSession = [...linkSessions].sort(
+          (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
+        )[0];
+        return {
+          ...link,
+          video_id: data.id,
+          session_count: linkSessions.length,
+          unique_viewer_count: new Set(linkSessions.map((session) => session.viewer_profile_id ?? session.viewer_identifier ?? session.id)).size,
+          first_opened_at: orderedSessions[0]?.started_at ?? null,
+          last_accessed_at: lastSession?.last_seen_at ?? null,
+        };
+      }),
     };
   } catch {
     return null;
@@ -845,7 +883,7 @@ export async function associateClickUpTask(
 /**
  * Workspace-level analytics summary.
  */
-export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerProfileId?: string, period?: AnalyticsPeriod): Promise<WorkspaceAnalytics> {
+export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerProfileId?: string, period?: AnalyticsPeriod, includePlaybackEvents = true): Promise<WorkspaceAnalytics> {
   const empty: WorkspaceAnalytics = {
     total_videos: 0,
     total_views: 0,
@@ -1005,6 +1043,9 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
       videoSummaries.set(video.id, summary);
     }
 
+    const overviewSessions = includePlaybackEvents
+      ? viewerSessions
+      : viewerSessions.map((session) => ({ ...session, playback_events: [] }));
     const summaries = Array.from(videoSummaries.values());
     const topVideosByViews = summaries
       .slice()
@@ -1029,9 +1070,9 @@ export async function getWorkspaceAnalytics(scope: AnalyticsDataScope, viewerPro
       activity_over_time: Array.from(activityByDate.values()).sort((a, b) => a.date.localeCompare(b.date)),
       top_videos_by_views: topVideosByViews,
       top_videos_by_watch_time: topVideosByWatchTime,
-      recent_activity: viewerSessions.slice(0, 10),
-      viewer_sessions: viewerSessions,
-      viewers: buildViewerSummaries(viewerSessions),
+      recent_activity: overviewSessions.slice(0, 10),
+      viewer_sessions: overviewSessions,
+      viewers: buildViewerSummaries(overviewSessions),
       telemetry_health: {
         measured_sessions: viewerSessions.filter((session) => session.telemetry_state === "measured").length,
         missing_sessions: viewerSessions.filter((session) => session.telemetry_state === "missing").length,
