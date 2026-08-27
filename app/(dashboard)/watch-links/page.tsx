@@ -24,7 +24,7 @@ export default async function WatchLinksPage({ searchParams }: PageProps) {
     const scope = organizationDataScope(organization);
     if (!scope) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} spaceCanManage={false} />;
     const videos = await listVideos(scope);
-    return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} organizationId={organization.id} spaceCanManage={false} />;
+    return <WatchLinksManager videos={videos} role={user.role} appOrigin={getAppUrl()} hasWorkspace={true} spaceId={null} organizationId={organization.id} spaceCanManage={user.role === "owner"} />;
   }
 
   if (!resolution.access) return <WatchLinksManager videos={[]} role={user.role} appOrigin={getAppUrl()} hasWorkspace={false} />;

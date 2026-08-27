@@ -18,12 +18,28 @@ export default async function VideosPage({ searchParams }: PageProps) {
   if (resolution.requiresSelection) redirect("/spaces?error=select_space");
 
   if (resolution.context.type === "all") {
-    if (!resolution.organization) redirect("/spaces?error=forbidden");
-    return <VideoList role={user.role} organizationId={resolution.organization.id} spaceId={null} spaceCanManage={false} />;
+    const organization = resolution.organization;
+    if (!organization) redirect("/spaces?error=forbidden");
+    return <VideoList
+      role={user.role}
+      organizationId={organization.id}
+      spaceId={null}
+      scopeOptions={resolution.spaces.filter((space) => space.organization_id === organization.id).map((space) => ({ id: space.id, name: space.name }))}
+      spaceCanManage={user.role === "owner"}
+      allowAllSpaces={user.role === "owner"}
+    />;
   }
 
   const access = resolution.access;
-  const spaceId = resolution.space?.id ?? null;
+  const space = resolution.space;
+  const spaceId = space?.id ?? null;
   const spaceCanManage = Boolean(access?.is_platform_owner || access?.membership?.role === "admin");
-  return <VideoList role={user.role} spaceId={spaceId} spaceCanManage={spaceCanManage} />;
+  return <VideoList
+    role={user.role}
+    organizationId={space?.organization_id ?? null}
+    spaceId={spaceId}
+    scopeOptions={space ? [{ id: space.id, name: space.name }] : []}
+    spaceCanManage={spaceCanManage}
+    allowAllSpaces={user.role === "owner"}
+  />;
 }

@@ -6,11 +6,12 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withDashboardAuth } from "@/src/lib/auth/api-handler";
-import { resolveSpaceAdminForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
+import { resolveMutationScopeForUser, resolveSpaceForUser } from "@/src/lib/spaces/access";
 import { authorizeAllSpacesForUser } from "@/src/lib/spaces/active-space";
 import { organizationDataScope, spaceDataScope } from "@/src/lib/spaces/data-scope";
 import { getWorkspaceAnalytics, listVideos, createVideo } from "@/src/lib/videos/service";
 import { isValidSourceType, type Video, type WorkspaceAnalytics } from "@/src/types/video";
+import { isValidSourceUrl } from "@/src/lib/playback/providers";
 
 function addLibraryAnalytics(videos: Video[], viewerSessions: WorkspaceAnalytics["viewer_sessions"], analyticsAvailable: boolean): Video[] {
   const byVideo = new Map<string, { viewers: Set<string>; measured: number; watchTime: number; completions: number[] }>();
@@ -112,21 +113,31 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   const duration = typeof input.duration === "number" ? input.duration : null;
   if (!title || title.length > 255) return NextResponse.json({ error: "invalid_title" }, { status: 400 });
   if (!isValidSourceType(source_type)) return NextResponse.json({ error: "invalid_source_type" }, { status: 400 });
-  if (!source_url) return NextResponse.json({ error: "invalid_source_url" }, { status: 400 });
+  if (!source_url || !isValidSourceUrl(source_type, source_url)) return NextResponse.json({ error: "invalid_source_url" }, { status: 400 });
 
   try {
-    const access = await resolveSpaceAdminForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const video = await createVideo(access.space.clickup_workspace_id, user.id, {
+    const scope = await resolveMutationScopeForUser(request, user);
+    const video = await createVideo(scope.workspaceId, user.id, {
       title,
       description,
       source_type,
       source_url,
       duration,
-    }, access.space.id);
+    }, scope.spaceId ?? undefined);
     if (!video) return NextResponse.json({ error: "create_failed" }, { status: 500 });
-    return NextResponse.json({ video, space: { id: access.space.id, name: access.space.name } }, { status: 201 });
-  } catch {
+    return NextResponse.json({
+      video,
+      scope: {
+        organization_id: scope.organizationId,
+        space_id: scope.spaceId,
+        is_all_spaces: scope.spaceId === null,
+      },
+    }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
+      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    }
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });

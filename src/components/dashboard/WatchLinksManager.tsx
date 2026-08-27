@@ -143,10 +143,16 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Manage one private TrackUp viewer link per video. Session counts are recorded views; playback metrics remain Not measured unless valid provider telemetry is stored.</p>
           </div>
-          <Link href={scopedQuery ? `/videos${scopedQuery}` : "/videos"} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:w-auto">
-            Open video library
-            <ArrowUpRight size={15} />
-          </Link>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {canManage && <Link href={scopedQuery ? `/videos${scopedQuery}` : "/videos"} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(124,58,237,0.22)] transition hover:bg-violet-400 active:scale-[0.98] sm:w-auto">
+              <Link2 size={15} />
+              Create watch link
+            </Link>}
+            <Link href={scopedQuery ? `/videos${scopedQuery}` : "/videos"} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:w-auto">
+              Open video library
+              <ArrowUpRight size={15} />
+            </Link>
+          </div>
         </header>
 
         <section aria-label="Watch link summary" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/9 md:grid-cols-4">
@@ -159,7 +165,7 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
         {!hasWorkspace ? (
           <EmptyState title="Connect a ClickUp workspace" description="Connect a workspace before managing viewer access." icon={Link2} />
         ) : videos.length === 0 ? (
-          <EmptyState title="Your watch links will appear here" description="Add a video first, then create a secure TrackUp viewer link for it." icon={VideoIcon} actionHref={scopedQuery ? `/videos${scopedQuery}` : "/videos"} actionLabel="Open video library" />
+          <EmptyState title="Your watch links will appear here" description="Add a video first, then create a secure TrackUp viewer link for it. The flow is Video → Watch Link → Viewer → Tracking → Analytics." icon={VideoIcon} actionHref={scopedQuery ? `/videos${scopedQuery}` : "/videos"} actionLabel={canManage ? "Create watch link from a video" : "Open video library"} />
         ) : (
           <>
             <section aria-label="Watch link filters" className="rounded-2xl border border-white/9 bg-white/[0.03] p-4 sm:p-5">
@@ -232,7 +238,7 @@ function VideoAccessCard({ video, now, canManage, appOrigin, spaceId, organizati
         </div>
 
         <div className="mt-5 min-w-0">
-            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} spaceId={effectiveSpaceId} detailsHref={scopedQuery ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} onLinksChange={onLinksChange} />
+            <WatchLinkPanel videoId={video.id} existingLinks={links} canManage={canManage} appOrigin={appOrigin} spaceId={effectiveSpaceId} organizationId={organizationId} detailsHref={scopedQuery ? `/videos/${video.id}${scopedQuery}` : `/videos/${video.id}`} onLinksChange={onLinksChange} />
         </div>
       </div>
     </article>

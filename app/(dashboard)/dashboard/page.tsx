@@ -56,7 +56,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     } catch {
       error = "workspace_data_unavailable";
     }
-    return <DashboardOverview user={{ name: user.name, email: user.email, role: user.role }} analytics={analytics} videos={videos} error={error} spaceId={null} organizationId={organization.id} scopeType="all" canManage={false} />;
+    return <DashboardOverview user={{ name: user.name, email: user.email, role: user.role }} analytics={analytics} videos={videos} error={error} spaceId={null} organizationId={organization.id} scopeType="all" canManage={user.role === "owner"} />;
   }
 
   const space = resolution.space;

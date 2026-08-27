@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withDashboardAuth } from "@/src/lib/auth/api-handler";
-import { resolveSpaceAdminForUser } from "@/src/lib/spaces/access";
+import { resolveMutationScopeForUser } from "@/src/lib/spaces/access";
 import { generateWatchLink, revokeWatchLink } from "@/src/lib/videos/service";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,12 +14,22 @@ export const POST = withDashboardAuth(async (request: NextRequest, user, context
   const { id } = await (context as RouteContext).params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
-    const access = await resolveSpaceAdminForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const link = await generateWatchLink(id, access.space.clickup_workspace_id, user.id, access.space.id);
+    const scope = await resolveMutationScopeForUser(request, user);
+    const link = await generateWatchLink(id, scope.workspaceId, user.id, scope.spaceId ?? undefined);
     if (!link) return NextResponse.json({ error: "generation_failed" }, { status: 500 });
-    return NextResponse.json({ watch_link: link, space: { id: access.space.id, name: access.space.name } }, { status: link.reused ? 200 : 201 });
-  } catch {
+    return NextResponse.json({
+      watch_link: link,
+      scope: {
+        organization_id: scope.organizationId,
+        space_id: scope.spaceId,
+        is_all_spaces: scope.spaceId === null,
+      },
+    }, { status: link.reused ? 200 : 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
+      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    }
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });
@@ -37,12 +47,15 @@ export const DELETE = withDashboardAuth(async (request: NextRequest, user, conte
   const linkId = (body as Record<string, unknown>).link_id;
   if (typeof linkId !== "string" || !linkId.trim()) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   try {
-    const access = await resolveSpaceAdminForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const revoked = await revokeWatchLink(linkId.trim(), id, access.space.clickup_workspace_id, access.space.id);
+    const scope = await resolveMutationScopeForUser(request, user);
+    const revoked = await revokeWatchLink(linkId.trim(), id, scope.workspaceId, scope.spaceId ?? undefined);
     if (!revoked) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ revoked: true });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
+      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    }
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });

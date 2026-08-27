@@ -119,6 +119,19 @@ export function getGoogleDriveId(sourceUrl: string): string | null {
   }
 }
 
+export function isValidSourceUrl(sourceType: VideoSourceType, sourceUrl: string): boolean {
+  try {
+    const parsed = new URL(sourceUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (sourceType === "youtube") return getYouTubeId(sourceUrl) !== null;
+    if (sourceType === "vimeo") return getVimeoId(sourceUrl) !== null;
+    if (sourceType === "google_drive") return getGoogleDriveId(sourceUrl) !== null;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const ADAPTERS: Record<VideoSourceType, ProviderAdapter> = {
   youtube: {
     source_type: "youtube",

@@ -333,6 +333,62 @@ export async function resolveSpaceAdminForUser(request: Request, user: Authentic
   return authorizeSpaceAdmin(fallbackSpaceId, user);
 }
 
+export type MutationScope = {
+  workspaceId: string;
+  organizationId: string;
+  spaceId: string | null;
+  isPlatformOwner: boolean;
+};
+
+/**
+ * Resolves the authorized mutation scope from a request.
+ * Supports explicit space_id or organization_id (for virtual All Spaces).
+ */
+export async function resolveMutationScopeForUser(request: Request, user: AuthenticatedUser): Promise<MutationScope> {
+  const url = new URL(request.url);
+  const spaceId = url.searchParams.get("space_id")?.trim() || url.searchParams.get("spaceId")?.trim() || null;
+  const organizationId = url.searchParams.get("organization_id")?.trim() || url.searchParams.get("organizationId")?.trim() || null;
+
+  if (spaceId) {
+    const access = await authorizeSpaceAdmin(spaceId, user);
+    if (organizationId && access.space.organization_id !== organizationId) throw denied("Organization and Space scope mismatch");
+    if (!access.space.clickup_workspace_id) throw denied("Space not connected to ClickUp");
+    return {
+      workspaceId: access.space.clickup_workspace_id,
+      organizationId: access.space.organization_id,
+      spaceId: access.space.id,
+      isPlatformOwner: access.is_platform_owner,
+    };
+  }
+
+  if (organizationId && isOwner(user.role)) {
+    const access = await authorizeOrganizationAdmin(organizationId, user);
+    if (!access.organization.clickup_workspace_id) throw denied("Organization not connected to ClickUp");
+    return {
+      workspaceId: access.organization.clickup_workspace_id,
+      organizationId: access.organization.id,
+      spaceId: null,
+      isPlatformOwner: true,
+    };
+  }
+
+  // Fallback to single accessible space if no explicit scope provided
+  const fallbackSpaceId = await getSingleAccessibleSpaceId(user);
+  if (fallbackSpaceId) {
+    const access = await authorizeSpaceAdmin(fallbackSpaceId, user);
+    if (access.space.clickup_workspace_id) {
+      return {
+        workspaceId: access.space.clickup_workspace_id,
+        organizationId: access.space.organization_id,
+        spaceId: access.space.id,
+        isPlatformOwner: access.is_platform_owner,
+      };
+    }
+  }
+
+  throw denied("Authorized scope selection required");
+}
+
 export function isSpaceRole(value: unknown): value is SpaceRole {
   return value === "admin" || value === "member";
 }
