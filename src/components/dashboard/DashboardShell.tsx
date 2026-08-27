@@ -55,6 +55,13 @@ export default function DashboardShell({
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
   const requestedOrganizationId = searchParams.get("organization_id");
+  const isOrganizationScopedResourceRoute = pathname === "/dashboard"
+    || pathname.startsWith("/videos")
+    || pathname.startsWith("/analytics")
+    || pathname.startsWith("/watch-links")
+    || pathname === "/settings"
+    || pathname.startsWith("/owner/admins");
+  const requestedAllSpaces = Boolean(requestedOrganizationId && isOrganizationScopedResourceRoute && !routeSpace);
   const selectedOrganizationId = routeSpace?.organization_id
     ?? (activeOrganizationId && organizations.some((organization) => organization.id === activeOrganizationId) ? activeOrganizationId : null)
     ?? (requestedOrganizationId && organizations.some((organization) => organization.id === requestedOrganizationId) ? requestedOrganizationId : organizations[0]?.id ?? "");
@@ -73,7 +80,7 @@ export default function DashboardShell({
   const persistedSpace = selectableSpaces.find((space) => space.id === activeSpaceId) ?? null;
   const selectedSpace = routeSpace && routeSpace.organization_id === selectedOrganizationId
     ? routeSpace
-    : persistedSpace;
+    : requestedAllSpaces ? null : persistedSpace;
   const selectedSpaceId = selectedSpace?.id ?? "";
   const canManageActiveSpace = Boolean(selectedSpace?.is_platform_owner || selectedSpace?.membership_role === "admin");
   const organizationMembersNavItem = selectedOrganizationId
@@ -93,10 +100,13 @@ export default function DashboardShell({
 
   useEffect(() => {
     const routeSpaceNeedsPersistence = Boolean(routeSpace && routeSpace.id !== activeSpaceId);
-    if (!routeSpaceNeedsPersistence && !activeSpaceNeedsPersistence && !activeSpacePreferenceInvalid) return;
-    const request = routeSpaceNeedsPersistence && routeSpace
-      ? { scope: "specific", space_id: routeSpace.id }
-      : activeSpaceContext.type === "all" && activeOrganizationId
+    const requestedAllSpacesNeedsPersistence = Boolean(requestedAllSpaces && (activeSpaceContext.type !== "all" || activeOrganizationId !== requestedOrganizationId));
+    if (!routeSpaceNeedsPersistence && !requestedAllSpacesNeedsPersistence && !activeSpaceNeedsPersistence && !activeSpacePreferenceInvalid) return;
+    const request = requestedAllSpacesNeedsPersistence && requestedOrganizationId
+      ? { scope: "all", organization_id: requestedOrganizationId }
+      : routeSpaceNeedsPersistence && routeSpace
+        ? { scope: "specific", space_id: routeSpace.id }
+        : activeSpaceContext.type === "all" && activeOrganizationId
         ? { scope: "all", organization_id: activeOrganizationId }
         : activeSpaceId
           ? { scope: "specific", space_id: activeSpaceId }
@@ -110,7 +120,7 @@ export default function DashboardShell({
     } else {
       void fetch("/api/spaces/active", { method: "DELETE" });
     }
-  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, routeSpace]);
+  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, requestedAllSpaces, requestedOrganizationId, routeSpace]);
 
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
@@ -131,9 +141,11 @@ export default function DashboardShell({
 
   const organizationContext = selectedOrganization?.name ?? workspace?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
-  const displayedSpaceContext = selectedSpace
-    ? (spaceContext ?? selectedSpace.name)
-    : activeSpaceContext.type === "all"
+  const displayedSpaceContext = requestedAllSpaces
+    ? "All Spaces"
+    : selectedSpace
+      ? (spaceContext ?? selectedSpace.name)
+      : activeSpaceContext.type === "all"
       ? "All Spaces"
       : selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space";
 
