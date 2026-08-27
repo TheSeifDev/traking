@@ -32,8 +32,8 @@ function LoginRequired({ token }: { token: string }) {
   const loginUrl = `/login?redirect=${encodeURIComponent(returnPath)}`;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#070720] px-5 py-12 text-white">
-      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl shadow-black/20 sm:p-9">
+    <main className="flex min-h-screen items-center justify-center bg-[#08081f] px-5 py-12 text-white">
+      <section className="w-full max-w-md rounded-3xl border border-white/9 bg-white/[0.03] p-7 text-center shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-9">
         <Image src="/logo.webp" alt="TrackUp" width={44} height={44} priority className="mx-auto h-11 w-11 object-contain" />
         <p className="mt-6 text-xs uppercase tracking-[0.18em] text-violet-300/70">Private viewer</p>
         <h1 className="mt-2 text-2xl font-semibold">Sign in to watch this video</h1>
@@ -42,7 +42,7 @@ function LoginRequired({ token }: { token: string }) {
         </p>
         <a
           href={loginUrl}
-          className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+          className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400"
         >
           Continue with ClickUp
         </a>
@@ -71,17 +71,17 @@ export default async function WatchPage({ params }: Props) {
   const hasPlaybackTelemetry = provider.capabilities.detailed_tracking;
 
   return (
-    <main className="min-h-screen bg-[#070720] px-4 py-8 text-white sm:px-6 lg:py-12">
+    <main className="min-h-screen bg-[#08081f] px-4 py-8 text-white sm:px-6 lg:py-12">
       <div className="mx-auto w-full max-w-5xl">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <Image src="/logo.webp" alt="TrackUp" width={40} height={40} priority className="h-8 w-8 object-contain" />
             <span className="text-sm font-semibold tracking-wide text-white/85">TrackUp</span>
           </div>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-white/40">Private viewer</span>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.16em] text-white/40">Private viewer</span>
         </header>
 
-        <section className="rounded-3xl border border-white/8 bg-white/[0.03] p-4 shadow-2xl shadow-black/20 sm:p-6 lg:p-8">
+        <section className="rounded-3xl border border-white/9 bg-white/[0.03] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-6 lg:p-8">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0"><p className="text-xs uppercase tracking-[0.18em] text-violet-300/70">Shared video</p><h1 className="mt-2 truncate text-xl font-semibold text-white sm:text-2xl">{resolved.title}</h1></div>
             <span className="w-fit rounded-full border border-violet-400/15 bg-violet-500/10 px-2.5 py-1 text-xs capitalize text-violet-200">{sourceLabel}</span>

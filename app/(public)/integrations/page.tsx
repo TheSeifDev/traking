@@ -10,7 +10,7 @@ import IntegrationsCTA from "@/src/components/integrations/IntegrationsCTA";
 
 export default function IntegrationsPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050617] text-white">
+    <main className="min-h-screen overflow-hidden bg-[#08081f] text-white">
       <ResponsiveNav />
 
       <IntegrationsHero />

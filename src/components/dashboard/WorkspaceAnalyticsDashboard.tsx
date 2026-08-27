@@ -25,6 +25,7 @@ import {
 import ViewerAnalyticsPanel from "@/src/components/dashboard/ViewerAnalyticsPanel";
 import type { Video, ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
 import { getProviderLabel } from "@/src/lib/playback/providers";
+import { TrackUpContent, TrackUpPageShell, TrackUpSurface } from "@/src/components/ui/trackup";
 
 interface WorkspaceAnalyticsDashboardProps {
   analytics: WorkspaceAnalytics;
@@ -161,8 +162,10 @@ export default function WorkspaceAnalyticsDashboard({
   ];
 
   return (
-    <div className="space-y-6">
-        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-linear-to-br from-violet-500/12 via-white/[0.03] to-blue-500/8 p-6 lg:flex-row lg:items-end lg:justify-between">
+    <TrackUpPageShell>
+      <TrackUpContent>
+        <div className="space-y-6">
+        <TrackUpSurface className="flex flex-col gap-4 bg-linear-to-br from-violet-500/12 via-white/[0.03] to-blue-500/8 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-violet-200/70"><BarChart3 size={14} /> {scopeType === "all" ? "Organization intelligence" : "Workspace intelligence"}</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Analytics</h1>
@@ -187,7 +190,7 @@ export default function WorkspaceAnalyticsDashboard({
             </div>
           </div>
         </div>
-      </div>
+        </TrackUpSurface>
 
       <nav className="flex flex-wrap gap-2 border-b border-white/8 pb-3" aria-label="Analytics sections">
         {tabs.map(({ id, label, icon: Icon }) => (
@@ -242,7 +245,9 @@ export default function WorkspaceAnalyticsDashboard({
           <div className="grid gap-6 xl:grid-cols-2"><TopVideosCard spaceId={spaceId} organizationId={organizationId} title="Top videos by views" videos={topByViews} value={(video) => `${video.total_views} views`} max={maxViews} color="violet" /><TopVideosCard spaceId={spaceId} organizationId={organizationId} title="Top videos by measured watch time" videos={topByWatchTime} value={(video) => formatDuration(video.measurable_watch_time_seconds)} max={maxWatchTime} color="emerald" /></div>
         </div>
       )}
-    </div>
+        </div>
+      </TrackUpContent>
+    </TrackUpPageShell>
   );
 }
 

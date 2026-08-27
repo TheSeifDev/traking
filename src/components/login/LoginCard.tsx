@@ -8,23 +8,23 @@ type LoginCardProps = {
 };
 
 const LoginCard = ({ authHref = "/api/auth/clickup" }: LoginCardProps) => (
-  <div className="relative isolate w-full max-w-md overflow-hidden rounded-[24px] border border-violet-500/65 px-5 py-6 shadow-[0_0_0_4px_rgba(124,58,237,0.06),0_0_56px_rgba(88,28,255,0.3)] ring-1 ring-violet-300/15 backdrop-blur-2xl sm:px-7 sm:py-8 xl:px-8 xl:py-9">
+  <div className="relative isolate w-full max-w-md overflow-hidden rounded-3xl border border-white/9 bg-white/[0.03] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] ring-1 ring-violet-300/10 backdrop-blur-2xl sm:px-7 sm:py-8 xl:px-8 xl:py-9">
     {/* Card depth and ambient glow */}
-    <div className="pointer-events-none absolute inset-1 rounded-[20px] border border-white/5" />
+    <div className="pointer-events-none absolute inset-1 rounded-[22px] border border-white/5" />
     <div className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-violet-600/15 blur-[80px]" />
     <div className="pointer-events-none absolute -bottom-24 left-12 h-40 w-72 rounded-full bg-blue-700/8 blur-[85px]" />
 
     <div className="relative z-10">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fuchsia-400">
+      <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-300/75">
         <Settings aria-hidden="true" className="size-4" strokeWidth={2.4} />
         <span>Step 1 of 2</span>
       </p>
 
-      <h2 className="mt-3 text-xl font-bold tracking-tight text-white sm:text-2xl">
+      <h2 className="mt-3 text-xl font-semibold tracking-tight text-white sm:text-2xl">
         Continue with ClickUp
       </h2>
 
-      <p className="mt-2 max-w-md text-xs leading-6 text-white/65 sm:text-sm">
+      <p className="mt-2 max-w-md text-xs leading-6 text-white/45 sm:text-sm">
         You&apos;ll be redirected to ClickUp to securely sign in and authorize TrackUp.
       </p>
 
@@ -32,7 +32,7 @@ const LoginCard = ({ authHref = "/api/auth/clickup" }: LoginCardProps) => (
           not be prefetched as an in-app page. */}
       <a
         href={authHref}
-        className="group relative mt-6 flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-linear-to-r from-[#8728ff] via-[#7130ff] to-[#5b31f4] px-6 text-sm font-semibold text-white shadow-[0_10px_40px_rgba(105,45,255,0.42)] transition duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_14px_50px_rgba(105,45,255,0.58)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400 motion-reduce:transform-none motion-reduce:transition-none"
+        className="group relative mt-6 flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-violet-500 px-6 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(124,58,237,0.28)] transition duration-200 hover:-translate-y-0.5 hover:bg-violet-400 hover:shadow-[0_14px_50px_rgba(105,45,255,0.42)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300 motion-reduce:transform-none motion-reduce:transition-none"
       >
         <ClickUpLogo gradientId="login-cta-clickup" className="size-6 shrink-0" />
         <span>Continue with ClickUp</span>
@@ -66,7 +66,7 @@ const LoginCard = ({ authHref = "/api/auth/clickup" }: LoginCardProps) => (
         ))}
       </ol>
 
-      <aside className="mt-6 flex items-start gap-3 rounded-xl border border-white/8 bg-white/2 p-3">
+      <aside className="mt-6 flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/3 text-white/80">
           <LockKeyhole aria-hidden="true" className="size-4" strokeWidth={1.9} />
         </span>

@@ -7,7 +7,7 @@ type LoginHeroProps = {
 };
 
 const LoginHero = ({ authHref = "/api/auth/clickup" }: LoginHeroProps) => (
-  <main className="relative isolate min-h-[calc(100svh-6rem)] overflow-hidden">
+  <main className="trackup-auth-page relative isolate min-h-[calc(100svh-6rem)] overflow-hidden bg-[#08081f]">
     {/* Page atmosphere */}
     <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
       <div className="absolute left-[42%] top-24 h-125 w-125 rounded-full bg-violet-700/10 blur-[150px]" />
@@ -16,12 +16,12 @@ const LoginHero = ({ authHref = "/api/auth/clickup" }: LoginHeroProps) => (
     </div>
 
     {/* تم إضافة xl:items-center لجعل المحتوى في المنتصف عمودياً */}
-    <div className="relative mx-auto grid w-full max-w-360 grid-cols-1 gap-14 px-5 pb-20 pt-17 sm:px-8 lg:px-10 xl:grid-cols-[minmax(0,1.22fr)_minmax(32.5rem,0.92fr)] xl:gap-13 xl:px-5 xl:items-center">
+    <div className="relative mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-10 px-4 pb-16 pt-24 sm:px-6 lg:px-8 lg:pb-20 lg:pt-28 xl:grid-cols-[minmax(0,1.22fr)_minmax(32.5rem,0.92fr)] xl:items-center xl:gap-12">
       <section className="min-w-0" aria-labelledby="clickup-login-title">
 
         <h1
           id="clickup-login-title"
-          className="mt-7 max-w-2xl text-4xl leading-[1.06] font-bold tracking-tight text-white sm:text-5xl xl:text-[56px]"
+          className="mt-6 max-w-2xl text-3xl font-semibold leading-[1.06] tracking-[-0.035em] text-white sm:text-5xl xl:text-[56px]"
         >
           Connect with{" "}
           <span className="bg-linear-to-r from-fuchsia-400 via-violet-500 to-blue-400 bg-clip-text text-transparent">
@@ -34,12 +34,12 @@ const LoginHero = ({ authHref = "/api/auth/clickup" }: LoginHeroProps) => (
           </span>
         </h1>
 
-        <p className="mt-5 max-w-xl text-base leading-7 text-white/65 sm:text-lg sm:leading-7">
+        <p className="mt-4 max-w-xl text-sm leading-6 text-white/50 sm:text-base sm:leading-7">
           TrackUp works hand-in-hand with ClickUp to bring all your video tracking
           and team insights into one connected workspace.
         </p>
 
-        <div className="mt-4 grid items-start gap-6 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="mt-6 grid items-start gap-5 md:grid-cols-[18rem_minmax(0,1fr)]">
           <LoginBenefits />
 
           <div className="hidden min-w-0 md:block">

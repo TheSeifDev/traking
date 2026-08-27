@@ -32,6 +32,7 @@ import {
 import type { UserRole } from "@/src/types/auth";
 import type { Video, ViewerSessionAnalytics, WorkspaceAnalytics } from "@/src/types/video";
 import { getProviderAdapter, getProviderLabel } from "@/src/lib/playback/providers";
+import { TrackUpContent, TrackUpPageShell } from "@/src/components/ui/trackup";
 
 interface DashboardOverviewProps {
   user: { name: string | null; email: string; role: UserRole };
@@ -204,8 +205,8 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
   ];
 
   return (
-    <div className="min-h-full bg-[#08081f] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-      <div className="mx-auto max-w-[1440px] space-y-8">
+    <TrackUpPageShell>
+      <TrackUpContent>
         <header className="flex flex-col gap-5 border-b border-white/8 pb-7 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.26em] text-violet-300/70"><span className="h-1.5 w-1.5 rounded-full bg-violet-300" />{scopeType === "all" ? "Organization overview" : analytics.total_videos > 0 ? "Workspace overview" : "Workspace setup"}</div>
@@ -248,8 +249,8 @@ export default function DashboardOverview({ user, analytics, videos, error = nul
 
           <article className="rounded-3xl border border-violet-300/12 bg-linear-to-br from-violet-500/[0.10] via-white/[0.035] to-blue-500/[0.08] p-5 sm:p-6"><SectionHeading eyebrow="Workspace tools" title="Quick actions" /><p className="mt-2 text-xs text-white/40">Move from overview to the next useful task.</p><div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">{canManage && <QuickAction href={scoped("/videos")} icon={Plus} label="Add a video" detail="Build your library" tone="violet" />}<QuickAction href={scoped("/watch-links")} icon={Link2} label="Manage viewer links" detail="Share or revoke access" tone="blue" /><QuickAction href={scoped("/analytics")} icon={BarChart3} label="Open analytics" detail="Inspect real session data" tone="cyan" />{canManage && spaceId && scopeType !== "all" && <QuickAction href={scoped(`/spaces/${spaceId}/members`)} icon={UsersRound} label="Manage team" detail="Invitations and access" tone="emerald" />}</div></article>
         </section>
-      </div>
-    </div>
+      </TrackUpContent>
+    </TrackUpPageShell>
   );
 }
 

@@ -7,7 +7,7 @@ import AnalyticsShowcase from "@/src/components/features/AnalyticsShowcase";
 
 export default function FeaturesPage() {
   return (
-    <main className="features-page min-h-screen overflow-hidden bg-[#050617] text-white">
+    <main className="features-page min-h-screen overflow-hidden bg-[#08081f] text-white">
       <ResponsiveNav />
       <section className="relative px-6 pb-10 pt-28 sm:pb-14 sm:pt-36 lg:px-10 lg:pt-40">
         <div className="pointer-events-none absolute left-1/2 top-8 h-80 w-[min(80vw,58rem)] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[130px]" />

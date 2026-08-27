@@ -54,7 +54,7 @@ const accentClasses: Record<(typeof useCases)[number]["accent"], string> = {
 
 export default function UseCasesPage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050617] text-white">
+    <main className="min-h-screen overflow-hidden bg-[#08081f] text-white">
       <ResponsiveNav />
       <section className="relative px-6 pb-16 pt-32 sm:pt-40 lg:px-10 lg:pb-24">
         <div className="pointer-events-none absolute left-1/2 top-20 h-72 w-[min(80vw,56rem)] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[120px]" />
@@ -67,7 +67,7 @@ export default function UseCasesPage() {
       <section className="px-6 pb-20 lg:px-10">
         <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-2 lg:grid-cols-3">
           {useCases.map(({ title, description, icon: Icon, accent }) => (
-            <article key={title} className="group rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.15)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-300/25 hover:bg-white/[0.05]">
+            <article key={title} className="group rounded-3xl border border-white/9 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.16)] transition duration-200 hover:-translate-y-0.5 hover:border-violet-300/25 hover:bg-white/[0.05]">
               <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${accentClasses[accent]}`}><Icon size={19} /></div>
               <h2 className="mt-6 text-xl font-semibold text-white">{title}</h2>
               <p className="mt-3 text-sm leading-6 text-white/45">{description}</p>
@@ -77,7 +77,7 @@ export default function UseCasesPage() {
         </div>
       </section>
       <section className="px-6 pb-20 lg:px-10">
-        <div className="mx-auto grid max-w-6xl gap-5 rounded-3xl border border-white/10 bg-white/[0.025] p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="mx-auto grid max-w-6xl gap-5 rounded-3xl border border-white/9 bg-white/[0.025] p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-200/70">One controlled path</p>
             <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Add a video, create a Watch Link, then investigate real activity.</h2>

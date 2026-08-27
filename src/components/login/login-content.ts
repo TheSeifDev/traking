@@ -40,17 +40,17 @@ export const LOGIN_BENEFITS: readonly LoginContentItem[] = [
 export const LOGIN_STEPS: readonly LoginContentItem[] = [
   {
     icon: ShieldCheck,
-    title: "You&apos;ll be redirected to ClickUp",
+    title: "You'll be redirected to ClickUp",
     description: "Sign in to your ClickUp account and authorize TrackUp.",
   },
   {
     icon: Users,
-    title: "We&apos;ll fetch your workspace info",
-    description: "We&apos;ll securely import your user and workspace data.",
+    title: "We'll fetch your workspace info",
+    description: "We'll securely import your user and workspace data.",
   },
   {
     icon: BarChart3,
-    title: "You&apos;re all set!",
+    title: "You're all set!",
     description: "Open TrackUp and review persisted viewing activity with provider-aware measurement.",
   },
 ];
