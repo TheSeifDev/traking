@@ -15,7 +15,6 @@ import {
   Link2,
   Loader2,
   PlayCircle,
-  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
