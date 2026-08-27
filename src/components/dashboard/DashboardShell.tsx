@@ -92,12 +92,15 @@ export default function DashboardShell({
   ];
 
   useEffect(() => {
-    if (!activeSpaceNeedsPersistence && !activeSpacePreferenceInvalid) return;
-    const request = activeSpaceContext.type === "all" && activeOrganizationId
-      ? { scope: "all", organization_id: activeOrganizationId }
-      : activeSpaceId
-        ? { scope: "specific", space_id: activeSpaceId }
-        : null;
+    const routeSpaceNeedsPersistence = Boolean(routeSpace && routeSpace.id !== activeSpaceId);
+    if (!routeSpaceNeedsPersistence && !activeSpaceNeedsPersistence && !activeSpacePreferenceInvalid) return;
+    const request = routeSpaceNeedsPersistence && routeSpace
+      ? { scope: "specific", space_id: routeSpace.id }
+      : activeSpaceContext.type === "all" && activeOrganizationId
+        ? { scope: "all", organization_id: activeOrganizationId }
+        : activeSpaceId
+          ? { scope: "specific", space_id: activeSpaceId }
+          : null;
     if (request) {
       void fetch("/api/spaces/active", {
         method: "POST",
@@ -107,7 +110,7 @@ export default function DashboardShell({
     } else {
       void fetch("/api/spaces/active", { method: "DELETE" });
     }
-  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid]);
+  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, routeSpace]);
 
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
@@ -128,9 +131,11 @@ export default function DashboardShell({
 
   const organizationContext = selectedOrganization?.name ?? workspace?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
-  const displayedSpaceContext = activeSpaceContext.type === "all"
-    ? "All Spaces"
-    : spaceContext ?? (selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space");
+  const displayedSpaceContext = selectedSpace
+    ? (spaceContext ?? selectedSpace.name)
+    : activeSpaceContext.type === "all"
+      ? "All Spaces"
+      : selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space";
 
   return (
     <>
