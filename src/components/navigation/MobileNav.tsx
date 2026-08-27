@@ -42,9 +42,12 @@ const MobileNav = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300 md:hidden ${open || scrolled ? "border-b border-white/8 bg-[#0b0b28]/92 backdrop-blur-xl" : "border-b border-white/8 bg-[#0b0b28]/78 backdrop-blur-xl"}`}
+      className={`
+        fixed top-0 left-0 right-0 z-50 transition-colors duration-300 md:hidden
+        ${open || scrolled ? "border-transparent bg-transparent" : "border-transparent bg-transparent"}
+      `}
     >
-      <nav className="relative z-50 mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 sm:px-6">
+      <nav className="relative z-50 flex h-16 items-center justify-between px-5">
         {/* Logo */}
         <Link href="/" onClick={() => setOpen(false)} className="flex items-center">
           <Image
@@ -67,7 +70,7 @@ const MobileNav = () => {
             aria-expanded={open}
             aria-controls="mobile-menu"
             onClick={() => setOpen((prev) => !prev)}
-            className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-white transition-colors hover:border-white/20 hover:bg-white/[0.08]"
+            className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/2.5 text-white transition-colors hover:bg-white/6"
           >
             <Menu
               size={21}
@@ -101,7 +104,9 @@ const MobileNav = () => {
         role="dialog"
         aria-modal="true"
         className={`
-          fixed inset-x-4 top-20 z-40 overflow-hidden rounded-2xl border border-white/9 bg-[#0b0b28]/95 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl
+          fixed inset-x-4 top-20 z-40 overflow-hidden rounded-2xl 
+          border border-white/8 bg-[#0b0b28]/95 
+          shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl 
           transition-all duration-300
           ${open ? "visible translate-y-0 opacity-100" : "invisible -translate-y-3 opacity-0"}
         `}
@@ -113,7 +118,11 @@ const MobileNav = () => {
               href={item.href}
               onClick={() => setOpen(false)}
               style={{ transitionDelay: open ? `${i * 40}ms` : "0ms" }}
-              className={`rounded-xl px-4 py-3.5 text-sm font-medium text-white/65 transition-all duration-300 hover:bg-white/5 hover:text-white ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}`}
+              className={`
+                rounded-xl px-4 py-3.5 text-sm font-medium text-white/80 
+                transition-all duration-300 hover:bg-white/5 hover:text-white
+                ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}
+              `}
             >
               {item.label}
             </Link>
@@ -123,7 +132,14 @@ const MobileNav = () => {
             href="/login"
             onClick={() => setOpen(false)}
             style={{ transitionDelay: open ? `${navItems.length * 40}ms` : "0ms" }}
-            className={`mt-2 flex h-11 items-center justify-center rounded-xl bg-violet-500 text-sm font-semibold text-white shadow-[0_8px_28px_rgba(124,58,237,0.28)] transition-all duration-300 hover:bg-violet-400 ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}`}
+            className={`
+              mt-2 flex h-11 items-center justify-center rounded-xl 
+              bg-linear-to-r from-[#8b3dff] to-[#5d4cff] 
+              text-sm font-semibold text-white 
+              shadow-[0_8px_25px_rgba(105,65,255,0.25)]
+              transition-all duration-300
+              ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}
+            `}
           >
             Continue with ClickUp
           </Link>

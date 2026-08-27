@@ -23,13 +23,16 @@ const Nav = () => {
 
   return (
     <header
-      className={`trackup-public-nav fixed top-0 left-0 right-0 z-50 hidden w-full transition-all duration-300 md:block ${scrolled ? "border-b border-white/8 bg-[#0b0b28]/90 backdrop-blur-xl" : "border-b border-white/8 bg-[#0b0b28]/75 backdrop-blur-xl"}`}
+      className={`
+        fixed top-0 left-0 right-0 z-50 hidden w-full transition-all duration-300 md:block
+        ${scrolled ? "border-transparent bg-transparent" : "border-transparent bg-transparent"}
+      `}
     >
-      <nav className="mx-auto flex h-16 w-full max-w-[1440px] items-center px-5 sm:px-6 lg:px-8">
+      <nav className="mx-auto flex h-18 w-full max-w-360 items-center px-6 lg:px-12">
         {/* Logo */}
         <Link
           href="/"
-          className="flex shrink-0 items-center transition-transform duration-200 hover:opacity-90"
+          className="flex shrink-0 items-center transition-transform duration-200 hover:scale-[1.03]"
         >
           <Image
             src="/logo.webp"
@@ -42,12 +45,12 @@ const Nav = () => {
         </Link>
 
         {/* Navigation - next to logo, left side */}
-        <div className="flex items-center gap-5 pl-8 lg:gap-7 lg:pl-10 xl:gap-8">
+        <div className="flex items-center gap-4 pl-8 lg:gap-7 lg:pl-12 xl:gap-9 xl:pl-16">
           {navItems.map((item) => (
             <Link
               key={item.label}
               href={item.href}
-              className="group relative rounded-lg px-2 py-2 text-xs font-medium text-white/55 transition-colors duration-200 hover:bg-white/5 hover:text-white lg:text-sm"
+              className="group relative py-2 text-[13px] font-medium text-white/80 transition-colors duration-200 hover:text-white lg:text-[14px]"
             >
               {item.label}
               <span className="absolute inset-x-0 -bottom-0.5 h-px scale-x-0 bg-linear-to-r from-[#8b3dff] to-[#5d4cff] transition-transform duration-200 group-hover:scale-x-100" />
@@ -61,7 +64,14 @@ const Nav = () => {
           {/* ClickUp CTA */}
           <Link
             href="/login"
-            className="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-violet-500 px-4 text-xs font-semibold text-white shadow-[0_8px_28px_rgba(124,58,237,0.28)] transition-all duration-200 hover:bg-violet-400 hover:shadow-[0_10px_35px_rgba(105,65,255,0.4)] lg:h-11 lg:gap-2.5 lg:px-5 lg:text-sm"
+            className="
+              flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4
+              bg-linear-to-r from-[#8b3dff] to-[#5d4cff] 
+              text-[13px] font-semibold text-white 
+              shadow-[0_8px_30px_rgba(105,65,255,0.28)] transition-all duration-200 
+              hover:-translate-y-px hover:shadow-[0_10px_35px_rgba(105,65,255,0.4)]
+              lg:h-11 lg:gap-2.5 lg:px-6 lg:text-[14px]
+            "
           >
             <svg
               width="19"
