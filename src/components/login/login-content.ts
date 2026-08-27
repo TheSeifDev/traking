@@ -17,8 +17,8 @@ export type LoginContentItem = {
 export const LOGIN_BENEFITS: readonly LoginContentItem[] = [
   {
     icon: LockKeyhole,
-    title: "Secure Connection",
-    description: "Your data is encrypted and never shared. We only access what&apos;s needed.",
+    title: "Scoped access",
+    description: "TrackUp uses ClickUp OAuth and checks access on protected requests for your authorized workspace context.",
   },
   {
     icon: Zap,
@@ -27,13 +27,13 @@ export const LOGIN_BENEFITS: readonly LoginContentItem[] = [
   },
   {
     icon: RefreshCw,
-    title: "Real-Time Sync",
-    description: "Keep your teams, tasks, and progress synchronized in real-time.",
+    title: "Connected workspace",
+    description: "Load your authorized ClickUp workspace and member context inside TrackUp.",
   },
   {
     icon: BarChart3,
-    title: "Actionable Insights",
-    description: "Start tracking videos and gaining insights instantly.",
+    title: "Evidence-based analytics",
+    description: "Review persisted viewer activity and provider-backed metrics when reliable telemetry is available.",
   },
 ];
 
@@ -51,6 +51,6 @@ export const LOGIN_STEPS: readonly LoginContentItem[] = [
   {
     icon: BarChart3,
     title: "You&apos;re all set!",
-    description: "Start tracking videos and gaining insights instantly.",
+    description: "Open TrackUp and review persisted viewing activity with provider-aware measurement.",
   },
 ];
