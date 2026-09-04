@@ -3,14 +3,14 @@
 @import "shadcn/tailwind.css";
 
 :root {
-  --font-sans: var(--font-montserrat);
+  --font-sans: Arial, Tahoma, sans-serif;
 }
 
 html {
   min-width: 320px;
   background: #070720;
   color-scheme: dark;
-  font-family: var(--font-montserrat), sans-serif;
+  font-family: Arial, Tahoma, sans-serif;
 }
 
 ::selection {
