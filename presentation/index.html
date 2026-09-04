@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phantoms — أول ميتنج في السنة | الخطة الكاملة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070b14;
+    --bg2:#0c1220;
+    --panel:#101a2e;
+    --panel2:#131f38;
+    --line:rgba(120,180,255,.14);
+    --cyan:#27e0ff;
+    --cyan2:#00b8d9;
+    --violet:#8b7bff;
+    --amber:#ffc24b;
+    --green:#3ddc97;
+    --red:#ff5d73;
+    --txt:#eaf2ff;
+    --muted:#9db2d0;
+    --dim:#6d82a3;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:'Tajawal','Cairo',system-ui,'Segoe UI',sans-serif;}
+  body{background:
+    radial-gradient(1100px 700px at 85% -10%, rgba(39,224,255,.10), transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, rgba(139,123,255,.10), transparent 60%),
+    var(--bg);
+  }
+
+  /* ---------- Deck frame ---------- */
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #slide{width:1280px;height:720px;position:relative;transform-origin:center center;
+    display:none;overflow:hidden;border-radius:18px;
+    background:linear-gradient(160deg,var(--bg2),var(--bg) 70%);
+    box-shadow:0 30px 90px rgba(0,0,0,.55), inset 0 0 0 1px var(--line);
+    padding:58px 64px;
+  }
+  #slide.active{display:block;animation:fade .45s ease}
+  @keyframes fade{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
+
+  /* grid backdrop */
+  #slide::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(120,180,255,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(120,180,255,.05) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(circle at 50% 30%,#000 30%,transparent 80%)}
+  #slide::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(700px 300px at 80% 0%,rgba(39,224,255,.07),transparent 70%)}
+
+  .content{position:relative;z-index:2;height:100%;display:flex;flex-direction:column}
+
+  /* ---------- Typography ---------- */
+  .kicker{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:15px;
+    color:var(--cyan);letter-spacing:.5px;background:rgba(39,224,255,.08);
+    border:1px solid rgba(39,224,255,.25);padding:7px 16px;border-radius:100px;width:max-content}
+  .kicker.v{color:var(--violet);background:rgba(139,123,255,.10);border-color:rgba(139,123,255,.3)}
+  .kicker.a{color:var(--amber);background:rgba(255,194,75,.10);border-color:rgba(255,194,75,.3)}
+  .kicker.g{color:var(--green);background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.3)}
+  h1{font-family:'Cairo',sans-serif;font-weight:900;line-height:1.25}
+  h2{font-family:'Cairo',sans-serif;font-weight:900;font-size:40px;line-height:1.3;margin:14px 0 8px}
+  h2 .hl{color:var(--cyan)}
+  h3{font-family:'Cairo',sans-serif;font-weight:800;font-size:23px}
+  p{font-size:19px;line-height:1.85;color:var(--muted)}
+  .big-quote{font-family:'Cairo';font-weight:800;font-size:27px;line-height:1.7;color:var(--txt)}
+
+  /* ---------- Common blocks ---------- */
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:linear-gradient(165deg,var(--panel),rgba(16,26,46,.55));
+    border:1px solid var(--line);border-radius:16px;padding:22px 24px;position:relative;overflow:hidden}
+  .card .ico{font-size:30px;margin-bottom:8px}
+  .card h3{font-size:20px;margin-bottom:6px;display:flex;align-items:center;gap:9px}
+  .card p{font-size:16.5px;line-height:1.75}
+  .card.acc{border-color:rgba(39,224,255,.35)}
+  .card.acc::before{content:"";position:absolute;top:0;right:0;width:120px;height:120px;
+    background:radial-gradient(circle,rgba(39,224,255,.16),transparent 70%)}
+  .num{font-family:'Cairo';font-weight:900;font-size:54px;color:var(--cyan);line-height:1;
+    text-shadow:0 0 30px rgba(39,224,255,.35)}
+  ul.clean{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:6px}
+  ul.clean li{font-size:18.5px;line-height:1.7;color:var(--muted);padding-right:30px;position:relative}
+  ul.clean li::before{content:"";position:absolute;right:4px;top:11px;width:11px;height:11px;
+    border-radius:3px;background:var(--cyan);box-shadow:0 0 12px rgba(39,224,255,.6);
+    transform:rotate(45deg)}
+  ul.clean li b{color:var(--txt)}
+  .tag{display:inline-block;font-size:14px;font-weight:700;padding:4px 12px;border-radius:100px;
+    background:rgba(139,123,255,.14);color:#c3baff;border:1px solid rgba(139,123,255,.3)}
+
+  /* timeline */
+  .tl{display:flex;flex-direction:column;gap:0;margin-top:8px}
+  .tl-row{display:grid;grid-template-columns:128px 56px 1fr;gap:14px;align-items:stretch}
+  .tl-time{font-family:'Cairo';font-weight:800;font-size:17px;color:var(--cyan);text-align:left;
+    padding:11px 0;white-space:nowrap}
+  .tl-rail{position:relative;display:flex;justify-content:center}
+  .tl-rail::before{content:"";position:absolute;top:0;bottom:0;width:2px;background:var(--line)}
+  .tl-dot{width:13px;height:13px;border-radius:50%;background:var(--bg);border:3px solid var(--cyan);
+    margin-top:15px;z-index:2;box-shadow:0 0 14px rgba(39,224,255,.6)}
+  .tl-body{padding:8px 0 16px}
+  .tl-body h3{font-size:18.5px}
+  .tl-body p{font-size:15px;line-height:1.6}
+  .tl-row.soft .tl-dot{border-color:var(--violet);box-shadow:0 0 14px rgba(139,123,255,.6)}
+  .tl-row.soft .tl-time{color:var(--violet)}
+  .tl-row.end .tl-dot{border-color:var(--amber);box-shadow:0 0 14px rgba(255,194,75,.6)}
+  .tl-row.end .tl-time{color:var(--amber)}
+
+  /* progress + chrome */
+  #bar{position:fixed;top:0;right:0;height:3px;background:linear-gradient(90deg,var(--cyan),var(--violet));
+    z-index:50;transition:width .35s ease;box-shadow:0 0 12px rgba(39,224,255,.7)}
+  #hud{position:fixed;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:center;padding:0 26px;z-index:50;pointer-events:none;font-size:13.5px;color:var(--dim)}
+  #hud .brand{font-weight:800;color:var(--muted);letter-spacing:1px}
+  #hud .brand span{color:var(--cyan)}
+  #hud .pg{font-family:'Cairo';font-weight:800;color:var(--muted)}
+  .nav{position:fixed;bottom:14px;z-index:60;display:flex;gap:10px;pointer-events:auto}
+  .nav button{background:var(--panel);color:var(--txt);border:1px solid var(--line);
+    width:42px;height:42px;border-radius:50%;font-size:18px;cursor:pointer;transition:.2s}
+  .nav button:hover{background:var(--panel2);border-color:var(--cyan);color:var(--cyan)}
+  #navp{left:50%;transform:translateX(-70px)}
+  #navn{left:50%;transform:translateX(10px)}
+  .hint{position:fixed;bottom:60px;right:26px;font-size:12.5px;color:var(--dim);z-index:50}
+
+  /* cover */
+  .ghost{position:absolute;left:56px;bottom:40px;width:300px;opacity:.9;filter:drop-shadow(0 0 40px rgba(39,224,255,.35))}
+  .cover-title{font-size:76px;letter-spacing:1px}
+  .cover-title .ph{background:linear-gradient(120deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover-meta{display:flex;gap:26px;margin-top:26px;flex-wrap:wrap}
+  .meta-chip{display:flex;align-items:center;gap:10px;background:rgba(16,26,46,.7);
+    border:1px solid var(--line);border-radius:12px;padding:12px 20px;font-size:17px;font-weight:700}
+  .meta-chip .ic{font-size:22px}
+
+  /* section number watermark */
+  .wm{position:absolute;left:26px;top:18px;font-family:'Cairo';font-weight:900;font-size:150px;
+    color:rgba(120,180,255,.05);line-height:1;z-index:0}
+
+  /* rule slide */
+  .rule-num{font-family:'Cairo';font-weight:900;font-size:150px;line-height:1;
+    background:linear-gradient(160deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text;background-clip:text;color:transparent;opacity:.9}
+  .vs{display:grid;grid-template-columns:1fr 60px 1fr;gap:14px;align-items:stretch}
+  .vs .mid{display:flex;align-items:center;justify-content:center;font-family:'Cairo';
+    font-weight:900;font-size:26px;color:var(--dim)}
+  .vs .bad{border-color:rgba(255,93,115,.3);background:linear-gradient(165deg,rgba(60,20,32,.5),rgba(16,26,46,.5))}
+  .vs .good{border-color:rgba(61,220,151,.35);background:linear-gradient(165deg,rgba(16,50,40,.55),rgba(16,26,46,.55))}
+  .vs h4{font-family:'Cairo';font-size:19px;margin-bottom:8px}
+  .vs .bad h4{color:var(--red)} .vs .good h4{color:var(--green)}
+  .vs p{font-size:16px}
+
+  /* books */
+  .book{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;
+    display:flex;flex-direction:column;gap:12px;transition:.25s}
+  .book:hover{transform:translateY(-6px);border-color:var(--cyan);box-shadow:0 18px 40px rgba(0,0,0,.4)}
+  .book img{width:100%;height:210px;object-fit:cover;border-radius:9px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  .book h3{font-size:18px;line-height:1.4}
+  .book .au{font-size:14px;color:var(--dim);font-weight:700}
+  .book p{font-size:14.5px;line-height:1.65}
+
+  /* doctor */
+  .doc-photo{position:absolute;left:0;bottom:0;height:600px;z-index:1;
+    filter:drop-shadow(0 0 50px rgba(39,224,255,.18))}
+  .stat{background:rgba(16,26,46,.75);border:1px solid var(--line);border-radius:13px;padding:13px 15px;text-align:center}
+  .stat b{display:block;font-family:'Cairo';font-size:29px;color:var(--cyan);line-height:1.15}
+  .stat span{font-size:13px;color:var(--muted);font-weight:700}
+  .src{font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:10px}
+  .src a{color:var(--dim);text-decoration:underline}
+  .timeline-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px}
+  .tlm{background:rgba(16,26,46,.7);border:1px solid var(--line);border-radius:11px;padding:11px 13px}
+  .tlm b{display:block;font-family:'Cairo';color:var(--cyan);font-size:15px}
+  .tlm span{font-size:13px;color:var(--muted);line-height:1.5;display:block;margin-top:3px}
+
+  /* closing */
+  .finale{text-align:center;justify-content:center;align-items:center;gap:18px}
+  .finale .ghost2{width:120px;opacity:.95;filter:drop-shadow(0 0 35px rgba(39,224,255,.5));animation:float 3.5s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+
+  .lead{font-size:21px;color:var(--muted);line-height:1.8;max-width:900px}
+  .pill-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .chain{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:14px}
+  .chain .node{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 20px;
+    font-family:'Cairo';font-weight:800;font-size:18px}
+  .chain .arr{color:var(--cyan);font-size:24px;font-weight:900}
+  .chain .node.head{border-color:rgba(39,224,255,.45);box-shadow:0 0 22px rgba(39,224,255,.15)}
+  .note{border-right:4px solid var(--amber);background:rgba(255,194,75,.07);border-radius:0 12px 12px 0;
+    padding:14px 18px;font-size:16.5px;line-height:1.75;color:#ffe2a8;margin-top:8px}
+  .note.cy{border-color:var(--cyan);background:rgba(39,224,255,.06);color:#c9f4ff}
+  .note.vl{border-color:var(--violet);background:rgba(139,123,255,.07);color:#d8d3ff}
+</style>
+</head>
+<body>
+
+<div id="bar" style="width:0"></div>
+
+<div id="stage">
+<div id="slide" class="active"></div>
+</div>
+
+<div class="nav">
+  <button id="navp" onclick="go(-1)">‹</button>
+  <button id="navn" onclick="go(1)">›</button>
+</div>
+<div class="hint">تنقل: الأسهم ← → أو مسافة</div>
+<div id="hud">
+  <div class="pg"><span id="pgn">1</span> / <span id="pgt">1</span></div>
+  <div class="brand">👻 PHAN<span>TOMS</span> — MEETING 01 · 2026</div>
+</div>
+
+<script>
+/* ---------------- Slide content ---------------- */
+const SLIDES = [];
+
+/* 1 — Cover */
+SLIDES.push(`
+<div class="content" style="justify-content:center">
+  <svg class="ghost" viewBox="0 0 200 220" fill="none">
+    <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#27e0ff"/><stop offset="1" stop-color="#8b7bff"/>
+    </linearGradient></defs>
+    <path d="M100 12c-46 0-74 30-74 72v96c0 10 12 14 18 6l12-15 13 16c4 5 11 5 15 0l13-16 13 16c4 5 11 5 15 0l13-16 12 15c6 8 18 4 18-6V84c0-42-28-72-68-72z" fill="url(#gg)" opacity=".92"/>
+    <circle cx="76" cy="92" r="11" fill="#07101f"/><circle cx="124" cy="92" r="11" fill="#07101f"/>
+    <ellipse cx="100" cy="122" rx="10" ry="14" fill="#07101f"/>
+  </svg>
+  <div style="width:66%">
+    <div class="kicker">👻 أول ميتنج رسمي في السنة</div>
+    <h1 class="cover-title" style="margin-top:20px">خطة ميتنج <span class="ph">Phantoms</span></h1>
+    <p class="big-quote" style="margin-top:14px">مش تيم بيحاول يبان كويس…<br>تيم بيتبني منتجات حقيقية، وناس حقيقية.</p>
+    <div class="cover-meta">
+      <div class="meta-chip"><span class="ic">⏱️</span> ساعتان كاملتان</div>
+      <div class="meta-chip"><span class="ic">🕙</span> 10:00 — 12:00</div>
+      <div class="meta-chip"><span class="ic">🎯</span> استحواذ الانتباه · تأسيس · تحوّل</div>
+    </div>
+  </div>
+</div>`);
+
+/* 2 — Timeline */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">⏱</div>
+  <div class="kicker">الجدول الزمني الواقعي</div>
+  <h2>الساعتان، <span class="hl">دقيقة بدقيقة</span></h2>
+  <div class="tl">
+    <div class="tl-row"><div class="tl-time">10:00 – 10:10</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>⏳ مرحلة الانتظار — 10 دقائق</h3><p>حضور وتسجيل وتهيئة، من غير ما نبدأ رسميًا قبل الميعاد.</p></div></div>
+    <div class="tl-row"><div class="tl-time">10:10 – 10:25</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>🚀 الافتتاحية: الهوية + ليه بدأنا بدري — 15 دقيقة</h3><p>ترحيب، كسر فخ الاعتذار، تعريف مختصر، الجملة التأسيسية.</p></div></div>
+    <div class="tl-row"><div class="tl-time">10:25 – 10:35</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>🧭 ليه من غير فكرة محددة + البرمشن — 10 دقائق</h3><p>قانون الأساس قبل الفكرة، ونقطة التفويض الرسمي — جملة واحدة واضحة.</p></div></div>
+    <div class="tl-row"><div class="tl-time">10:35 – 11:15</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>🏛️ عروض اللجان (Heads + Monitors) — 40 دقيقة</h3><p>3 لجان × 12–13 دقيقة: رؤية، تقييم، Roadmap، أدوار، معايير استمرار.</p></div></div>
+    <div class="tl-row"><div class="tl-time">11:15 – 11:25</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>📥 الصندوق الأسود — أسئلة الفورم — 10 دقائق</h3><p>رد سريع ومباشر على أكتر الأسئلة تكرارًا، من غير ذكر أسماء.</p></div></div>
+    <div class="tl-row soft"><div class="tl-time">11:25 – 11:55</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>🧠 Mindset + مهارتين بعمق — 30 دقيقة</h3><p>3 رسائل جوهرية بس، كل واحدة تتقال بعمق: عقلية، 80/20، تواصل بحضور.</p></div></div>
+    <div class="tl-row end"><div class="tl-time">11:55 – 12:00</div><div class="tl-rail"><div class="tl-dot"></div></div>
+      <div class="tl-body"><h3>🎉 الختام والتحوّل — 5 دقائق</h3><p>خلاصة واحدة، تقدير للحضور… وبعدها اللعب يبدأ فورًا بلا فاصل.</p></div></div>
+  </div>
+</div>`);
+
+/* 3 — Opening */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">1</div>
+  <div class="kicker">الافتتاحية · 15 دقيقة</div>
+  <h2>أول 15 دقيقة هدفها <span class="hl">استحواذ الانتباه</span>، مش سرد إنجازات</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card acc">
+      <div class="ico">🗣️</div>
+      <h3>جملة الدخول — وكسر فخ الاعتذار</h3>
+      <p class="big-quote" style="font-size:21px">«صباح الخير جميعًا… شكرًا لالتزامكم وحضوركم في الميعاد،<br>وشكرًا لانتظاركم.»</p>
+      <p style="margin-top:10px">شكرًا على الالتزام — <b style="color:var(--txt)">مش</b> «آسف على التأخير». أول جملة بتحدد نبرة القائد.</p>
+    </div>
+    <div class="card">
+      <div class="ico">🪪</div>
+      <h3>مين أنا — في جملتين بس</h3>
+      <p>خبرتك التقنية + إنجاز مختصر بأرقام يخلق مصداقية بسرعة… وبعدها فورًا:</p>
+      <p class="big-quote" style="font-size:19px;margin-top:8px">«أنا مش هنا أقولكم عملت إيه… أنا هنا أوفّرلكم البيئة اللي تخليكم تعملوا أحسن من كده.»</p>
+      <p style="margin-top:8px">⚠️ مفيش قصة حياة. دقيقتين بالظبط.</p>
+    </div>
+    <div class="card">
+      <div class="ico">👻</div>
+      <h3>هوية Phantoms</h3>
+      <p>«إحنا مش تيم بيحاول يبان كويس… إحنا تيم بيتبني <b style="color:var(--txt)">منتجات حقيقية وناس حقيقية</b>.»</p>
+    </div>
+    <div class="card acc">
+      <div class="ico">⚓</div>
+      <h3>الجملة التأسيسية — شعار السنة</h3>
+      <p>جملة واحدة قصيرة تتكرر طول السنة وتبقى علامة التيم. بتتعرض في البداية، وتتكرر في الختام، وتبقى على كل حاجة بعد كده.</p>
+    </div>
+  </div>
+</div>`);
+
+/* 4 — Why early */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">2</div>
+  <div class="kicker">ليه بدأنا بدري · 5 دقائق</div>
+  <h2>بنشتري وقت… <span class="hl">مش بنسرقه من حد</span></h2>
+  <div class="vs" style="margin-top:18px">
+    <div class="card bad">
+      <h4>😵 اللي يبدأ مع أول محاضرة</h4>
+      <p>الضغط الأكاديمي بيسرق فرصة التأسيس الحقيقي. بيبقى طول الترم في وضع <b style="color:var(--txt)">رد الفعل — Reactive</b>: بيلحق بس، بيتعلم في نص طاقة، وأي حاجة جديدة بتتشال.</p>
+    </div>
+    <div class="mid">⚡</div>
+    <div class="card good">
+      <h4>🎯 إحنا النهاردة</h4>
+      <p>بنبدأ بدري عشان نكون في وضع <b style="color:var(--txt)">المبادرة — Proactive</b>: إحنا اللي بنتحكم في الوتيرة، بنبني الأساس بهدوء وعمق قبل ما الزحمة تبدأ.</p>
+    </div>
+  </div>
+  <div class="note cy" style="margin-top:20px">
+    💡 الأساسيات اللي بنشتغل عليها دلوقتي <b>مش حمل زيادة</b> — هي أصلًا جزء من منهج السنة دي، بس بندرسها بعمق وتطبيق عملي بدل الحفظ السطحي وقت الامتحان.
+  </div>
+</div>`);
+
+/* 5 — Why no fixed idea */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">3</div>
+  <div class="kicker v">ليه من غير فكرة محددة · 7 دقائق — Product Thinking</div>
+  <h2>قانون <span class="hl" style="color:var(--violet)">الأساس قبل الفكرة</span></h2>
+  <div class="card" style="margin-top:10px">
+    <p class="big-quote" style="font-size:22px">«سواء اشتريت عربية مانيوال أو أوتوماتيك… لازم تكون متعلّم أساسيات السواقة الأول. لو حددنا فكرة دلوقتي، هنحبس نفسنا في سقف مهاراتنا الحالية. لما كل مسار — سوفت، هارد، AI — يمتلك أدواته بالكامل، هنقدر ننفّذ أي فكرة معقدة تكتسح أي منافسة.»</p>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card acc"><div class="ico">🧩</div><h3>الفكرة مش هي القيمة</h3><p>القيمة الحقيقية هي <b style="color:var(--txt)">المهارة</b> اللي هتنفّذ بيها. الأفكار رخيصة، التنفيذ هو اللي نادر.</p></div>
+    <div class="card acc"><div class="ico">⚖️</div><h3>القاعدة الذهبية</h3><p>فكرة كويسة + فريق ضعيف = <b style="color:var(--red)">فشل</b>.<br>فريق قوي + أي فكرة = <b style="color:var(--green)">منتج ينافس</b>.</p></div>
+    <div class="card acc"><div class="ico">🧠</div><h3>عقلية Product</h3><p>إحنا مش بتوع «مشروع تخرج يتسلّم»… إحنا بتوع منتج حقيقي بيتحلّ بيه مشكلة ناس حقيقية.</p></div>
+  </div>
+  <div class="note vl" style="margin-top:16px">
+    🔎 <b>بعدين</b> لما نيجي نختار: (1) إيه المشكلة الحقيقية ولمين بالظبط؟ · (2) هل حد جاهز يدفع/يستخدم الحل فعلًا؟ · (3) إيه أصغر نسخة تجربة (MVP) قبل ما نبني كل حاجة؟ — التفاصيل كاملة في المستند المكتوب.
+  </div>
+</div>`);
+
+/* 6 — Permission */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">4</div>
+  <div class="kicker a">البرمشن · 8 دقائق</div>
+  <h2>القوة في <span class="hl" style="color:var(--amber)">الوضوح</span>… مش في الغموض</h2>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card" style="border-color:rgba(255,93,115,.3)">
+      <div class="ico">🚫</div>
+      <h3 style="color:var(--red)">اللي منعملوش</h3>
+      <ul class="clean">
+        <li>منحوّلهاش «سر مرعب غامض» — الغموض الزيادة بيولّد <b>قلق مش هيبة</b>.</li>
+        <li>منقولش «ممنوع تتكلم عن البرمشن دي» بنبرة تهديد.</li>
+        <li>منكررهاش أكتر من مرة — التكرار بيثير الفضول أكتر ما بيرسّخ الهيبة.</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:rgba(61,220,151,.35)">
+      <div class="ico">✅</div>
+      <h3 style="color:var(--green)">الجملة — بحزم وهدوء، مرة واحدة</h3>
+      <p class="big-quote" style="font-size:20px">«إحنا معانا تفويض رسمي إننا نبدأ ونتحرك من بدري. ده امتياز — والتفاصيل دي داخلية وخاصة بالتيم، وممنوع تخرج برا القاعة دي لأسباب تنظيمية، مش لأنه سر مخيف.»</p>
+    </div>
+  </div>
+  <div class="note" style="margin-top:18px">
+    🎯 نفس القوة، من غير ما الناس تحس إنك بتخبي حاجة وحشة. جملة واحدة واضحة… وكفاية.
+  </div>
+</div>`);
+
+/* 7 — Committees */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">5</div>
+  <div class="kicker">عروض اللجان · 40 دقيقة — Heads + Monitors</div>
+  <h2>3 لجان × <span class="hl">12–13 دقيقة</span>… وكل لجنة لازم تغطي 5 حاجات</h2>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card acc"><div class="ico">🔭</div><h3>1 · الرؤية الفنية</h3><p>إيه المسار بتاع اللجنة (سوفت / هارد / AI)، ومين المفروض نوصل فين بنهاية الترم.</p></div>
+    <div class="card acc"><div class="ico">📊</div><h3>2 · تقييم الفترة السابقة</h3><p>تقييم صريح لجاهزية الأعضاء الحالية — فين القوة وفين الفجوة.</p></div>
+    <div class="card acc"><div class="ico">🗺️</div><h3>3 · الـ Roadmap</h3><p>خطة الترم الأول بتواريخ واضحة، مش عناوين.</p></div>
+    <div class="card acc"><div class="ico">👥</div><h3>4 · الأدوار</h3><p>مين بيعمل إيه بالظبط — مفيش «هنعمل» من غير صاحب.</p></div>
+    <div class="card acc"><div class="ico">🚪</div><h3>5 · معايير الاستمرار</h3><p>نظام الـ <b style="color:var(--amber)">Strikes</b> والالتزام — واضح من الأول، من غير مفاجآت.</p></div>
+    <div class="card" style="border-color:rgba(255,194,75,.35)"><div class="ico">⏱️</div><h3 style="color:var(--amber)">انضباط التوقيت</h3><p>يُبلَّغوا قبلها بيوم إنك <b>هتوقفهم</b> لو زادوا. القائد واقف جنبهم — مش قاعد — عشان الانتقال يفضل سلس والحضور القيادي ما يسقطش.</p></div>
+  </div>
+  <h3 style="margin-top:22px;text-align:center;color:var(--muted)">تسلسل التواصل الرسمي</h3>
+  <div class="chain">
+    <div class="node">👤 Monitor <span style="font-size:13px;color:var(--dim)"><br>متابعة يومية + أعذار</span></div>
+    <div class="arr">←</div>
+    <div class="node">🧠 Head <span style="font-size:13px;color:var(--dim)"><br>مشاكل فنية</span></div>
+    <div class="arr">←</div>
+    <div class="node">سهيلة</div>
+    <div class="arr">←</div>
+    <div class="node head">سيف</div>
+  </div>
+</div>`);
+
+/* 8 — Black box */
+SLIDES.push(`
+<div class="content" style="justify-content:center">
+  <div class="wm">6</div>
+  <div class="kicker v">الصندوق الأسود · 10 دقائق</div>
+  <h2>أسئلة الفورم — <span class="hl" style="color:var(--violet)">إحنا بنسمع فعلًا</span></h2>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card"><div class="ico">🕵️</div><h3>من غير أسماء</h3><p>نقرا أكتر 3–4 أسئلة تكرارًا ونجاوب عليها مباشرة — الخصوصية محفوظة، والجرأة مكافأة.</p></div>
+    <div class="card"><div class="ico">⚡</div><h3>رد سريع ومباشر</h3><p>من غير لف ولا دفاعية. سؤال واضح يستحق إجابة واضحة.</p></div>
+    <div class="card"><div class="ico">⏰</div><h3>ركّز على سؤال واحد</h3><p>أي سؤال عن <b style="color:var(--txt)">الخوف من إدارة الوقت مع الدراسة</b> ياخد وقت أكبر — لأنه بيفتح الفقرة الجاية مباشرة.</p></div>
+  </div>
+  <div class="note vl" style="margin-top:22px;text-align:center">
+    الرسالة الضمنية: «مش بس بنتكلم فيكم… إحنا بنقرا اللي بتكتبوه، وأسئلتكم بتشكّل الميتنج.»
+  </div>
+</div>`);
+
+/* 9 — Mindset */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">7</div>
+  <div class="kicker g">الفقرة الجوهرية · 30 دقيقة — 3 رسائل بعمق، مش عشرة سطحيين</div>
+  <h2>أولًا: الـ <span class="hl" style="color:var(--green)">Mindset</span> · 8 دقائق</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card" style="border-color:rgba(61,220,151,.35)">
+      <div class="ico">🧊</div>
+      <h3 style="color:var(--green)">الفكرة المحورية: افصل المشاعر عن الالتزام</h3>
+      <p class="big-quote" style="font-size:20px">«ضغطك، مزاجك، ظروفك — دي حاجات إنسانية وطبيعية ومحترمة. لكن التزامك وكلمتك قدام التيم… حاجة تانية خالص.»</p>
+      <p style="margin-top:8px">المحترف الحقيقي مش اللي معندوش ضغط — هو اللي <b style="color:var(--txt)">بيسلّم حتى وهو تحت ضغط</b>.</p>
+    </div>
+    <div class="card" style="border-color:rgba(39,224,255,.35)">
+      <div class="ico">🥊</div>
+      <h3>الفكرة التانية: الفعل بدل الكلام</h3>
+      <p class="big-quote" style="font-size:20px">«متقولش هتعمل إيه… اعمله، وخلّي النتيجة تتكلم.»</p>
+      <p style="margin-top:8px">الكلام الكتير عن النية بيستهلك <b style="color:var(--txt)">نفس الطاقة</b> اللي المفروض تتصرف في التنفيذ.</p>
+    </div>
+  </div>
+</div>`);
+
+/* 10 — Pareto */
+SLIDES.push(`
+<div class="content">
+  <div class="kicker">تانيًا: مهارة الوقت · 10 دقائق</div>
+  <div style="display:flex;align-items:center;gap:26px;margin-top:6px">
+    <div class="rule-num">80/20</div>
+    <div>
+      <h2 style="margin:0">قاعدة <span class="hl">پاريتو</span> — ركّز في الـ 20% اللي بتفرق</h2>
+      <p class="lead" style="font-size:19px;margin-top:6px">80% من نتيجتك بتيجي من <b style="color:var(--cyan)">20% بس</b> من مجهودك. المشكلة إن أغلبنا بيوزّع وقته بالتساوي على كل حاجة، فيضيع وقت كبير في تفاصيل مالهاش تأثير.</p>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card acc"><div class="ico">🎯</div><h3>قبل أي تاسك</h3><p>اسأل نفسك: «إيه الجزء اللي لو خلصته… هيخلي 80% من التاسك خلص؟» وابدأ بيه.</p></div>
+    <div class="card acc"><div class="ico">📚</div><h3>في المذاكرة</h3><p>20% من المنهج (المفاهيم الأساسية) بتغطّي 80% من فهمك للباقي — ركّز عليها الأول.</p></div>
+    <div class="card acc"><div class="ico">🌅</div><h3>أول ساعة في يومك</h3><p>أعلى طاقة ذهنية تروح للمهمة الأهم — مش للإيميلات والتنظيف السطحي.</p></div>
+  </div>
+</div>`);
+
+/* 11 — 12 Week Year */
+SLIDES.push(`
+<div class="content">
+  <div class="kicker v">تطبيق إيقاع التيم — من المستند المكتوب</div>
+  <h2>الـ <span class="hl" style="color:var(--violet)">12 Week Year</span> — السنة مبقتش 12 شهر</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <div class="ico">🐢</div><h3>ليه الأهداف السنوية بتفشل؟</h3>
+      <p>التخطيط السنوي بيخلي الدماغ يأجّل لآخر 3 شهور — الإحساس بالإلحاح بيموت، وكل حاجة «بكرة».</p>
+    </div>
+    <div class="card" style="border-color:rgba(139,123,255,.4)">
+      <div class="ico">🔥</div><h3>الحل: كل 12 أسبوع = سنة كاملة</h3>
+      <p>اتعامل مع كل 12 أسبوع كأنها سنة مستقلة، بهدف واضح وخطة أسبوعية — الإلحاح بيفضل شغّال طول الوقت.</p>
+    </div>
+  </div>
+  <div class="note vl" style="margin-top:18px">
+    🎯 <b>تطبيق Phantoms:</b> كل ربع سنة (≈ ترم دراسي) ليه هدف تقني واحد واضح ومحدد وقابل للقياس — مثلاً «مشروع كامل جاهز» أو «مهارة معينة متقَنة 100%» — وكل أسبوع فيه تسليم صغير بيقرّب من الهدف.
+  </div>
+</div>`);
+
+/* 12 — Communication */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">8</div>
+  <div class="kicker a">تالتًا: مهارة التواصل · 12 دقيقة</div>
+  <h2>الحضور الواثق — <span class="hl" style="color:var(--amber)">متتكلمش زي الموظف</span></h2>
+  <div class="vs" style="margin-top:14px">
+    <div class="card bad">
+      <h4>🙊 الموظف — اللي بيتنسى</h4>
+      <p>«أنا عملت اللي طلبتوه.»<br>بيشتغل بصمت، يوافق أول واحد، بيتكلم آخره من غير رأي، ويعتذر قبل ما يقول رأيه.</p>
+    </div>
+    <div class="mid">↔</div>
+    <div class="card good">
+      <h4>🦅 صاحب المسؤولية — اللي بيتذكر</h4>
+      <p>«عملت X، ولاحظت Y، فعملت Z كمان.»<br>عنده موقف واضح: «أنا شايف الحل التاني أفضل، وده السبب» — بهدوء وثبات، من غير تلعثم.</p>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="note" style="margin-top:0">
+      💪 الثقة مش عناد ولا رفع صوت — إنك تقول رأيك بوضوح وهدوء، من غير ما تعتذر عن رأيك قبل ما تقوله. الشغل الكويس <b>مش</b> بيتكلم عن نفسه لوحده.
+    </div>
+    <div class="note cy" style="margin-top:0">
+      🧪 <b>تمرين يتنفّذ من بكرة:</b> قبل أي اجتماع، حضّر <b>جملة واحدة واضحة</b> تعبّر بيها عن رأيك. متدخلش فاضي تستني تشوف الكل هيقول إيه — تيجي مجهّز بحلول مش أسئلة، وبأرقام ونتائج مش انطباعات.
+    </div>
+  </div>
+</div>`);
+
+/* 13 — Books */
+SLIDES.push(`
+<div class="content">
+  <div class="kicker">30 ثانية لكل كتاب — التفاصيل في المستند المكتوب</div>
+  <h2>مكتبة <span class="hl">Phantoms</span> — العادات والعقل والتركيز</h2>
+  <div class="grid g4" style="margin-top:16px">
+    <div class="book">
+      <img src="assets/books/atomic-habits.jpg" alt="Atomic Habits">
+      <h3>Atomic Habits</h3>
+      <div class="au">James Clear</div>
+      <p>بناء عادة التطوّر بزيادات صغيرة يومية من غير ضغط — 1% كل يوم.</p>
+    </div>
+    <div class="book">
+      <img src="assets/books/deep-work.jpg" alt="Deep Work">
+      <h3>Deep Work</h3>
+      <div class="au">Cal Newport</div>
+      <p>ساعتين تركيز عميق بتنتجوا أكتر من أسبوع كامل من التشتّت.</p>
+    </div>
+    <div class="book">
+      <img src="assets/books/12-week-year.png" alt="The 12 Week Year">
+      <h3>The 12 Week Year</h3>
+      <div class="au">Brian Moran &amp; Michael Lennington</div>
+      <p>التنفيذ في دورات قصيرة عالية الكثافة — بدل التأجيل السنوي.</p>
+    </div>
+    <div class="book">
+      <img src="assets/books/daily-stoic.jpg" alt="The Daily Stoic">
+      <h3>The Daily Stoic</h3>
+      <div class="au">Ryan Holiday</div>
+      <p>ثبات انفعالي تحت الضغط — حكمة يومية للسنة كاملة.</p>
+    </div>
+  </div>
+</div>`);
+
+/* 14 — Dr Bravo analysis part 1 */
+SLIDES.push(`
+<div class="content">
+  <img class="doc-photo" src="assets/bravo-cutout.png" alt="د. محمود برافو">
+  <div style="width:64%;margin-right:auto">
+    <div class="kicker a">📌 تحليل كامل — ليه بنتعلم منه بالظبط؟</div>
+    <h2>د. محمود برافو <span class="hl" style="color:var(--amber)">Dr. Mahmoud Bravo</span></h2>
+    <p style="font-size:17px">مدرب شركات دولي وكوتش أداء، متحدث رئيسي (Keynote Speaker)، وخبير تسويق وتواصل في الرعاية الصحية — والأهم: إنسان بنى مهارات العرض والحضور دي من مشوار تنفيذي حقيقي، مش من كتب.</p>
+    <div class="grid g4" style="margin-top:14px;gap:10px">
+      <div class="stat"><b>1500+</b><span>مشروع عبر MENA</span></div>
+      <div class="stat"><b>3000+</b><span>متخصص درّبهم</span></div>
+      <div class="stat"><b>50+</b><span>حدث كمتحدث رئيسي</span></div>
+      <div class="stat"><b>30+</b><span>جائزة عالمية وإقليمية</span></div>
+    </div>
+    <div class="timeline-mini">
+      <div class="tlm"><b>2010</b><span>صيدلة عين شمس + دبلوم تسويق AUC → Novartis</span></div>
+      <div class="tlm"><b>2013–16</b><span>Brand Manager: نمو 35% فوق التارجت + MBA جنيف</span></div>
+      <div class="tlm"><b>2017–19</b><span>Abbott Nutrition ثم Medtronic — تسويق إقليمي في 9 دول</span></div>
+      <div class="tlm"><b>2021–24</b><span>MD لـ Healthcare COMs · DBA · رئيس تميز الأعمال بـ Utopia</span></div>
+    </div>
+    <p class="src">المصادر: <a href="https://www.mahmoudbravo.com/">mahmoudbravo.com</a> · <a href="https://www.mahmoudbravo.com/about">صفحة About</a> · <a href="https://www.instagram.com/drmahmoudbravo/">@drmahmoudbravo</a> · TEDxEJUST</p>
+  </div>
+</div>`);
+
+/* 15 — Dr Bravo analysis part 2: method */
+SLIDES.push(`
+<div class="content">
+  <div class="kicker a">تحليل الأسلوب — إيه اللي بيخليه مؤثر؟</div>
+  <h2>5 دراسات من برافو… <span class="hl" style="color:var(--amber)">بنطبّقها في ميتنج النهاردة</span></h2>
+  <div class="grid g2" style="margin-top:14px;gap:14px">
+    <div class="card acc"><div class="ico">🧬</div><h3>1 · المزج بين الاستراتيجي والإنساني</h3><p>موقعه بينصّ عليها صراحة: قدرته النادرة إنه يقدّم عمقًا استراتيجيًا بتواضع وتعاطف. <b style="color:var(--txt)">الدرس:</b> الحزم في الرسالة، الدفء في التوصيل — ده بالظبط توازن «البرمشن» و«التحوّل لصحاب» في خطتنا.</p></div>
+    <div class="card acc"><div class="ico">🔢</div><h3>2 · المصداقية بالأرقام مش بالكلام</h3><p>1500+ مشروع، 3000+ متدرب، 9 دول. <b style="color:var(--txt)">الدرس:</b> في أول جملتين للتعريف بنفسك — اضرب بإنجاز مختكر بأرقام، واقفل بسرعة. «الأرقام بتتكلم.»</p></div>
+    <div class="card acc"><div class="ico">🎙️</div><h3>3 · الصوت أول سلاح</h3><p>محتواه كله عن الصوت: «Don't Underestimate Your Voice»، «Find Your Authority»، و«Taming the Tremble». <b style="color:var(--txt)">الدرس:</b> أول 30 ثانية افتتح بصوت ثابت ومرتاح — أول انطباع بيُبنى سمعيًا قبل ما يُبنى بصريًا.</p></div>
+    <div class="card acc"><div class="ico">🕊️</div><h3>4 · التأثير الهادئ بدل البيع العنيف</h3><p>أشهر حواراته: «كيف تبيع دون أن تبيع — سيكولوجية العميل وفن التأثير الهادئ». <b style="color:var(--txt)">الدرس:</b> القيادة بالاقناع الهادي أقوى من التهديد — نظام Strikes يُعرض بهدوء وحزم، مش بترهيب.</p></div>
+  </div>
+  <div class="note" style="margin-top:14px">
+    👂 <b>5 · الاستماع النشط:</b> حلقاته عن Active Listening مع المشاعر — ده اللي بيخلي «الصندوق الأسود» مش فقرة شكلية: لما تقرأ أسئلة الفورم وترد عليها بجدية، بتقول للقاعة كلمة واحدة: «إحنا سامعاكم». وقانونه الشخصي تلخيصه في جملة: «الخبرة التقنية بتفتحلك الباب… لكن المهارات الناعمة هي اللي بتحدّد توصل لفين.»
+  </div>
+</div>`);
+
+/* 16 — Post-meeting doc */
+SLIDES.push(`
+<div class="content">
+  <div class="wm">📩</div>
+  <div class="kicker v">المستند المكتوب — يترسل بعد الميتنج بساعات</div>
+  <h2>اللي هنقوله <span class="hl" style="color:var(--violet)">بعمق في الجروب</span>… بدل ما يضيع في الزحمة</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><div class="ico">📅</div><h3>الـ 12 Week Year خطوة بخطوة</h3><p>الفكرة كاملة + التطبيق العملي على التيم: هدف ربعي محدد، خطة أسبوعية، تسليم أسبوعي صغير.</p></div>
+    <div class="card"><div class="ico">🧭</div><h3>إطار اختيار فكرة المشروع</h3><p>Product-Market Fit مبسّط: ابدأ من مشكلة حقيقية → مين المستخدم؟ → ابنِ أبسط نسخة (MVP) وجرّبها بسرعة.</p></div>
+    <div class="card"><div class="ico">📚</div><h3>ملخصات أطول للكتب الأربعة</h3><p>Atomic Habits · Deep Work · 12 Week Year · The Daily Stoic — نقاط قابلة للتطبيق مش مراجعات.</p></div>
+    <div class="card"><div class="ico">🗺️</div><h3>الـ Roadmap الكامل بالتواريخ</h3><p>خطة الترم الأول لكل لجنة بتواريخها — مرجع دائم يرجعوله في أي وقت.</p></div>
+  </div>
+  <div class="note vl" style="margin-top:16px">
+    ⏱️ <b>لو الوقت ضاق في الميتنج:</b> اختصر عروض اللجان لـ 10 دقائق بدل 13 — ده يوفّر 9 دقايق تروح لفقرة الـ Mindset. المكتوب يفضل هو شبكة الأمان.
+  </div>
+</div>`);
+
+/* 17 — Closing summary */
+SLIDES.push(`
+<div class="content" style="justify-content:center">
+  <div class="kicker a">الختام · 5 دقائق</div>
+  <h2 style="text-align:center">الخلاصة في جملة واحدة</h2>
+  <p class="big-quote" style="text-align:center;font-size:31px;margin-top:18px;color:var(--txt)">
+    «النهاردة مش بس سمعتوا خطة…<br>انتوا بقيتوا جزء من <span style="color:var(--cyan)">كيان بيصنع فرق</span>.»
+  </p>
+  <div class="grid g3" style="margin-top:28px">
+    <div class="card"><div class="ico">🙏</div><h3>قدّر الحضور</h3><p>كل واحد يحس إنه اتقدّر لالتزامه — مش إنه اتهدّد بس.</p></div>
+    <div class="card"><div class="ico">🔁</div><h3>كرّر الجملة التأسيسية</h3><p>الشعار اللي افتتحت بيه يتقفل بيه — بيثبت في الذاكرة.</p></div>
+    <div class="card"><div class="ico">🔻</div><h3>انزل من المنصة</h3><p>ابتسامة، تشمير كم، ونزول تجلس وسط التيم — الإشارة الجسدية أقوى من كلام.</p></div>
+  </div>
+</div>`);
+
+/* 18 — Finale */
+SLIDES.push(`
+<div class="content finale">
+  <svg class="ghost2" viewBox="0 0 200 220" fill="none">
+    <defs><linearGradient id="gg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#27e0ff"/><stop offset="1" stop-color="#8b7bff"/>
+    </linearGradient></defs>
+    <path d="M100 12c-46 0-74 30-74 72v96c0 10 12 14 18 6l12-15 13 16c4 5 11 5 15 0l13-16 13 16c4 5 11 5 15 0l13-16 12 15c6 8 18 4 18-6V84c0-42-28-72-68-72z" fill="url(#gg2)"/>
+    <circle cx="76" cy="92" r="11" fill="#07101f"/><circle cx="124" cy="92" r="11" fill="#07101f"/>
+    <ellipse cx="100" cy="122" rx="10" ry="14" fill="#07101f"/>
+  </svg>
+  <div class="kicker g">جملة التحوّل — تُقال حرفيًا</div>
+  <h1 style="font-size:52px;line-height:1.4">«لحد هنا… كلام الشغل والرسميات خلص.<br>من اللحظة دي إحنا <span style="color:var(--cyan)">إخوات وصحاب</span>.»</h1>
+  <p class="lead" style="text-align:center">يلا نفصّل… ونشوف مين هيسد ومين هيخسر في اللعب. 🎮<br>
+  <b style="color:var(--amber)">اللعب يبدأ فورًا — بلا فاصل زمني. الانتقال المفاجئ نفسه هو اللي بيكسر التوتر.</b></p>
+  <div class="pill-row" style="justify-content:center">
+    <div class="meta-chip"><span class="ic">👻</span> Phantoms — السنة دي بتتفرق</div>
+  </div>
+</div>`);
+
+/* ---------------- Engine ---------------- */
+const slideEl = document.getElementById('slide');
+let idx = 0;
+function render(){
+  slideEl.innerHTML = SLIDES[idx];
+  slideEl.classList.remove('active'); void slideEl.offsetWidth; slideEl.classList.add('active');
+  document.getElementById('pgn').textContent = idx+1;
+  document.getElementById('pgt').textContent = SLIDES.length;
+  document.getElementById('bar').style.width = ((idx+1)/SLIDES.length*100)+'%';
+}
+function go(d){
+  idx = Math.max(0, Math.min(SLIDES.length-1, idx+d));
+  render();
+}
+function fit(){
+  const s = Math.min(window.innerWidth/1340, window.innerHeight/790, 1.05);
+  slideEl.style.transform = `scale(${s})`;
+}
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '||e.key==='Enter'){e.preventDefault();go(1);}
+  if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key==='Backspace'){e.preventDefault();go(-1);}
+  if(e.key==='Home'){idx=0;render();}
+  if(e.key==='End'){idx=SLIDES.length-1;render();}
+});
+window.addEventListener('resize', fit);
+fit(); render();
+</script>
+</body>
+</html>
