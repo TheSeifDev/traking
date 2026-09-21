@@ -41,6 +41,35 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
     const organization = resolution.organization;
     const scope = organization ? organizationDataScope(organization) : null;
     if (!organization || !scope) return <AnalyticsEmptyState title="Connect a ClickUp Workspace" detail="Connect the selected Organization before reading its analytics." />;
+    // Organization "All Spaces" aggregate viewer activity is an admin/owner
+    // surface. A viewer-level org member must receive their own personal
+    // sessions scoped to their authenticated profile, not the org-wide list.
+    const canManageOrg = user.role === "owner" || organization.membership_role === "admin";
+    if (!canManageOrg) {
+      const personalAnalytics = await getWorkspaceAnalytics(scope, user.id);
+      return <PersonalSpaceAnalytics
+        space={{
+          id: organization.id,
+          organization_id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          clickup_workspace_id: organization.clickup_workspace_id,
+          clickup_space_id: null,
+          clickup_sync_status: "success",
+          clickup_last_synced_at: null,
+          clickup_sync_error: null,
+          created_by: null,
+          settings: {},
+          archived_at: null,
+          created_at: organization.created_at,
+          updated_at: organization.updated_at,
+          membership_role: organization.membership_role,
+          membership_status: organization.membership_status,
+          is_platform_owner: organization.is_platform_owner,
+        }}
+        analytics={personalAnalytics}
+      />;
+    }
     const filters = parsePeriod(params?.from, params?.to);
     const analytics = await getViewerActivityAnalytics(scope, {
       ...filters,

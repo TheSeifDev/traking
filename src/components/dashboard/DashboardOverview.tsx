@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -134,7 +134,25 @@ function EmptyState({ icon: Icon, title, body, action }: { icon: typeof Activity
 
 export default function DashboardOverview({ user, analytics, videos, error = null, spaceId, organizationId = null, scopeType = "specific", canManage }: DashboardOverviewProps) {
   const [dateRange, setDateRange] = useState<DateRange>("30");
-  const [now] = useState(() => Date.now());
+  // `now` is intentionally reactive, not a one-shot capture: relative timestamps and
+  // link-expiry checks go stale on long-open tabs. Refresh on focus, visibility
+  // changes, and a slow timer so "Just now / Active link" stays honest.
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const refresh = () => setNow(Date.now());
+    const onFocus = () => refresh();
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") refresh();
+    };
+    const intervalId = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
   const firstName = user.name?.trim().split(/\s+/)[0] ?? user.email.split("@")[0];
   const scoped = (path: string) => {
     const parameter = spaceId ? `space_id=${encodeURIComponent(spaceId)}` : organizationId ? `organization_id=${encodeURIComponent(organizationId)}` : "";

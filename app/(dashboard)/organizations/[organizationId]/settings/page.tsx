@@ -2,14 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Building2, ShieldCheck } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
-import { getOrganizationForUser } from "@/src/lib/organizations/service";
+import { authorizeOrganizationAdmin } from "@/src/lib/spaces/access";
 
 export default async function OrganizationSettingsPage({ params }: { params: Promise<{ organizationId: string }> }) {
   const user = await guardAuth();
   const { organizationId } = await params;
   let access;
   try {
-    access = await getOrganizationForUser(organizationId, user);
+    // Organization settings is an admin/owner surface. authorizeOrganizationAdmin
+    // throws for viewers and non-admin org members, which we translate to 404
+    // so unauthenticated/forbidden look identical (no information leak).
+    access = await authorizeOrganizationAdmin(organizationId, user);
   } catch {
     notFound();
   }

@@ -366,7 +366,189 @@ for (const code of codes) {
 }
 
 // ---------------------------------------------------------------------------
-// Login OAuth route wiring
+// 11. Dashboard route is viewer-accessible (P0-1 regression guard)
+//
+// Background: app/(dashboard)/layout.tsx used to call guardRole(ADMIN, "/").
+// Every fresh ClickUp-authenticated user is provisioned as VIEWER, so they
+// landed on /dashboard after OAuth and were silently redirected back to the
+// marketing home page by handleAuthError. The layout was changed to guardAuth()
+// to let viewers in; privileged surfaces (admin / owner, member management,
+// settings) are now guarded at the page level. These tests pin that behaviour:
+//   - viewer → /dashboard MUST be allowed
+//   - viewer → /admin MUST be forbidden
+//   - viewer → /owner MUST be forbidden
+//   - admin → /admin MUST be allowed; admin → /owner MUST be forbidden
+//   - owner → /admin and /owner MUST be allowed
+// We also read the layout/page sources to verify the guards are wired up
+// exactly that way; this fails closed if anyone reverts the layout guard.
+// ---------------------------------------------------------------------------
+
+section("11. Dashboard viewer-accessible regression (P0-1)");
+
+const dashboardLayout = readFileSync("app/(dashboard)/layout.tsx", "utf8");
+const dashboardPage = readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
+const adminLayout = readFileSync("app/admin/layout.tsx", "utf8");
+const ownerLayout = readFileSync("app/owner/layout.tsx", "utf8");
+const adminUsersPage = readFileSync("app/admin/users/page.tsx", "utf8");
+
+// Pin the actual source-level guards so a future regression to guardRole(ADMIN, "/")
+// in the dashboard layout is caught here instead of in production.
+assert(
+  dashboardLayout.includes('await guardAuth()') && !dashboardLayout.includes("guardRole(USER_ROLES.ADMIN"),
+  "(dashboard)/layout.tsx uses guardAuth() so viewers can enter /dashboard"
+);
+assert(
+  dashboardPage.includes('await guardAuth()'),
+  "(dashboard)/dashboard/page.tsx uses guardAuth() for the landing dashboard"
+);
+assert(
+  adminLayout.includes('await guardAdmin()'),
+  "app/admin/layout.tsx enforces the ADMIN gate at the layout boundary"
+);
+assert(
+  ownerLayout.includes('await guardOwner()'),
+  "app/owner/layout.tsx enforces the OWNER gate at the layout boundary"
+);
+assert(
+  adminUsersPage.includes('await guardOwner()'),
+  "app/admin/users/page.tsx keeps owner-only team management at the page boundary"
+);
+
+// Middleware fast-path: viewer is allowed past middleware into the dashboard.
+assert(
+  simulateMiddlewareAccess("/dashboard", { role: "viewer" }) === "allowed",
+  "viewer: middleware lets a viewer into /dashboard"
+);
+assert(
+  simulateMiddlewareAccess("/dashboard/analytics", { role: "viewer" }) === "allowed",
+  "viewer: middleware lets a viewer into /dashboard/analytics"
+);
+assert(
+  simulateMiddlewareAccess("/dashboard/videos", { role: "viewer" }) === "allowed",
+  "viewer: middleware lets a viewer into /dashboard/videos"
+);
+
+// Layout/page guard: viewer passes guardAuth (no role requirement), so no
+// redirect — equivalent to "the page renders".
+assert(
+  simulateGuard(viewer) === "ok",
+  "viewer: guardAuth passes — page renders for viewer"
+);
+
+// Viewer is still blocked from privileged admin and owner surfaces.
+assert(
+  simulateMiddlewareAccess("/admin", { role: "viewer" }) === "redirect_forbidden",
+  "viewer: middleware still blocks /admin"
+);
+assert(
+  simulateMiddlewareAccess("/admin/users", { role: "viewer" }) === "redirect_forbidden",
+  "viewer: middleware still blocks /admin/users"
+);
+assert(
+  simulateMiddlewareAccess("/owner", { role: "viewer" }) === "redirect_forbidden",
+  "viewer: middleware still blocks /owner"
+);
+assert(
+  simulateMiddlewareAccess("/owner/admins", { role: "viewer" }) === "redirect_forbidden",
+  "viewer: middleware still blocks /owner/admins"
+);
+assert(
+  simulateGuard(viewer, USER_ROLES.ADMIN) === "forbidden",
+  "viewer: guardAdmin rejects viewer"
+);
+assert(
+  simulateGuard(viewer, USER_ROLES.OWNER) === "forbidden",
+  "viewer: guardOwner rejects viewer"
+);
+
+// Admin can enter admin surfaces but not owner-only surfaces.
+assert(
+  simulateMiddlewareAccess("/admin", { role: "admin" }) === "allowed",
+  "admin: middleware allows /admin"
+);
+assert(
+  simulateMiddlewareAccess("/admin/settings", { role: "admin" }) === "allowed",
+  "admin: middleware allows /admin/settings"
+);
+assert(
+  simulateMiddlewareAccess("/admin/users", { role: "admin" }) === "redirect_forbidden",
+  "admin: middleware blocks owner-only /admin/users"
+);
+assert(
+  simulateMiddlewareAccess("/owner", { role: "admin" }) === "redirect_forbidden",
+  "admin: middleware blocks /owner"
+);
+assert(
+  simulateMiddlewareAccess("/owner/admins", { role: "admin" }) === "redirect_forbidden",
+  "admin: middleware blocks /owner/admins"
+);
+assert(
+  simulateGuard(admin, USER_ROLES.ADMIN) === "ok",
+  "admin: guardAdmin passes"
+);
+assert(
+  simulateGuard(admin, USER_ROLES.OWNER) === "forbidden",
+  "admin: guardOwner rejects admin"
+);
+
+// Owner can enter both admin and owner surfaces.
+assert(
+  simulateMiddlewareAccess("/admin", { role: "owner" }) === "allowed",
+  "owner: middleware allows /admin"
+);
+assert(
+  simulateMiddlewareAccess("/admin/users", { role: "owner" }) === "allowed",
+  "owner: middleware allows /admin/users (owner-only)"
+);
+assert(
+  simulateMiddlewareAccess("/owner", { role: "owner" }) === "allowed",
+  "owner: middleware allows /owner"
+);
+assert(
+  simulateMiddlewareAccess("/owner/admins", { role: "owner" }) === "allowed",
+  "owner: middleware allows /owner/admins"
+);
+assert(
+  simulateGuard(owner, USER_ROLES.ADMIN) === "ok",
+  "owner: guardAdmin passes (owner hierarchy ≥ admin)"
+);
+assert(
+  simulateGuard(owner, USER_ROLES.OWNER) === "ok",
+  "owner: guardOwner passes"
+);
+
+// Permission-level enforcement at the privileged-route boundary: viewer must
+// not gain access to admin-only / owner-only permissions even if a future
+// middleware bug leaks them onto the route.
+assert(
+  simulateApiHandler(viewer, PERMISSIONS.ADMINS_MANAGE) === 403,
+  "viewer: admins.manage permission rejected at API boundary"
+);
+assert(
+  simulateApiHandler(viewer, PERMISSIONS.USERS_MANAGE) === 403,
+  "viewer: users.manage permission rejected at API boundary"
+);
+assert(
+  simulateApiHandler(viewer, PERMISSIONS.SETTINGS_MANAGE) === 403,
+  "viewer: settings.manage permission rejected at API boundary"
+);
+assert(
+  simulateApiHandler(viewer, PERMISSIONS.SYSTEM_MANAGE) === 403,
+  "viewer: system.manage permission rejected at API boundary"
+);
+assert(
+  simulateApiHandler(admin, PERMISSIONS.VIDEOS_CREATE) === 200,
+  "admin: videos.create permission allowed at API boundary"
+);
+assert(
+  simulateApiHandler(admin, PERMISSIONS.ADMINS_MANAGE) === 403,
+  "admin: admins.manage permission rejected at API boundary (owner-only)"
+);
+assert(
+  simulateApiHandler(owner, PERMISSIONS.ADMINS_MANAGE) === 200,
+  "owner: admins.manage permission allowed at API boundary"
+);
+
 // ---------------------------------------------------------------------------
 
 section("Login OAuth route wiring");

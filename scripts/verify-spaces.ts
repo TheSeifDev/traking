@@ -89,7 +89,7 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/spaces/[spaceId]/route.ts", ["withDashboardAuth", "getSpaceForUser"]],
   ["app/api/spaces/[spaceId]/members/route.ts", ["withDashboardAuth", "listSpaceMembers", "addSpaceMember"]],
   ["app/api/spaces/[spaceId]/members/[profileId]/route.ts", ["withDashboardAuth", "updateSpaceMemberRole", "removeSpaceMember"]],
-  ["app/api/spaces/active/route.ts", ["withDashboardAuth", "setActiveSpacePreference", "getSpaceForUser"]],
+  ["app/api/spaces/active/route.ts", ["withAuth", "setActiveSpacePreference", "getSpaceForUser", "authorizeOrganizationMember"]],
   ["app/api/spaces/[spaceId]/member-candidates/route.ts", ["withDashboardAuth", "searchSpaceMemberCandidates"]],
   ["app/api/spaces/[spaceId]/analytics/route.ts", ["withDashboardAuth", "authorizeSpaceAdmin"]],
   ["app/api/spaces/[spaceId]/sync-clickup/route.ts", ["withDashboardAuth", "authorizeSpaceAdmin", "syncClickUpAuthorizedTeams"]],
@@ -101,7 +101,7 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/organizations/[organizationId]/members/[profileId]/route.ts", ["withDashboardAuth", "updateOrganizationMemberRole", "removeOrganizationMember"]],
   ["app/(dashboard)/organizations/[organizationId]/members/[profileId]/page.tsx", ["guardAuth", "getUser360", "kind: \"organization\"", "User360Dashboard"]],
   ["app/(dashboard)/organizations/[organizationId]/analytics/page.tsx", ["getOrganizationForUser", "listOrganizationSpaces", "getWorkspaceAnalytics"]],
-  ["app/(dashboard)/organizations/[organizationId]/settings/page.tsx", ["getOrganizationForUser", "Organization settings"]],
+  ["app/(dashboard)/organizations/[organizationId]/settings/page.tsx", ["authorizeOrganizationAdmin", "Organization settings"]],
   ["app/api/videos/route.ts", ["withDashboardAuth", "resolveSpaceForUser", "resolveMutationScopeForUser", "scope.spaceId"]],
   ["app/api/videos/[id]/route.ts", ["withDashboardAuth", "resolveSpaceForUser", "resolveSpaceAdminForUser", "access.space.id"]],
   ["app/api/videos/[id]/watch-link/route.ts", ["withDashboardAuth", "resolveMutationScopeForUser", "scope.spaceId"]],
@@ -208,11 +208,11 @@ assert(detailedTelemetryMigration.includes("ALTER TYPE public.watch_event_type")
 assert(trackingServiceSource.includes('event_type: "session_started"') && trackingServiceSource.includes('event_type: "session_ended"') && trackingServiceSource.includes("onConflict: \"session_id,client_event_id\""), "tracking service persists idempotent session lifecycle events");
 assert(trackingPlayer.includes("UniversalTrackingEngine") && trackingPlayer.includes("handleNormalized") && trackingEngine.includes('sendEvent("playback_progress"') && trackingEngine.includes('sendEvent("seek_completed"') && trackingEngine.includes('sendEvent("buffering_started"') && trackingEngine.includes('sendEvent("player_error"'), "provider adapters route detailed playback movement and error events through the universal engine");
 assert(trackingRanges.includes('case "playback_progress"') && trackingRanges.includes('case "seek_started"') && trackingRanges.includes('case "seek_completed"') && trackingRanges.includes('case "buffering_started"'), "range reconstruction handles progress, seek boundaries, and buffering without counting skipped gaps");
-assert(activeSpaceRoute.includes("withDashboardAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
+assert(activeSpaceRoute.includes("withAuth") && activeSpaceRoute.includes("getSpaceForUser") && activeSpaceRoute.includes("setActiveSpacePreference") && activeSpaceRoute.includes("isSelectableChildSpace"), "active Space selection is authenticated and server-authorized");
 assert(activeSpaceService.includes('ALL_SPACES_PREFIX = "all:"') && activeSpaceService.includes('type: "all"') && activeSpaceService.includes("setAllSpacesPreference"), "All Spaces is represented by an explicit organization preference, not a fake Space UUID");
 assert(activeSpaceService.includes("isOwner(user.role)") && activeSpaceService.includes("organizationSpaces.length === 1") && activeSpaceService.includes("requiresSelection"), "Owner defaults to All Spaces, one-space users auto-select, and multi-space users require an explicit choice");
 assert(dataScope.includes('type: "organization"') && dataScope.includes('type: "space"') && dataScope.includes("organizationDataScope"), "resource scope model distinguishes virtual Organization from real Space");
-assert(activeSpaceRoute.includes("scope === \"all\"") && activeSpaceRoute.includes("authorizeAllSpacesForUser") && activeSpaceRoute.includes("organization_id"), "All Spaces selection is server-authorized and owner-only");
+assert(activeSpaceRoute.includes("authorizeOrganizationMember") && activeSpaceRoute.includes("setAllSpacesPreference"), "All Spaces selection is server-authorized per-user via organization membership");
 assert(videosRoute.includes("organization_id") && videosRoute.includes("authorizeAllSpacesForUser") && videosRoute.includes("organizationDataScope") && videosRoute.includes("listVideos(scope)") && videosRoute.includes("getWorkspaceAnalytics(scope"), "organization video GET uses the authorized virtual organization scope");
 assert(videosPage.includes("context.type === \"all\"") && videosPage.includes("spaceCanManage={user.role === \"owner\"}") && videosPage.includes("allowAllSpaces={user.role === \"owner\"}"), "Owner All Spaces video library exposes scoped creation while preserving virtual scope semantics");
 assert(analyticsPage.includes("context.type === \"all\"") && analyticsPage.includes("organizationDataScope") && analyticsPage.includes("getViewerActivityAnalytics(scope") && analyticsPage.includes("defaultViewerActivityPeriod") && analyticsPage.includes("ViewerActivityDashboard"), "All Spaces analytics uses the complete authorized Viewer Activity organization aggregate");

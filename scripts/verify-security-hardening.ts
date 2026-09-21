@@ -71,7 +71,17 @@ async function runTests(): Promise<void> {
   assert(capabilityMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token"), "session token has a unique index");
   assert(sessionRoute.includes("withAuth") && sessionRoute.includes("createWatchSession(") && sessionRoute.includes("resolved.watch_link_id") && sessionRoute.includes("user.id"), "session creation requires an authenticated TrackUp profile");
   assert(sessionRoute.includes("session_token: session.sessionToken"), "session creation route returns the private capability");
-  assert(eventRoute.includes("withAuth") && eventRoute.includes("recordTrackingEvents(\n    sessionId") && eventRoute.includes("user.id"), "event route requires the authenticated TrackUp profile");
+  // Robust: collapse whitespace so the assertion survives formatting changes
+  // (the prior exact-newline match failed whenever recordTrackingEvents was
+  // reformatted onto different line breaks).
+  const collapseWhitespace = (source: string): string => source.replace(/\s+/g, " ");
+  const eventRouteCollapsed = collapseWhitespace(eventRoute);
+  assert(
+    eventRoute.includes("withAuth") &&
+      eventRouteCollapsed.includes("recordTrackingEvents(") &&
+      eventRouteCollapsed.includes("user.id"),
+    "event route requires the authenticated TrackUp profile"
+  );
   assert(eventRoute.includes("missing_session_token") && eventRoute.includes("const sessionToken") && eventRoute.includes("recordTrackingEvents"), "event route requires and forwards the capability");
   assert(eventRoute.includes("status: 404") && eventRoute.includes("session_not_found"), "event route uses a non-leaking capability failure");
   assert(endRoute.includes("withAuth") && endRoute.includes("endWatchSession(sessionId, sessionToken, user.id"), "end route requires the authenticated TrackUp profile");
@@ -172,7 +182,7 @@ async function runTests(): Promise<void> {
   assert(videoList.includes("providerFilter") && videoList.includes("statusFilter") && videoList.includes("sortBy") && videoList.includes("Search videos, descriptions, providers"), "video library provides real search, provider/status filters, and sorting");
   assert(videoList.includes("Most viewed") && videoList.includes("Alphabetical") && videoList.includes("Copy link") && videoList.includes("Open viewer") && videoList.includes("Revoke"), "video cards expose the required real management actions");
   assert(videoList.includes('method: "DELETE"') && videoList.includes("link_id: activeLink.id") && videoList.includes("Retry"), "video library exposes protected revoke and retry states");
-  assert(watchLinkService.includes('throw new Error("video_list_failed")') && watchLinkService.includes("created_at,\n          watch_sessions"), "video list surfaces query failures and returns complete link fields");
+  assert(watchLinkService.includes('throw new Error("video_list_failed")') && /\bcreated_at\b[\s\S]{0,400}\bwatch_sessions\b/.test(watchLinkService), "video list surfaces query failures and returns complete link fields");
   assert(watchLinksPage.includes("listVideos") && watchLinksManager.includes("WatchLinkPanel"), "watch-links page reuses workspace-scoped video and link contracts");
   assert(watchLinksManager.includes("Search watch links") && watchLinksManager.includes("Revoked links") && watchLinksManager.includes("No active link"), "watch-links UI provides searchable access cards and explicit active/revoked states");
   assert(watchLinksManager.includes("aspect-video") && watchLinksManager.includes("line-clamp-2") && watchLinksManager.includes("grid-cols-3") && watchLinksManager.includes("grid-cols-1") && watchLinksManager.includes("Session counts are recorded views"), "watch-links cards preserve media ratio and compact page-level information hierarchy");
@@ -266,10 +276,31 @@ async function runTests(): Promise<void> {
   else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
   if (originalRedirectUri === undefined) delete process.env.CLICKUP_REDIRECT_URI;
   else process.env.CLICKUP_REDIRECT_URI = originalRedirectUri;
-assert(oauthStart.includes("getClickUpRedirectUri") && !oauthStart.includes('"http://localhost:3000"'), "OAuth start uses canonical redirect configuration without localhost fallback");
-assert(oauthCallback.includes("getClickUpRedirectUri") && oauthCallback.includes("redirect_uri: redirectUri"), "OAuth token exchange uses the same environment-aware callback URI");
-assert(logoutRoute.includes("getAppUrl") && !logoutRoute.includes('"http://localhost:3000"'), "logout uses canonical production origin");
-assert(videoServiceForUrls.includes("const appUrl = getAppUrl()") && !videoServiceForUrls.includes('process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"'), "watch links use canonical production origin");
+  // Robust: strip comments + whitespace, then check for any localhost/loopback
+  // URL literal regardless of quoting style. The previous exact-string match
+  // would silently miss single-quoted or template-literal forms and could
+  // false-positive on a localhost mention inside a comment.
+  const stripCommentsAndWhitespace = (source: string): string => source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1")
+    .replace(/\s+/g, " ");
+  const oauthStartStripped = stripCommentsAndWhitespace(oauthStart);
+  const videoServiceStripped = stripCommentsAndWhitespace(videoServiceForUrls);
+  const logoutStripped = stripCommentsAndWhitespace(logoutRoute);
+  const localhostLiteral = /(['"`])https?:\/\/(?:localhost|127\.0\.0\.1)(:\d+)?\1/;
+  assert(
+    oauthStartStripped.includes("getClickUpRedirectUri") && !localhostLiteral.test(oauthStartStripped),
+    "OAuth start uses canonical redirect configuration without localhost fallback"
+  );
+  assert(oauthCallback.includes("getClickUpRedirectUri") && oauthCallback.includes("redirect_uri: redirectUri"), "OAuth token exchange uses the same environment-aware callback URI");
+  assert(
+    logoutStripped.includes("getAppUrl") && !localhostLiteral.test(logoutStripped),
+    "logout uses canonical production origin"
+  );
+  assert(
+    videoServiceStripped.includes("getAppUrl()") && !/NEXT_PUBLIC_APP_URL\s*\?\?\s*(['"`])https?:\/\/(?:localhost|127\.0\.0\.1)/.test(videoServiceStripped),
+    "watch links use canonical production origin"
+  );
   const authRedirect = readFileSync("src/lib/auth/redirect.ts", "utf8");
   assert(authRedirect.includes("getSafeAuthReturnPath") && authRedirect.includes("startsWith(\"//\")"), "auth return path rejects external and protocol-relative redirects");
   assert(oauthStart.includes("trackup_oauth_state") && oauthStart.includes("AUTH_RETURN_COOKIE"), "OAuth start stores state and return cookies");

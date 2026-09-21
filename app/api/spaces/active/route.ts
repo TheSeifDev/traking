@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withDashboardAuth } from "@/src/lib/auth/api-handler";
-import { authorizeAllSpacesForUser, clearActiveSpacePreference, setActiveSpacePreference, setAllSpacesPreference } from "@/src/lib/spaces/active-space";
+import { withAuth } from "@/src/lib/auth/api-handler";
+import { clearActiveSpacePreference, setActiveSpacePreference, setAllSpacesPreference } from "@/src/lib/spaces/active-space";
+import { authorizeOrganizationMember } from "@/src/lib/spaces/access";
 import { getSpaceForUser } from "@/src/lib/spaces/service";
 import { isSelectableChildSpace } from "@/src/lib/spaces/labels";
 
-export const POST = withDashboardAuth(async (request: NextRequest, user) => {
+const UUID_PATTERN = /^[0-9a-f-]{36}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+
+// POST — persist the active-space preference cookie for the calling user.
+// Authentication is required; the requested space/organization must be one the
+// caller can actually access. This is a per-user UI preference, not a tenant
+// mutation, so we deliberately do NOT require the dashboard ADMIN wrapper.
+// Each call only ever writes the calling user's cookie, so a viewer cannot
+// mutate another user's preference.
+export const POST = withAuth(async (request: NextRequest, user) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -17,21 +30,27 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
 
   if (scope === "all") {
     const organizationId = typeof payload.organization_id === "string" ? payload.organization_id.trim() : "";
-    if (!organizationId) return NextResponse.json({ error: "missing_organization_id" }, { status: 400 });
+    if (!organizationId || !isUuid(organizationId)) return NextResponse.json({ error: "missing_organization_id" }, { status: 400 });
     try {
-      await authorizeAllSpacesForUser(organizationId, user);
-      await setAllSpacesPreference(organizationId);
-      return NextResponse.json({ active_space_scope: "all", organization_id: organizationId });
+      // Per-user UI preference: any authenticated member of the organization may
+      // persist their own "All Spaces" view for that organization. Owner-only
+      // tenant mutations remain gated elsewhere.
+      await authorizeOrganizationMember(organizationId, user);
     } catch {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    await setAllSpacesPreference(organizationId);
+    return NextResponse.json({ active_space_scope: "all", organization_id: organizationId });
   }
   if (scope !== "specific") return NextResponse.json({ error: "invalid_scope" }, { status: 400 });
 
   const rawSpaceId = payload.space_id;
   const spaceId = typeof rawSpaceId === "string" ? rawSpaceId.trim() : "";
-  if (!spaceId) return NextResponse.json({ error: "missing_space_id" }, { status: 400 });
+  if (!spaceId || !isUuid(spaceId)) return NextResponse.json({ error: "missing_space_id" }, { status: 400 });
   try {
+    // authorizeSpaceMember (via getSpaceForUser) enforces that the caller is a
+    // platform owner OR an active organization/space member. Viewers are accepted
+    // for the specific spaces they belong to; non-members receive 403.
     const access = await getSpaceForUser(spaceId, user);
     if (!access.organization || !isSelectableChildSpace(access.space, access.organization.name)) {
       return NextResponse.json({ error: "space_not_selectable" }, { status: 409 });
@@ -43,7 +62,9 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   }
 });
 
-export const DELETE = withDashboardAuth(async () => {
+// DELETE — clear the calling user's active-space preference cookie.
+// Per-user, no tenant scope needed.
+export const DELETE = withAuth(async () => {
   await clearActiveSpacePreference();
   return NextResponse.json({ cleared: true });
 });

@@ -110,13 +110,17 @@ export async function GET(request: Request) {
     if (typeof tokens.access_token !== "string" || tokens.access_token.length === 0) return invitationFlow ? redirectToInvitationError(request, returnTo, "auth_failed") : redirectToLogin(request, "auth_failed", returnTo);
     const accessToken = tokens.access_token;
 
-    const teamsResponse = await fetch("https://api.clickup.com/api/v2/team", { headers: { Authorization: `Bearer ${accessToken}` } });
+    // Workspaces (teams) and user identity are both gated only on `accessToken`.
+    // Run them in parallel to cut roughly half of the OAuth callback latency.
+    const [teamsResponse, userResponse] = await Promise.all([
+      fetch("https://api.clickup.com/api/v2/team", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch("https://api.clickup.com/api/v2/user", { headers: { Authorization: `Bearer ${accessToken}` } }),
+    ]);
     console.info("ClickUp authorized Workspaces request completed", { status: teamsResponse.status, ok: teamsResponse.ok });
     if (!teamsResponse.ok) return invitationFlow ? redirectToInvitationError(request, returnTo, "workspace_auth_failed") : redirectToLogin(request, "workspace_auth_failed", returnTo);
     const teamsData: ClickUpTeamsResponse = await teamsResponse.json().catch(() => ({}));
     if (!Array.isArray(teamsData.teams) || teamsData.teams.length === 0) return invitationFlow ? redirectToInvitationError(request, returnTo, "no_workspaces") : redirectToLogin(request, "no_workspaces", returnTo);
 
-    const userResponse = await fetch("https://api.clickup.com/api/v2/user", { headers: { Authorization: `Bearer ${accessToken}` } });
     console.info("ClickUp authorized user request completed", { status: userResponse.status, ok: userResponse.ok });
     if (!userResponse.ok) return invitationFlow ? redirectToInvitationError(request, returnTo, "invalid_identity") : redirectToLogin(request, "invalid_identity", returnTo);
     const userData: unknown = await userResponse.json();

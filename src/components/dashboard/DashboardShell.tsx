@@ -132,19 +132,36 @@ export default function DashboardShell({
           ? { scope: "specific", space_id: activeSpaceId }
           : null;
     if (request) {
-          const body = JSON.stringify(request);
-          if (lastActiveSpaceRequest.current === body) return;
-          lastActiveSpaceRequest.current = body;
-          void fetch("/api/spaces/active", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-          });
-        } else {
-          if (lastActiveSpaceRequest.current === "__clear__") return;
-          lastActiveSpaceRequest.current = "__clear__";
-          void fetch("/api/spaces/active", { method: "DELETE" });
+      const body = JSON.stringify(request);
+      if (lastActiveSpaceRequest.current === body) return;
+      lastActiveSpaceRequest.current = body;
+      // Surface a non-2xx response instead of swallowing it. The endpoint is now
+      // withAuth (any authenticated user) and validates the requested space/org,
+      // so a 403 here means the caller no longer has access to that context.
+      // Logging keeps the failure visible in owner observability without
+      // disturbing the rest of the dashboard render path.
+      void fetch("/api/spaces/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      }).then((response) => {
+        if (!response.ok) {
+          console.warn("Active space preference persist rejected", { status: response.status, request });
         }
+      }).catch((error: unknown) => {
+        console.warn("Active space preference persist failed", { request, error: error instanceof Error ? error.message : String(error) });
+      });
+    } else {
+      if (lastActiveSpaceRequest.current === "__clear__") return;
+      lastActiveSpaceRequest.current = "__clear__";
+      void fetch("/api/spaces/active", { method: "DELETE" }).then((response) => {
+        if (!response.ok) {
+          console.warn("Active space preference clear rejected", { status: response.status });
+        }
+      }).catch((error: unknown) => {
+        console.warn("Active space preference clear failed", { error: error instanceof Error ? error.message : String(error) });
+      });
+    }
       }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, requestedAllSpaces, requestedOrganizationId, routeSpace]);
 
   const scopedHref = (href: string) => {
