@@ -1,8 +1,18 @@
+import type { Metadata } from "next";
 import { ArrowRight, BriefcaseBusiness, ClipboardCheck, GraduationCap, MessageSquareText, PlaySquare, UsersRound } from "lucide-react";
 import Link from "next/link";
 import ResponsiveNav from "@/src/components/navigation/ResponsiveNav";
 import Footer from "@/src/components/home/Footer";
 import FinalCTA from "@/src/components/home/FinalCTA";
+
+export const metadata: Metadata = {
+  title: "Use Cases",
+  description: "Onboarding, project updates, reviews, internal demos, team knowledge sharing, and playback investigation with TrackUp's scoped video workspace.",
+  openGraph: {
+    title: "TrackUp Use Cases | Onboarding, reviews, demos, and more",
+    description: "Onboarding, project updates, reviews, internal demos, team knowledge sharing, and playback investigation with TrackUp's scoped video workspace.",
+  },
+};
 
 const useCases = [
   {

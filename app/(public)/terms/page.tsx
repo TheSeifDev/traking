@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { ArrowLeft, CircleAlert, FileText, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import ResponsiveNav from "@/src/components/navigation/ResponsiveNav";
 import Footer from "@/src/components/home/Footer";
+
+export const metadata: Metadata = {
+  title: "Terms",
+  description: "TrackUp product notice covering authorized use, provider behavior, analytics interpretation, and account and link responsibility.",
+  openGraph: {
+    title: "TrackUp Terms | Use TrackUp with clear expectations",
+    description: "TrackUp product notice covering authorized use, provider behavior, analytics interpretation, and account and link responsibility.",
+  },
+};
 
 const terms = [
   {

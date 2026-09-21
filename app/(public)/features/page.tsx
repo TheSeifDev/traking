@@ -1,9 +1,19 @@
+import type { Metadata } from "next";
 import ResponsiveNav from "@/src/components/navigation/ResponsiveNav";
 import Footer from "@/src/components/home/Footer";
 import Features from "@/src/components/home/Features";
 import FinalCTA from "@/src/components/home/FinalCTA";
 import WorkflowSteps from "@/src/components/how-it-works/WorkflowSteps";
 import AnalyticsShowcase from "@/src/components/features/AnalyticsShowcase";
+
+export const metadata: Metadata = {
+  title: "Features",
+  description: "Provider-aware video tracking, ClickUp-connected access, scoped analytics, watch-link management, and team permissions for ClickUp teams.",
+  openGraph: {
+    title: "TrackUp Features | Provider-aware video tracking for ClickUp teams",
+    description: "Provider-aware video tracking, ClickUp-connected access, scoped analytics, watch-link management, and team permissions for ClickUp teams.",
+  },
+};
 
 export default function FeaturesPage() {
   return (

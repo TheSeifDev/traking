@@ -16,6 +16,42 @@ export const metadata: Metadata = {
   },
   description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
   applicationName: "TrackUp",
+  keywords: ["video tracking", "clickup", "playback analytics", "video sharing", "team collaboration", "watch links"],
+  authors: [{ name: "TrackUp" }],
+  creator: "TrackUp",
+  publisher: "TrackUp",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://trakeup.vercel.app",
+    siteName: "TrackUp",
+    title: "TrackUp | Video intelligence for ClickUp teams",
+    description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+    images: [
+      {
+        url: "/hero_img.webp",
+        width: 1200,
+        height: 630,
+        alt: "TrackUp dashboard preview",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TrackUp | Video intelligence for ClickUp teams",
+    description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+    images: ["/hero_img.webp"],
+  },
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
     shortcut: "/favicon.ico",

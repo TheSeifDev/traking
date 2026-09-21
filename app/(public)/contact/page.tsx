@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { ArrowLeft, ExternalLink, GitBranch, LifeBuoy, LogIn } from "lucide-react";
 import Link from "next/link";
 import ResponsiveNav from "@/src/components/navigation/ResponsiveNav";
 import Footer from "@/src/components/home/Footer";
+
+export const metadata: Metadata = {
+  title: "Contact",
+  description: "Get help with TrackUp: open a GitHub issue with reproduction steps, or sign in to your workspace for in-product resources.",
+  openGraph: {
+    title: "Contact TrackUp Support",
+    description: "Get help with TrackUp: open a GitHub issue with reproduction steps, or sign in to your workspace for in-product resources.",
+  },
+};
 
 export default function ContactPage() {
   return (

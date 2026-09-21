@@ -1,7 +1,17 @@
+import type { Metadata } from "next";
 import { ArrowLeft, Database, LockKeyhole, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import ResponsiveNav from "@/src/components/navigation/ResponsiveNav";
 import Footer from "@/src/components/home/Footer";
+
+export const metadata: Metadata = {
+  title: "Privacy",
+  description: "What TrackUp stores and protects: identity, video and viewing records, security boundaries, provider limitations, and retention.",
+  openGraph: {
+    title: "TrackUp Privacy | What we store and protect",
+    description: "What TrackUp stores and protects: identity, video and viewing records, security boundaries, provider limitations, and retention.",
+  },
+};
 
 const sections = [
   {

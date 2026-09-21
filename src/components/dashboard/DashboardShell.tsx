@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2 } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2, Menu, X } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
 import type { ActiveSpaceContext } from "@/src/lib/spaces/active-space";
 import PresenceHeartbeat from "@/src/components/dashboard/PresenceHeartbeat";
@@ -52,6 +52,26 @@ export default function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const lastActiveSpaceRequest = useRef<string>("");
+
+      // Lock body scroll while drawer is open and close on Escape.
+      // Drawer closes on navigation automatically because every nav link has
+      // onClick={() => setMobileNavOpen(false)} — no route-change effect needed.
+      useEffect(() => {
+        if (!mobileNavOpen) return;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        const onKey = (e: KeyboardEvent) => {
+          if (e.key === "Escape") setMobileNavOpen(false);
+        };
+        window.addEventListener("keydown", onKey);
+        return () => {
+          document.body.style.overflow = previous;
+          window.removeEventListener("keydown", onKey);
+        };
+      }, [mobileNavOpen]);
+
   const routeSpaceId = pathname.match(/^\/spaces\/([^/]+)/)?.[1] ?? searchParams.get("space_id");
   const routeSpace = spaces.find((space) => space.id === routeSpaceId) ?? null;
   const requestedOrganizationId = searchParams.get("organization_id");
@@ -112,15 +132,20 @@ export default function DashboardShell({
           ? { scope: "specific", space_id: activeSpaceId }
           : null;
     if (request) {
-      void fetch("/api/spaces/active", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-    } else {
-      void fetch("/api/spaces/active", { method: "DELETE" });
-    }
-  }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, requestedAllSpaces, requestedOrganizationId, routeSpace]);
+          const body = JSON.stringify(request);
+          if (lastActiveSpaceRequest.current === body) return;
+          lastActiveSpaceRequest.current = body;
+          void fetch("/api/spaces/active", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
+        } else {
+          if (lastActiveSpaceRequest.current === "__clear__") return;
+          lastActiveSpaceRequest.current = "__clear__";
+          void fetch("/api/spaces/active", { method: "DELETE" });
+        }
+      }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, requestedAllSpaces, requestedOrganizationId, routeSpace]);
 
   const scopedHref = (href: string) => {
     if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
@@ -202,19 +227,78 @@ export default function DashboardShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <Link href={scopedHref("/dashboard")} className="shrink-0" aria-label="TrackUp dashboard"><Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 object-contain" /></Link>
-              <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{hasOrganizationSelector ? <select aria-label="Select Organization" value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="block max-w-32 truncate rounded border border-white/10 bg-[#0b0b28] px-1 text-[10px] text-white/70 outline-none focus:border-violet-300/50">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <span className="block max-w-28 truncate text-[10px] text-white/35" title={organizationContext ?? undefined}>{organizationContext ?? "No Organization"}</span>}<span className="block max-w-28 truncate text-[10px] text-violet-200/55" title={displayedSpaceContext}>{displayedSpaceContext}</span></div>
-            </div>
-            <nav aria-label="Mobile navigation" className="flex max-w-[62vw] shrink-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {visibleNavItems.map(({ label, href, icon: Icon }) => <Link key={href} href={scopedHref(href)} className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs transition-colors ${isActive(href) ? "bg-violet-500/15 text-violet-300" : "text-white/45 hover:bg-white/5 hover:text-white"}`} aria-label={label}><Icon size={16} /><span className="hidden min-[430px]:inline">{label}</span></Link>)}
-            </nav>
-          </header>
+                  <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#0b0b28]/95 px-4 backdrop-blur lg:hidden">
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+                                  aria-expanded={mobileNavOpen}
+                                  aria-controls="dashboard-mobile-nav"
+                                  onClick={() => setMobileNavOpen((v) => !v)}
+                                  className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/[0.025] text-white transition-colors hover:bg-white/[0.06]"
+                                >
+                                  <Menu size={20} className={`absolute transition-all duration-200 ${mobileNavOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"}`} />
+                                  <X size={20} className={`absolute transition-all duration-200 ${mobileNavOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"}`} />
+                                </button>
+                                <Link href={scopedHref("/dashboard")} className="shrink-0" aria-label="TrackUp dashboard"><Image src="/logo.webp" alt="TrackUp" width={64} height={64} priority className="h-8 w-8 object-contain" /></Link>
+                                <div className="min-w-0"><span className="block text-sm font-semibold text-white">TrackUp</span>{hasOrganizationSelector ? <select aria-label="Select Organization" value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="block max-w-32 truncate rounded border border-white/10 bg-[#0b0b28] px-1 text-[10px] text-white/70 outline-none focus:border-violet-300/50">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <span className="block max-w-28 truncate text-[10px] text-white/35" title={organizationContext ?? undefined}>{organizationContext ?? "No Organization"}</span>}<span className="block max-w-28 truncate text-[10px] text-violet-200/55" title={displayedSpaceContext}>{displayedSpaceContext}</span></div>
+                              </div>
+                            </header>
 
-          <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
-        </div>
-      </div>
-    </>
-  );
-}
+                            {/* Mobile drawer */}
+                            <div
+                              onClick={() => setMobileNavOpen(false)}
+                              aria-hidden="true"
+                              className={`fixed inset-0 z-30 bg-black/55 backdrop-blur-sm transition-opacity duration-300 lg:hidden ${mobileNavOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
+                            />
+                            <nav
+                              id="dashboard-mobile-nav"
+                              aria-label="Dashboard navigation"
+                              className={`fixed inset-y-0 left-0 z-40 flex w-[min(86vw,20rem)] flex-col border-r border-white/8 bg-[#0b0b28]/95 backdrop-blur-xl transition-transform duration-300 lg:hidden ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}
+                            >
+                              <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/8 px-5">
+                                <Link href={scopedHref("/dashboard")} onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2">
+                                  <Image src="/logo.webp" alt="TrackUp" width={128} height={128} priority className="h-8 w-8 object-contain" />
+                                  <span className="text-sm font-semibold tracking-wide text-white">TrackUp</span>
+                                </Link>
+                                <button type="button" aria-label="Close menu" onClick={() => setMobileNavOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/8 text-white/60 hover:bg-white/5">
+                                  <X size={18} />
+                                </button>
+                              </div>
+
+                              <div className="space-y-3 px-4 pt-4">
+                                {organizationContext && (
+                                  <div className="min-w-0 px-1 py-1">
+                                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Organization</span>
+                                    {hasOrganizationSelector ? <select aria-label="Select Organization" value={selectedOrganizationId} onChange={(event) => selectOrganization(event.target.value)} className="block w-full min-w-0 rounded-lg border border-white/10 bg-[#0b0b28] px-2 py-1.5 text-sm font-medium text-white/80 outline-none focus:border-violet-300/50">{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select> : <p className="truncate text-sm font-medium text-white/80" title={organizationContext}>{organizationContext}</p>}
+                                  </div>
+                                )}
+                                <div className="min-w-0 px-1 py-1">
+                                  <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
+                                  <p className="truncate text-sm font-medium text-white/65" title={displayedSpaceContext}>{displayedSpaceContext}</p>
+                                </div>
+                              </div>
+
+                              <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-4">
+                                {visibleNavItems.map(({ label, href, icon: Icon }) => {
+                                  const active = isActive(href);
+                                  return <Link key={href} href={scopedHref(href)} onClick={() => setMobileNavOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${active ? "border border-violet-500/20 bg-violet-600/20 text-violet-300" : "text-white/60 hover:bg-white/5 hover:text-white"}`}><Icon size={16} className={active ? "text-violet-400" : "text-white/40"} />{label}</Link>;
+                                })}
+                              </nav>
+
+                              <div className="space-y-1 border-t border-white/8 px-3 pb-4 pt-4">
+                                <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+                                  <p className="truncate text-sm font-medium text-white/80">{user.name ?? user.email}</p>
+                                  <p className="truncate text-[11px] text-white/40">{user.email}</p>
+                                  <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-300">{displayedOrganizationRole}</span>
+                                </div>
+                                <form action="/api/auth/logout" method="POST"><button type="submit" className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-white/40 transition-all hover:bg-red-500/10 hover:text-red-400"><LogOut size={15} />Sign out</button></form>
+                              </div>
+                            </nav>
+
+                            <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
