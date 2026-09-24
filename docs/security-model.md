@@ -54,7 +54,7 @@ The security-hardening migration `20260824000011_harden_function_security.sql` r
 
 ## Browser security headers
 
-The application sends a baseline CSP compatible with the YouTube IFrame API, Referrer-Policy, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a restrictive Permissions-Policy. YouTube frame/script/connect domains are explicitly allowed where required by the existing embedded player; no broad frame embedding policy is enabled. Vercel supplies Strict-Transport-Security on the HTTPS production deployment.
+The application sends a baseline CSP compatible with the YouTube IFrame API, Referrer-Policy, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a restrictive Permissions-Policy. YouTube frame/script/connect domains are explicitly allowed where required by the existing embedded player; no broad frame embedding policy is enabled. Vercel supplies Strict-Transport-Security on the HTTPS production deployment. The `next dev` server alone extends `script-src` with `'unsafe-eval'` because React's development runtime probes indirect eval once per RSC stream to reconstruct server-component call stacks; the production policy never allows `unsafe-eval`, and the strict baseline is pinned byte-for-byte by `scripts/verify-security-hardening.ts`.
 
 ## CSRF and state-changing requests
 

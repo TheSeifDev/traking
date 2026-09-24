@@ -262,6 +262,44 @@ async function runTests(): Promise<void> {
   assert(nextConfig.includes('key: "Content-Security-Policy"') && nextConfig.includes("frame-src https://www.youtube.com") && nextConfig.includes("https://player.vimeo.com") && nextConfig.includes("https://drive.google.com") && nextConfig.includes("https://t.me") && nextConfig.includes("connect-src 'self'"), "CSP is present and allows only the registered provider embed/player network contracts");
   assert(nextConfig.includes('key: "Referrer-Policy"') && nextConfig.includes('strict-origin-when-cross-origin'), "YouTube embeds receive a referrer policy required for player configuration");
   assert(nextConfig.includes('key: "X-Content-Type-Options"') && nextConfig.includes('value: "nosniff"') && nextConfig.includes('key: "X-Frame-Options"') && nextConfig.includes('value: "DENY"') && nextConfig.includes('key: "Permissions-Policy"'), "baseline browser hardening headers are configured");
+
+  // Functional regression check: the strict production CSP is pinned
+  // byte-for-byte, and 'unsafe-eval' may only appear on the development
+  // server. React's development runtime probes indirect eval once per RSC
+  // stream to reconstruct server-component call stacks; production bundles
+  // never evaluate code, so the shipped policy must never allow it.
+  const PINNED_PRODUCTION_CSP =
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com https://player.vimeo.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' blob: https:; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me; connect-src 'self' https://*.supabase.co https://api.clickup.com https://www.youtube.com https://*.youtube.com https://*.googlevideo.com https://*.vimeo.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me;";
+  type SecurityHeaderRoute = { source: string; headers: Array<{ key: string; value: string }> };
+  const nextConfigModule = (await import("../next.config")).default as unknown as {
+    headers: () => Promise<SecurityHeaderRoute[]>;
+  };
+  const cspFromConfig = async (): Promise<string> => {
+    const routes = await nextConfigModule.headers();
+    const csp = routes
+      .find((route) => route.source === "/:path*")
+      ?.headers.find((header) => header.key === "Content-Security-Policy");
+    if (!csp) {
+      throw new Error("next.config headers() no longer applies a Content-Security-Policy to /:path*");
+    }
+    return csp.value;
+  };
+  Reflect.set(process.env, "NODE_ENV", "production");
+  const productionCsp = await cspFromConfig();
+  assert(productionCsp === PINNED_PRODUCTION_CSP, "production CSP is byte-identical to the pinned strict baseline");
+  assert(!productionCsp.includes("unsafe-eval"), "production CSP never allows unsafe-eval");
+  Reflect.set(process.env, "NODE_ENV", "development");
+  const developmentCsp = await cspFromConfig();
+  assert(developmentCsp.replace(" 'unsafe-eval'", "") === productionCsp, "development CSP extends the production policy with 'unsafe-eval' and nothing else");
+  const scriptSrcDirective = (csp: string): string =>
+    csp.split(";").map((directive) => directive.trim()).find((directive) => directive.startsWith("script-src ")) ?? "";
+  assert(scriptSrcDirective(developmentCsp) === `${scriptSrcDirective(productionCsp)} 'unsafe-eval'`, "development appends 'unsafe-eval' to the script-src directive only");
+  Reflect.deleteProperty(process.env, "NODE_ENV");
+  const unsetEnvCsp = await cspFromConfig();
+  assert(unsetEnvCsp === PINNED_PRODUCTION_CSP, "CSP falls back to the strict production policy when NODE_ENV is unset");
+  if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+  else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
+
   assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
   assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
   assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
