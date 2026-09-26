@@ -109,11 +109,31 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtectedPath(pathname)) {
+    const rawCookie = request.cookies.get("trackup_user")?.value;
+    const hasTrackupUserCookie = Boolean(rawCookie);
+    const verificationResult = session ? "valid" : hasTrackupUserCookie ? "invalid" : "missing";
+
     if (!isAuthenticated) {
+      console.info("[TEMPORARY DIAGNOSTIC] Middleware rejecting protected request", {
+        hostname: request.nextUrl.hostname,
+        pathname,
+        userAgent: request.headers.get("user-agent"),
+        hasTrackupUserCookie,
+        verificationResult,
+        redirectReason: "unauthenticated_session",
+      });
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
+
+    console.info("[TEMPORARY DIAGNOSTIC] Middleware accepted protected request", {
+      hostname: request.nextUrl.hostname,
+      pathname,
+      userAgent: request.headers.get("user-agent"),
+      hasTrackupUserCookie: true,
+      verificationResult: "valid",
+    });
 
     const role = session.role;
 

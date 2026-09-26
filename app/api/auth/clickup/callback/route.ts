@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { provisionClickUpUser } from "@/src/lib/auth/provisioning";
 import { createSignedSessionCookie, SESSION_MAX_AGE_SECONDS } from "@/src/lib/auth/session-cookie";
 import { upsertClickUpConnections } from "@/src/lib/clickup/workspace";
@@ -176,6 +176,15 @@ export async function GET(request: Request) {
       path: "/",
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
+
+    console.info("[TEMPORARY DIAGNOSTIC] OAuth callback completed", {
+      requestHostname: new URL(request.url).hostname,
+      callbackCompleted: true,
+      sessionCookieCreated: Boolean(signedSession),
+      redirectDestination: new URL(destination, request.url).toString(),
+      userAgent: request.headers.get("user-agent"),
+    });
+
     return response;
   } catch {
     console.error("Unexpected error during OAuth callback processing");
