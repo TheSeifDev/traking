@@ -55,24 +55,24 @@ assert(!presenceRoute.includes("request.json") && !presenceRoute.includes("user_
 
 async function main(): Promise<void> {
   const originalKey = process.env.RESEND_API_KEY;
-const originalFrom = process.env.RESEND_FROM_EMAIL;
-delete process.env.RESEND_API_KEY;
-delete process.env.RESEND_FROM_EMAIL;
-const noProvider = await sendTransactionalEmail({ to: "controlled@example.com", subject: "test", html: "<p>test</p>", text: "test", idempotencyKey: "test-invitation-boundary" });
-assert(!noProvider.success && noProvider.error === "delivery_not_configured", "provider boundary never reports sent without configured credentials");
-if (originalKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalKey;
-if (originalFrom === undefined) delete process.env.RESEND_FROM_EMAIL; else process.env.RESEND_FROM_EMAIL = originalFrom;
+  const originalFrom = process.env.RESEND_FROM_EMAIL;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_FROM_EMAIL;
+  const noProvider = await sendTransactionalEmail({ to: "controlled@example.com", subject: "test", html: "<p>test</p>", text: "test", idempotencyKey: "test-invitation-boundary" });
+  assert(!noProvider.success && noProvider.error === "delivery_not_configured", "provider boundary never reports sent without configured credentials");
+  if (originalKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = originalKey;
+  if (originalFrom === undefined) delete process.env.RESEND_FROM_EMAIL; else process.env.RESEND_FROM_EMAIL = originalFrom;
 
-const rawToken = "test-token-that-is-never-persisted";
-const digest = hashInvitationToken(rawToken);
-assert(digest.length === 64 && digest !== rawToken, "token hashing returns a non-reversible-length digest");
-process.env.TRACKUP_SESSION_SECRET = "test-session-secret-with-at-least-32-characters";
-const context = createInvitationContextCookie("00000000-0000-0000-0000-000000000001", digest);
-const verified = verifyInvitationContextCookie(context);
-assert(Boolean(verified) && verified?.tokenHash === digest && !context.includes(rawToken), "signed OAuth context verifies without containing raw token");
+  const rawToken = "test-token-that-is-never-persisted";
+  const digest = hashInvitationToken(rawToken);
+  assert(digest.length === 64 && digest !== rawToken, "token hashing returns a non-reversible-length digest");
+  process.env.TRACKUP_SESSION_SECRET = "test-session-secret-with-at-least-32-characters";
+  const context = createInvitationContextCookie("00000000-0000-0000-0000-000000000001", digest);
+  const verified = verifyInvitationContextCookie(context);
+  assert(Boolean(verified) && verified?.tokenHash === digest && !context.includes(rawToken), "signed OAuth context verifies without containing raw token");
 
-const total = passed + failed;
-console.log(`Invitation verification: ${passed}/${total} tests passed`);
+  const total = passed + failed;
+  console.log(`Invitation verification: ${passed}/${total} tests passed`);
   if (failed > 0) process.exit(1);
 }
 
