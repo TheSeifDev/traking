@@ -562,12 +562,12 @@ const videoDetailRoute = readFileSync("app/api/videos/[id]/route.ts", "utf8");
 const clickupTaskSearchRoute = readFileSync("app/api/clickup/tasks/route.ts", "utf8");
 
 assert(
-  loginHero.includes('authHref = "/api/auth/clickup"'),
-  "LoginHero default href points to the implemented ClickUp OAuth route"
+  loginHero.includes("LoginForm") || loginHero.includes("LoginCard"),
+  "LoginHero renders credentials login card"
 );
 assert(
-  loginCard.includes('authHref = "/api/auth/clickup"'),
-  "LoginCard default href points to the implemented ClickUp OAuth route"
+  loginCard.includes("LoginForm") || loginCard.includes("/api/auth/login"),
+  "LoginCard renders credentials login form"
 );
 assert(
   clickupAuthRoute.includes("export async function GET"),

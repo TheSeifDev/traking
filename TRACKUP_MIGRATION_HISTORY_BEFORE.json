@@ -1,0 +1,343 @@
+[
+  {
+    "created_by": null,
+    "idempotency_key": null,
+    "name": "create_rbac_and_profiles",
+    "rollback": null,
+    "statements": [
+      "-- ==============================================================================\n-- TrackUp Migration: Create RBAC Enum, Profiles Table, and Security Policies\n-- ==============================================================================\n\n-- 1. Create PostgreSQL User Role Enum (owner, admin, viewer)\nDO $$ BEGIN\n  CREATE TYPE public.user_role AS ENUM ('owner', 'admin', 'viewer');\nEXCEPTION\n  WHEN duplicate_object THEN null;\nEND $$",
+      "-- 2. Create Profiles Table\nCREATE TABLE IF NOT EXISTS public.profiles (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  clickup_user_id TEXT UNIQUE,\n  name TEXT,\n  email TEXT NOT NULL UNIQUE,\n  role public.user_role NOT NULL DEFAULT 'viewer'::public.user_role,\n  is_active BOOLEAN NOT NULL DEFAULT true,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),\n  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())\n)",
+      "-- 3. Performance Indexes\nCREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email)",
+      "CREATE INDEX IF NOT EXISTS idx_profiles_clickup_user_id ON public.profiles(clickup_user_id)",
+      "CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role)",
+      "CREATE INDEX IF NOT EXISTS idx_profiles_is_active ON public.profiles(is_active)",
+      "-- 4. Updated At Trigger Function & Trigger\nCREATE OR REPLACE FUNCTION public.handle_updated_at()\nRETURNS TRIGGER AS $$\nBEGIN\n  NEW.updated_at = timezone('utc'::text, now());\n  RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql",
+      "DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles",
+      "CREATE TRIGGER set_profiles_updated_at\n  BEFORE UPDATE ON public.profiles\n  FOR EACH ROW\n  EXECUTE FUNCTION public.handle_updated_at()",
+      "-- 5. Helper Functions for Secure RLS (SECURITY DEFINER avoids recursion)\nCREATE OR REPLACE FUNCTION public.get_current_user_role()\nRETURNS public.user_role AS $$\nDECLARE\n  v_role public.user_role;\nBEGIN\n  SELECT role INTO v_role\n  FROM public.profiles\n  WHERE id = auth.uid() AND is_active = true;\n  \n  RETURN v_role;\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public",
+      "REVOKE ALL ON FUNCTION public.get_current_user_role() FROM PUBLIC",
+      "GRANT EXECUTE ON FUNCTION public.get_current_user_role() TO authenticated",
+      "CREATE OR REPLACE FUNCTION public.is_admin_or_owner()\nRETURNS BOOLEAN AS $$\nBEGIN\n  RETURN EXISTS (\n    SELECT 1\n    FROM public.profiles\n    WHERE id = auth.uid()\n      AND is_active = true\n      AND role IN ('owner'::public.user_role, 'admin'::public.user_role)\n  );\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public",
+      "REVOKE ALL ON FUNCTION public.is_admin_or_owner() FROM PUBLIC",
+      "GRANT EXECUTE ON FUNCTION public.is_admin_or_owner() TO authenticated",
+      "CREATE OR REPLACE FUNCTION public.is_owner()\nRETURNS BOOLEAN AS $$\nBEGIN\n  RETURN EXISTS (\n    SELECT 1\n    FROM public.profiles\n    WHERE id = auth.uid()\n      AND is_active = true\n      AND role = 'owner'::public.user_role\n  );\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public",
+      "REVOKE ALL ON FUNCTION public.is_owner() FROM PUBLIC",
+      "GRANT EXECUTE ON FUNCTION public.is_owner() TO authenticated",
+      "-- 6. Enable Row Level Security\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY",
+      "-- 7. Row Level Security Policies\n\n-- Select Policies\nDROP POLICY IF EXISTS \"Users can read own profile\" ON public.profiles",
+      "CREATE POLICY \"Users can read own profile\"\n  ON public.profiles\n  FOR SELECT\n  TO authenticated\n  USING (auth.uid() = id)",
+      "DROP POLICY IF EXISTS \"Admins and owners can read all profiles\" ON public.profiles",
+      "CREATE POLICY \"Admins and owners can read all profiles\"\n  ON public.profiles\n  FOR SELECT\n  TO authenticated\n  USING (public.is_admin_or_owner())",
+      "-- Write Policies\n-- All profile writes are intentionally denied to normal authenticated clients.\n-- Provisioning, role changes, status changes, and ClickUp identity sync must go\n-- through server-only service-role code, which performs centralized checks.\nDROP POLICY IF EXISTS \"Admins and owners can update profiles\" ON public.profiles",
+      "DROP POLICY IF EXISTS \"Users can update own non-sensitive profile data\" ON public.profiles",
+      "DROP POLICY IF EXISTS \"No direct profile updates\" ON public.profiles",
+      "CREATE POLICY \"No direct profile updates\"\n  ON public.profiles\n  FOR UPDATE\n  TO authenticated\n  USING (false)\n  WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"Admins and owners can insert profiles\" ON public.profiles",
+      "DROP POLICY IF EXISTS \"No direct profile inserts\" ON public.profiles",
+      "CREATE POLICY \"No direct profile inserts\"\n  ON public.profiles\n  FOR INSERT\n  TO authenticated\n  WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"Only owners can delete profiles\" ON public.profiles",
+      "DROP POLICY IF EXISTS \"No direct profile deletes\" ON public.profiles",
+      "CREATE POLICY \"No direct profile deletes\"\n  ON public.profiles\n  FOR DELETE\n  TO authenticated\n  USING (false)"
+    ],
+    "version": "20260820000001"
+  },
+  {
+    "created_by": null,
+    "idempotency_key": null,
+    "name": "role_change_audit",
+    "rollback": null,
+    "statements": [
+      "-- ==============================================================================\n-- TrackUp Migration: Role Change Audit Log\n-- ==============================================================================\n\n-- 1. Create the audit table\n--    Immutable append-only log of every role change the owner performs.\n--    Rows are never updated or deleted — only inserted.\n\nCREATE TABLE IF NOT EXISTS public.role_change_audit (\n  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  target_user_id   UUID         NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,\n  changed_by_user_id UUID       NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,\n  previous_role    public.user_role NOT NULL,\n  new_role         public.user_role NOT NULL,\n  changed_at       TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc'::text, now())\n)",
+      "-- 2. Indexes for efficient lookups\nCREATE INDEX IF NOT EXISTS idx_audit_target_user\n  ON public.role_change_audit(target_user_id)",
+      "CREATE INDEX IF NOT EXISTS idx_audit_changed_by\n  ON public.role_change_audit(changed_by_user_id)",
+      "CREATE INDEX IF NOT EXISTS idx_audit_changed_at\n  ON public.role_change_audit(changed_at DESC)",
+      "-- 3. Enable RLS — all access goes through the service-role admin client.\n--    Application code never reads this with the anon/authenticated key.\nALTER TABLE public.role_change_audit ENABLE ROW LEVEL SECURITY",
+      "-- 4. RLS policy: only the owner can view the audit log through the normal key.\n--    The admin client (service_role) bypasses RLS and is used for inserts.\nDROP POLICY IF EXISTS \"Owner can read role change audit\" ON public.role_change_audit",
+      "CREATE POLICY \"Owner can read role change audit\"\n  ON public.role_change_audit\n  FOR SELECT\n  TO authenticated\n  USING (public.is_owner())",
+      "-- Deny all inserts from the authenticated role — only service_role can insert.\nDROP POLICY IF EXISTS \"No direct inserts to audit log\" ON public.role_change_audit",
+      "CREATE POLICY \"No direct inserts to audit log\"\n  ON public.role_change_audit\n  FOR INSERT\n  TO authenticated\n  WITH CHECK (false)",
+      "-- 5. Constraint: previous_role and new_role must differ.\n--    Prevents no-op audit entries.\nALTER TABLE public.role_change_audit\n  DROP CONSTRAINT IF EXISTS audit_roles_must_differ",
+      "ALTER TABLE public.role_change_audit\n  ADD CONSTRAINT audit_roles_must_differ\n  CHECK (previous_role <> new_role)",
+      "-- 6. Constraint: 'owner' role can never appear as new_role in the audit log.\n--    Provides an extra database-level guarantee that owner is never assigned\n--    through the role management system.\nALTER TABLE public.role_change_audit\n  DROP CONSTRAINT IF EXISTS audit_new_role_not_owner",
+      "ALTER TABLE public.role_change_audit\n  ADD CONSTRAINT audit_new_role_not_owner\n  CHECK (new_role <> 'owner'::public.user_role)"
+    ],
+    "version": "20260820000002"
+  },
+  {
+    "created_by": null,
+    "idempotency_key": null,
+    "name": "mvp_core_tables",
+    "rollback": null,
+    "statements": [
+      "-- ==============================================================================\n-- TrackUp Migration: MVP Core Product Tables\n-- ==============================================================================\n\n-- 1. VIDEO SOURCE TYPE ENUM\nDO $$ BEGIN\n  CREATE TYPE public.video_source_type AS ENUM (\n    'youtube',\n    'google_drive',\n    'vimeo',\n    'telegram',\n    'direct_url'\n  );\nEXCEPTION\n  WHEN duplicate_object THEN null;\nEND $$",
+      "-- 2. WATCH EVENT TYPE ENUM\nDO $$ BEGIN\n  CREATE TYPE public.watch_event_type AS ENUM (\n    'play',\n    'pause',\n    'seek',\n    'heartbeat',\n    'complete',\n    'ended'\n  );\nEXCEPTION\n  WHEN duplicate_object THEN null;\nEND $$",
+      "-- 3. WORKSPACES\nCREATE TABLE IF NOT EXISTS public.workspaces (\n  id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  clickup_team_id TEXT         NOT NULL UNIQUE,\n  name            TEXT         NOT NULL,\n  created_at      TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now()),\n  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now())\n)",
+      "CREATE INDEX IF NOT EXISTS idx_workspaces_clickup_team_id\n  ON public.workspaces(clickup_team_id)",
+      "DROP TRIGGER IF EXISTS set_workspaces_updated_at ON public.workspaces",
+      "CREATE TRIGGER set_workspaces_updated_at\n  BEFORE UPDATE ON public.workspaces\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at()",
+      "ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"No direct workspace inserts\" ON public.workspaces",
+      "CREATE POLICY \"No direct workspace inserts\"\n  ON public.workspaces FOR INSERT TO authenticated WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct workspace updates\" ON public.workspaces",
+      "CREATE POLICY \"No direct workspace updates\"\n  ON public.workspaces FOR UPDATE TO authenticated USING (false) WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct workspace deletes\" ON public.workspaces",
+      "CREATE POLICY \"No direct workspace deletes\"\n  ON public.workspaces FOR DELETE TO authenticated USING (false)",
+      "DROP POLICY IF EXISTS \"Authenticated users can read workspaces\" ON public.workspaces",
+      "CREATE POLICY \"Authenticated users can read workspaces\"\n  ON public.workspaces FOR SELECT TO authenticated USING (true)",
+      "-- 4. CLICKUP_CONNECTIONS\nCREATE TABLE IF NOT EXISTS public.clickup_connections (\n  id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  profile_id     UUID         NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,\n  workspace_id   UUID         NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,\n  access_token   TEXT         NOT NULL,\n  created_at     TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now()),\n  updated_at     TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now()),\n  UNIQUE (profile_id, workspace_id)\n)",
+      "CREATE INDEX IF NOT EXISTS idx_clickup_connections_profile_id\n  ON public.clickup_connections(profile_id)",
+      "CREATE INDEX IF NOT EXISTS idx_clickup_connections_workspace_id\n  ON public.clickup_connections(workspace_id)",
+      "DROP TRIGGER IF EXISTS set_clickup_connections_updated_at ON public.clickup_connections",
+      "CREATE TRIGGER set_clickup_connections_updated_at\n  BEFORE UPDATE ON public.clickup_connections\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at()",
+      "ALTER TABLE public.clickup_connections ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"No direct connection reads\" ON public.clickup_connections",
+      "CREATE POLICY \"No direct connection reads\"\n  ON public.clickup_connections FOR SELECT TO authenticated USING (false)",
+      "DROP POLICY IF EXISTS \"No direct connection inserts\" ON public.clickup_connections",
+      "CREATE POLICY \"No direct connection inserts\"\n  ON public.clickup_connections FOR INSERT TO authenticated WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct connection updates\" ON public.clickup_connections",
+      "CREATE POLICY \"No direct connection updates\"\n  ON public.clickup_connections FOR UPDATE TO authenticated USING (false) WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct connection deletes\" ON public.clickup_connections",
+      "CREATE POLICY \"No direct connection deletes\"\n  ON public.clickup_connections FOR DELETE TO authenticated USING (false)",
+      "-- 5. VIDEOS\nCREATE TABLE IF NOT EXISTS public.videos (\n  id           UUID                     PRIMARY KEY DEFAULT gen_random_uuid(),\n  workspace_id UUID                     NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,\n  created_by   UUID                     REFERENCES public.profiles(id) ON DELETE SET NULL,\n  title        TEXT                     NOT NULL CHECK (char_length(title) BETWEEN 1 AND 255),\n  description  TEXT,\n  source_type  public.video_source_type  NOT NULL,\n  source_url   TEXT                     NOT NULL CHECK (char_length(source_url) > 0),\n  duration     INTEGER,\n  created_at   TIMESTAMPTZ              NOT NULL DEFAULT timezone('utc', now()),\n  updated_at   TIMESTAMPTZ              NOT NULL DEFAULT timezone('utc', now())\n)",
+      "CREATE INDEX IF NOT EXISTS idx_videos_workspace_id ON public.videos(workspace_id)",
+      "CREATE INDEX IF NOT EXISTS idx_videos_created_by ON public.videos(created_by)",
+      "CREATE INDEX IF NOT EXISTS idx_videos_created_at ON public.videos(created_at DESC)",
+      "DROP TRIGGER IF EXISTS set_videos_updated_at ON public.videos",
+      "CREATE TRIGGER set_videos_updated_at\n  BEFORE UPDATE ON public.videos\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at()",
+      "ALTER TABLE public.videos ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"No direct video inserts\" ON public.videos",
+      "CREATE POLICY \"No direct video inserts\"\n  ON public.videos FOR INSERT TO authenticated WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct video updates\" ON public.videos",
+      "CREATE POLICY \"No direct video updates\"\n  ON public.videos FOR UPDATE TO authenticated USING (false) WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct video deletes\" ON public.videos",
+      "CREATE POLICY \"No direct video deletes\"\n  ON public.videos FOR DELETE TO authenticated USING (false)",
+      "DROP POLICY IF EXISTS \"No direct video reads\" ON public.videos",
+      "CREATE POLICY \"No direct video reads\"\n  ON public.videos FOR SELECT TO authenticated USING (false)",
+      "-- 6. VIDEO_CLICKUP_TASKS\nCREATE TABLE IF NOT EXISTS public.video_clickup_tasks (\n  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),\n  video_id         UUID        NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,\n  clickup_task_id  TEXT        NOT NULL,\n  clickup_task_name TEXT,\n  created_at       TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  UNIQUE (video_id, clickup_task_id)\n)",
+      "CREATE INDEX IF NOT EXISTS idx_video_clickup_tasks_video_id\n  ON public.video_clickup_tasks(video_id)",
+      "ALTER TABLE public.video_clickup_tasks ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"No direct task association inserts\" ON public.video_clickup_tasks",
+      "CREATE POLICY \"No direct task association inserts\"\n  ON public.video_clickup_tasks FOR INSERT TO authenticated WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct task association reads\" ON public.video_clickup_tasks",
+      "CREATE POLICY \"No direct task association reads\"\n  ON public.video_clickup_tasks FOR SELECT TO authenticated USING (false)",
+      "DROP POLICY IF EXISTS \"No direct task association deletes\" ON public.video_clickup_tasks",
+      "CREATE POLICY \"No direct task association deletes\"\n  ON public.video_clickup_tasks FOR DELETE TO authenticated USING (false)",
+      "-- 7. WATCH_LINKS\n-- NOTE: pgcrypto lives in the \"extensions\" schema on Supabase, not \"public\",\n-- so gen_random_bytes() must be schema-qualified. We also build a URL-safe\n-- token manually via translate() instead of encode(..., 'base64url'), since\n-- 'base64url' is not yet a valid encode() format in any released Postgres\n-- version (it landed in the still-unreleased PG19, past PG18's freeze).\nCREATE EXTENSION IF NOT EXISTS pgcrypto",
+      "CREATE TABLE IF NOT EXISTS public.watch_links (\n  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),\n  video_id    UUID        NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,\n  token       TEXT        NOT NULL UNIQUE DEFAULT translate(\n                             encode(extensions.gen_random_bytes(24), 'base64'),\n                             '+/=',\n                             '-_'\n                           ),\n  created_by  UUID        REFERENCES public.profiles(id) ON DELETE SET NULL,\n  expires_at  TIMESTAMPTZ,\n  created_at  TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())\n)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_links_token ON public.watch_links(token)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_links_video_id ON public.watch_links(video_id)",
+      "ALTER TABLE public.watch_links ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"No direct watch_link reads\" ON public.watch_links",
+      "CREATE POLICY \"No direct watch_link reads\"\n  ON public.watch_links FOR SELECT TO authenticated USING (false)",
+      "DROP POLICY IF EXISTS \"No anon watch_link reads\" ON public.watch_links",
+      "CREATE POLICY \"No anon watch_link reads\"\n  ON public.watch_links FOR SELECT TO anon USING (false)",
+      "DROP POLICY IF EXISTS \"No direct watch_link inserts\" ON public.watch_links",
+      "CREATE POLICY \"No direct watch_link inserts\"\n  ON public.watch_links FOR INSERT TO authenticated WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No direct watch_link deletes\" ON public.watch_links",
+      "CREATE POLICY \"No direct watch_link deletes\"\n  ON public.watch_links FOR DELETE TO authenticated USING (false)",
+      "-- 8. WATCH_SESSIONS\nCREATE TABLE IF NOT EXISTS public.watch_sessions (\n  id                    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),\n  watch_link_id         UUID         NOT NULL REFERENCES public.watch_links(id) ON DELETE CASCADE,\n  viewer_identifier     TEXT,\n  started_at            TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now()),\n  last_seen_at          TIMESTAMPTZ  NOT NULL DEFAULT timezone('utc', now()),\n  ended_at              TIMESTAMPTZ,\n  watch_time_seconds    INTEGER      NOT NULL DEFAULT 0,\n  completion_percentage NUMERIC(5,2) NOT NULL DEFAULT 0\n    CHECK (completion_percentage >= 0 AND completion_percentage <= 100)\n)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_sessions_watch_link_id\n  ON public.watch_sessions(watch_link_id)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_sessions_started_at\n  ON public.watch_sessions(started_at DESC)",
+      "ALTER TABLE public.watch_sessions ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"Anon can insert watch sessions\" ON public.watch_sessions",
+      "CREATE POLICY \"Anon can insert watch sessions\"\n  ON public.watch_sessions FOR INSERT TO anon WITH CHECK (true)",
+      "DROP POLICY IF EXISTS \"No anon watch_session reads\" ON public.watch_sessions",
+      "CREATE POLICY \"No anon watch_session reads\"\n  ON public.watch_sessions FOR SELECT TO anon USING (false)",
+      "DROP POLICY IF EXISTS \"No anon watch_session updates\" ON public.watch_sessions",
+      "CREATE POLICY \"No anon watch_session updates\"\n  ON public.watch_sessions FOR UPDATE TO anon USING (false) WITH CHECK (false)",
+      "DROP POLICY IF EXISTS \"No authenticated watch_session reads\" ON public.watch_sessions",
+      "CREATE POLICY \"No authenticated watch_session reads\"\n  ON public.watch_sessions FOR SELECT TO authenticated USING (false)",
+      "-- 9. WATCH_EVENTS\nCREATE TABLE IF NOT EXISTS public.watch_events (\n  id           UUID                    PRIMARY KEY DEFAULT gen_random_uuid(),\n  session_id   UUID                    NOT NULL REFERENCES public.watch_sessions(id) ON DELETE CASCADE,\n  event_type   public.watch_event_type NOT NULL,\n  position     NUMERIC(10,2)           NOT NULL DEFAULT 0,\n  duration     NUMERIC(10,2),\n  created_at   TIMESTAMPTZ             NOT NULL DEFAULT timezone('utc', now())\n)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_events_session_id\n  ON public.watch_events(session_id)",
+      "CREATE INDEX IF NOT EXISTS idx_watch_events_created_at\n  ON public.watch_events(created_at DESC)",
+      "ALTER TABLE public.watch_events ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS \"Anon can insert watch events\" ON public.watch_events",
+      "CREATE POLICY \"Anon can insert watch events\"\n  ON public.watch_events FOR INSERT TO anon WITH CHECK (true)",
+      "DROP POLICY IF EXISTS \"No anon watch_event reads\" ON public.watch_events",
+      "CREATE POLICY \"No anon watch_event reads\"\n  ON public.watch_events FOR SELECT TO anon USING (false)",
+      "DROP POLICY IF EXISTS \"No authenticated watch_event reads\" ON public.watch_events",
+      "CREATE POLICY \"No authenticated watch_event reads\"\n  ON public.watch_events FOR SELECT TO authenticated USING (false)"
+    ],
+    "version": "20260822000003"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260822000004_harden_watch_session_capabilities",
+    "rollback": null,
+    "statements": [
+      "CREATE EXTENSION IF NOT EXISTS pgcrypto;\nALTER TABLE public.watch_sessions ADD COLUMN IF NOT EXISTS session_token TEXT;\nUPDATE public.watch_sessions SET session_token = encode(extensions.gen_random_bytes(32), 'hex') WHERE session_token IS NULL;\nALTER TABLE public.watch_sessions ALTER COLUMN session_token SET NOT NULL;\nCREATE UNIQUE INDEX IF NOT EXISTS idx_watch_sessions_session_token ON public.watch_sessions(session_token);\nCOMMENT ON COLUMN public.watch_sessions.session_token IS 'Private per-session capability required for anonymous tracking writes; never exposed in analytics responses.';"
+    ],
+    "version": "20260822203907"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260822000005_add_watch_link_revocation",
+    "rollback": null,
+    "statements": [
+      "ALTER TABLE public.watch_links ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;\nCREATE INDEX IF NOT EXISTS idx_watch_links_revoked_at ON public.watch_links(revoked_at);\nCOMMENT ON COLUMN public.watch_links.revoked_at IS 'When set, the public watch link is revoked and cannot create new sessions.';"
+    ],
+    "version": "20260822203941"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260822000006_add_watch_event_from_position",
+    "rollback": null,
+    "statements": [
+      "ALTER TABLE public.watch_events ADD COLUMN IF NOT EXISTS from_position NUMERIC(10,2);\nCOMMENT ON COLUMN public.watch_events.from_position IS 'Playback position immediately before a seek; populated for seek events to support future watched-range reconstruction.';"
+    ],
+    "version": "20260822204014"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "enforce_one_active_watch_link",
+    "rollback": null,
+    "statements": [
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_watch_links_one_active_video ON public.watch_links(video_id) WHERE revoked_at IS NULL; COMMENT ON INDEX public.uq_watch_links_one_active_video IS 'Allows historical revoked links but enforces at most one active viewer link per video.';"
+    ],
+    "version": "20260823133200"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_resume_watch_event",
+    "rollback": null,
+    "statements": [
+      "ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'resume' AFTER 'play';"
+    ],
+    "version": "20260823141704"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "create_invitations_and_profile_presence",
+    "rollback": null,
+    "statements": [
+      "ALTER TABLE public.profiles\n  ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;\n\nCREATE INDEX IF NOT EXISTS idx_profiles_last_seen_at\n  ON public.profiles(last_seen_at);\n\nCREATE TABLE IF NOT EXISTS public.invitations (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,\n  email TEXT NOT NULL,\n  role public.user_role NOT NULL,\n  token_hash TEXT NOT NULL UNIQUE,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),\n  expires_at TIMESTAMPTZ NOT NULL,\n  accepted_at TIMESTAMPTZ,\n  revoked_at TIMESTAMPTZ,\n  last_sent_at TIMESTAMPTZ,\n  created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,\n  CONSTRAINT invitations_role_check CHECK (role IN ('admin'::public.user_role, 'viewer'::public.user_role)),\n  CONSTRAINT invitations_expiry_after_creation CHECK (expires_at > created_at)\n);\n\nCREATE INDEX IF NOT EXISTS idx_invitations_profile_id\n  ON public.invitations(profile_id);\n\nCREATE INDEX IF NOT EXISTS idx_invitations_email\n  ON public.invitations(email);\n\nCREATE INDEX IF NOT EXISTS idx_invitations_expires_at\n  ON public.invitations(expires_at);\n\nCREATE UNIQUE INDEX IF NOT EXISTS idx_invitations_one_active_per_profile\n  ON public.invitations(profile_id)\n  WHERE accepted_at IS NULL AND revoked_at IS NULL;\n\nALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"No direct invitation reads\" ON public.invitations;\nCREATE POLICY \"No direct invitation reads\"\n  ON public.invitations\n  FOR SELECT\n  TO authenticated\n  USING (false);\n\nDROP POLICY IF EXISTS \"No direct invitation inserts\" ON public.invitations;\nCREATE POLICY \"No direct invitation inserts\"\n  ON public.invitations\n  FOR INSERT\n  TO authenticated\n  WITH CHECK (false);\n\nDROP POLICY IF EXISTS \"No direct invitation updates\" ON public.invitations;\nCREATE POLICY \"No direct invitation updates\"\n  ON public.invitations\n  FOR UPDATE\n  TO authenticated\n  USING (false)\n  WITH CHECK (false);\n\nDROP POLICY IF EXISTS \"No direct invitation deletes\" ON public.invitations;\nCREATE POLICY \"No direct invitation deletes\"\n  ON public.invitations\n  FOR DELETE\n  TO authenticated\n  USING (false);"
+    ],
+    "version": "20260823143924"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_invitation_acceptance_rpc",
+    "rollback": null,
+    "statements": [
+      "CREATE OR REPLACE FUNCTION public.accept_invitation(\n  p_invitation_id UUID,\n  p_token_hash TEXT,\n  p_email TEXT,\n  p_clickup_user_id TEXT,\n  p_name TEXT\n)\nRETURNS public.profiles\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public\nAS $$\nDECLARE\n  v_invitation public.invitations;\n  v_profile public.profiles;\n  v_email TEXT := lower(trim(p_email));\n  v_now TIMESTAMPTZ := timezone('utc'::text, now());\nBEGIN\n  IF p_invitation_id IS NULL OR p_token_hash IS NULL OR p_clickup_user_id IS NULL OR v_email = '' THEN\n    RAISE EXCEPTION 'invalid_invitation';\n  END IF;\n\n  SELECT * INTO v_invitation\n  FROM public.invitations\n  WHERE id = p_invitation_id\n    AND token_hash = p_token_hash\n  FOR UPDATE;\n\n  IF NOT FOUND THEN RAISE EXCEPTION 'invalid_invitation'; END IF;\n  IF v_invitation.accepted_at IS NOT NULL THEN RAISE EXCEPTION 'invitation_accepted'; END IF;\n  IF v_invitation.revoked_at IS NOT NULL THEN RAISE EXCEPTION 'invitation_revoked'; END IF;\n  IF v_invitation.expires_at <= v_now THEN RAISE EXCEPTION 'invitation_expired'; END IF;\n  IF v_invitation.email <> v_email THEN RAISE EXCEPTION 'invitation_email_mismatch'; END IF;\n  IF v_invitation.role NOT IN ('admin'::public.user_role, 'viewer'::public.user_role) THEN RAISE EXCEPTION 'invalid_invitation'; END IF;\n\n  SELECT * INTO v_profile FROM public.profiles WHERE id = v_invitation.profile_id FOR UPDATE;\n  IF NOT FOUND OR v_profile.email <> v_email THEN RAISE EXCEPTION 'invitation_email_mismatch'; END IF;\n  IF v_profile.clickup_user_id IS NOT NULL AND v_profile.clickup_user_id <> p_clickup_user_id THEN RAISE EXCEPTION 'profile_identity_mismatch'; END IF;\n\n  UPDATE public.profiles\n  SET clickup_user_id = p_clickup_user_id, name = COALESCE(NULLIF(trim(p_name), ''), name), role = v_invitation.role, is_active = true\n  WHERE id = v_profile.id\n  RETURNING * INTO v_profile;\n\n  UPDATE public.invitations SET accepted_at = v_now WHERE id = v_invitation.id AND accepted_at IS NULL AND revoked_at IS NULL;\n  RETURN v_profile;\nEND;\n$$;\nREVOKE ALL ON FUNCTION public.accept_invitation(UUID, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.accept_invitation(UUID, TEXT, TEXT, TEXT, TEXT) FROM anon;\nREVOKE ALL ON FUNCTION public.accept_invitation(UUID, TEXT, TEXT, TEXT, TEXT) FROM authenticated;\nGRANT EXECUTE ON FUNCTION public.accept_invitation(UUID, TEXT, TEXT, TEXT, TEXT) TO service_role;"
+    ],
+    "version": "20260823145055"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_profile_last_seen_rpc",
+    "rollback": null,
+    "statements": [
+      "CREATE OR REPLACE FUNCTION public.touch_profile_last_seen(p_profile_id UUID)\nRETURNS TIMESTAMPTZ\nLANGUAGE plpgsql\nSECURITY DEFINER\nSET search_path = public\nAS $$\nDECLARE\n  v_now TIMESTAMPTZ := timezone('utc'::text, now());\n  v_last_seen TIMESTAMPTZ;\nBEGIN\n  UPDATE public.profiles\n  SET last_seen_at = v_now\n  WHERE id = p_profile_id\n    AND (last_seen_at IS NULL OR last_seen_at <= v_now - interval '5 minutes')\n  RETURNING last_seen_at INTO v_last_seen;\n  IF v_last_seen IS NULL THEN\n    SELECT last_seen_at INTO v_last_seen FROM public.profiles WHERE id = p_profile_id;\n  END IF;\n  RETURN v_last_seen;\nEND;\n$$;\nREVOKE ALL ON FUNCTION public.touch_profile_last_seen(UUID) FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.touch_profile_last_seen(UUID) FROM anon;\nREVOKE ALL ON FUNCTION public.touch_profile_last_seen(UUID) FROM authenticated;\nGRANT EXECUTE ON FUNCTION public.touch_profile_last_seen(UUID) TO service_role;"
+    ],
+    "version": "20260823145119"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_analytics_identity_and_ordered_events",
+    "rollback": null,
+    "statements": [
+      "-- TrackUp Analytics: bind new watch sessions to profiles and preserve ordered telemetry.\n-- Existing rows remain valid; legacy sessions/events without these fields stay explicitly anonymous.\n\nALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'buffer';\nALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'rate_change';\nALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'visibility_change';\n\nALTER TABLE public.watch_sessions\n  ADD COLUMN IF NOT EXISTS viewer_profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,\n  ADD COLUMN IF NOT EXISTS device_type TEXT,\n  ADD COLUMN IF NOT EXISTS browser TEXT,\n  ADD COLUMN IF NOT EXISTS os TEXT;\n\nCREATE INDEX IF NOT EXISTS idx_watch_sessions_viewer_profile_id\n  ON public.watch_sessions(viewer_profile_id);\nCREATE INDEX IF NOT EXISTS idx_watch_sessions_viewer_profile_started_at\n  ON public.watch_sessions(viewer_profile_id, started_at DESC);\n\nALTER TABLE public.watch_events\n  ADD COLUMN IF NOT EXISTS client_event_id TEXT,\n  ADD COLUMN IF NOT EXISTS sequence_number INTEGER,\n  ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ,\n  ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;\n\nCREATE UNIQUE INDEX IF NOT EXISTS uq_watch_events_session_client_event\n  ON public.watch_events(session_id, client_event_id);\nCREATE INDEX IF NOT EXISTS idx_watch_events_session_sequence\n  ON public.watch_events(session_id, sequence_number);\nCREATE INDEX IF NOT EXISTS idx_watch_events_session_occurred_at\n  ON public.watch_events(session_id, occurred_at);\n\nCOMMENT ON COLUMN public.watch_sessions.viewer_profile_id IS\n  'Authenticated TrackUp profile associated with this watch session; legacy hashed-only sessions remain NULL.';\nCOMMENT ON COLUMN public.watch_sessions.device_type IS\n  'Coarse device class derived server-side from the request user-agent; NULL when unknown.';\nCOMMENT ON COLUMN public.watch_sessions.browser IS\n  'Browser family derived server-side from the request user-agent; NULL when unknown.';\nCOMMENT ON COLUMN public.watch_sessions.os IS\n  'Operating-system family derived server-side from the request user-agent; NULL when unknown.';\nCOMMENT ON COLUMN public.watch_events.client_event_id IS\n  'Client-generated idempotency key for one playback event; never contains PII.';\nCOMMENT ON COLUMN public.watch_events.sequence_number IS\n  'Monotonic per-session client sequence used to reconstruct playback order.';\nCOMMENT ON COLUMN public.watch_events.occurred_at IS\n  'Client playback timestamp; created_at remains the server receipt timestamp.';\nCOMMENT ON COLUMN public.watch_events.metadata IS\n  'Non-PII provider event metadata such as visibility or playback rate.';\n"
+    ],
+    "version": "20260823181303"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_guest_viewer_identity",
+    "rollback": null,
+    "statements": [
+      "CREATE TABLE IF NOT EXISTS public.viewer_identities (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  watch_link_id UUID NOT NULL REFERENCES public.watch_links(id) ON DELETE CASCADE,\n  name TEXT NOT NULL CHECK (char_length(trim(name)) BETWEEN 1 AND 120),\n  email TEXT NOT NULL CHECK (char_length(email) BETWEEN 3 AND 320),\n  normalized_email TEXT NOT NULL CHECK (char_length(normalized_email) BETWEEN 3 AND 320),\n  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  UNIQUE (watch_link_id, normalized_email)\n);\n\nCREATE INDEX IF NOT EXISTS idx_viewer_identities_watch_link_id ON public.viewer_identities(watch_link_id);\nCREATE INDEX IF NOT EXISTS idx_viewer_identities_last_seen_at ON public.viewer_identities(last_seen_at DESC);\n\nALTER TABLE public.viewer_identities ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"No direct viewer identity reads\" ON public.viewer_identities;\nCREATE POLICY \"No direct viewer identity reads\" ON public.viewer_identities FOR SELECT TO anon, authenticated USING (false);\nDROP POLICY IF EXISTS \"No direct viewer identity inserts\" ON public.viewer_identities;\nCREATE POLICY \"No direct viewer identity inserts\" ON public.viewer_identities FOR INSERT TO anon, authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct viewer identity updates\" ON public.viewer_identities;\nCREATE POLICY \"No direct viewer identity updates\" ON public.viewer_identities FOR UPDATE TO anon, authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct viewer identity deletes\" ON public.viewer_identities;\nCREATE POLICY \"No direct viewer identity deletes\" ON public.viewer_identities FOR DELETE TO anon, authenticated USING (false);\n\nALTER TABLE public.watch_sessions ADD COLUMN IF NOT EXISTS viewer_identity_id UUID REFERENCES public.viewer_identities(id) ON DELETE SET NULL;\nCREATE INDEX IF NOT EXISTS idx_watch_sessions_viewer_identity_id ON public.watch_sessions(viewer_identity_id);\nCOMMENT ON TABLE public.viewer_identities IS 'Validated guest viewer identity scoped to a private watch link; read/write only through server-side service role.';\nCOMMENT ON COLUMN public.viewer_identities.normalized_email IS 'Lowercase trimmed email used only for deduplication within one watch link.';\nCOMMENT ON COLUMN public.watch_sessions.viewer_identity_id IS 'Guest viewer identity for private-link viewers; mutually exclusive in normal operation with viewer_profile_id.';"
+    ],
+    "version": "20260823185705"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "create_owner_logs",
+    "rollback": null,
+    "statements": [
+      "CREATE TABLE IF NOT EXISTS public.owner_logs (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),\n  level TEXT NOT NULL CHECK (level IN ('INFO', 'WARN', 'ERROR')),\n  category TEXT NOT NULL CHECK (category IN ('AUTH', 'TRACKING', 'SESSION', 'VIDEO', 'ANALYTICS', 'API', 'DATABASE', 'SYSTEM', 'PROVIDER', 'SECURITY')),\n  action TEXT NOT NULL CHECK (char_length(action) BETWEEN 1 AND 120),\n  user_id UUID NULL REFERENCES public.profiles(id) ON DELETE SET NULL,\n  video_id UUID NULL REFERENCES public.videos(id) ON DELETE SET NULL,\n  session_id UUID NULL REFERENCES public.watch_sessions(id) ON DELETE SET NULL,\n  route TEXT NULL CHECK (route IS NULL OR char_length(route) <= 240),\n  status INTEGER NULL CHECK (status IS NULL OR (status >= 100 AND status <= 599)),\n  duration_ms INTEGER NULL CHECK (duration_ms IS NULL OR (duration_ms >= 0 AND duration_ms <= 86400000)),\n  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,\n  CONSTRAINT owner_logs_metadata_bounded CHECK (octet_length(metadata::text) <= 4096)\n);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_created_at ON public.owner_logs(created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_level_created_at ON public.owner_logs(level, created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_category_created_at ON public.owner_logs(category, created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_user_created_at ON public.owner_logs(user_id, created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_video_created_at ON public.owner_logs(video_id, created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_owner_logs_session_created_at ON public.owner_logs(session_id, created_at DESC);\nALTER TABLE public.owner_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"No direct owner log reads\" ON public.owner_logs;\nCREATE POLICY \"No direct owner log reads\" ON public.owner_logs FOR SELECT TO anon, authenticated USING (false);\nDROP POLICY IF EXISTS \"No direct owner log inserts\" ON public.owner_logs;\nCREATE POLICY \"No direct owner log inserts\" ON public.owner_logs FOR INSERT TO anon, authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct owner log updates\" ON public.owner_logs;\nCREATE POLICY \"No direct owner log updates\" ON public.owner_logs FOR UPDATE TO anon, authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct owner log deletes\" ON public.owner_logs;\nCREATE POLICY \"No direct owner log deletes\" ON public.owner_logs FOR DELETE TO anon, authenticated USING (false);"
+    ],
+    "version": "20260823221335"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260824000007_create_spaces_and_memberships",
+    "rollback": null,
+    "statements": [
+      "-- TrackUp: additive multi-tenant Spaces and Space memberships\n--\n-- This migration preserves all existing profiles, workspaces, videos, links,\n-- sessions, events, invitations, and legacy viewer rows. Existing resources are\n-- assigned to one deterministic Space per ClickUp workspace.\n\nDO $$ BEGIN\n  CREATE TYPE public.space_member_role AS ENUM ('admin', 'member');\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nDO $$ BEGIN\n  CREATE TYPE public.space_member_status AS ENUM ('active', 'suspended', 'removed');\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE TABLE IF NOT EXISTS public.spaces (\n  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name                 TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),\n  slug                 TEXT NOT NULL CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,95}[a-z0-9]$'),\n  clickup_workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,\n  created_by           UUID REFERENCES public.profiles(id) ON DELETE SET NULL,\n  settings             JSONB NOT NULL DEFAULT '{}'::jsonb\n                       CHECK (jsonb_typeof(settings) = 'object' AND octet_length(settings::text) <= 8192),\n  archived_at          TIMESTAMPTZ,\n  created_at           TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  updated_at           TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  CONSTRAINT spaces_slug_unique UNIQUE (slug),\n  CONSTRAINT spaces_clickup_workspace_unique UNIQUE (clickup_workspace_id)\n);\n\nCREATE INDEX IF NOT EXISTS idx_spaces_clickup_workspace_id\n  ON public.spaces(clickup_workspace_id);\nCREATE INDEX IF NOT EXISTS idx_spaces_created_by\n  ON public.spaces(created_by);\nCREATE INDEX IF NOT EXISTS idx_spaces_archived_at\n  ON public.spaces(archived_at);\n\nDROP TRIGGER IF EXISTS set_spaces_updated_at ON public.spaces;\nCREATE TRIGGER set_spaces_updated_at\n  BEFORE UPDATE ON public.spaces\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();\n\nALTER TABLE public.spaces ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"No direct space reads\" ON public.spaces;\nCREATE POLICY \"No direct space reads\"\n  ON public.spaces FOR SELECT TO authenticated USING (false);\nDROP POLICY IF EXISTS \"No anonymous space reads\" ON public.spaces;\nCREATE POLICY \"No anonymous space reads\"\n  ON public.spaces FOR SELECT TO anon USING (false);\nDROP POLICY IF EXISTS \"No direct space inserts\" ON public.spaces;\nCREATE POLICY \"No direct space inserts\"\n  ON public.spaces FOR INSERT TO authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct space updates\" ON public.spaces;\nCREATE POLICY \"No direct space updates\"\n  ON public.spaces FOR UPDATE TO authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct space deletes\" ON public.spaces;\nCREATE POLICY \"No direct space deletes\"\n  ON public.spaces FOR DELETE TO authenticated USING (false);\n\nCREATE TABLE IF NOT EXISTS public.space_members (\n  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  space_id    UUID NOT NULL REFERENCES public.spaces(id) ON DELETE RESTRICT,\n  profile_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,\n  role        public.space_member_role NOT NULL DEFAULT 'member',\n  status      public.space_member_status NOT NULL DEFAULT 'active',\n  joined_at   TIMESTAMPTZ,\n  source      TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'clickup')),\n  clickup_user_id TEXT,\n  last_synced_at TIMESTAMPTZ,\n  created_at  TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  updated_at  TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  CONSTRAINT space_members_space_profile_unique UNIQUE (space_id, profile_id)\n);\n\nCREATE INDEX IF NOT EXISTS idx_space_members_space_id\n  ON public.space_members(space_id);\nCREATE INDEX IF NOT EXISTS idx_space_members_profile_id\n  ON public.space_members(profile_id);\nCREATE INDEX IF NOT EXISTS idx_space_members_role\n  ON public.space_members(role);\nCREATE INDEX IF NOT EXISTS idx_space_members_status\n  ON public.space_members(status);\nCREATE INDEX IF NOT EXISTS idx_space_members_space_status\n  ON public.space_members(space_id, status);\nCREATE INDEX IF NOT EXISTS idx_space_members_space_source_status\n  ON public.space_members(space_id, source, status);\nCREATE INDEX IF NOT EXISTS idx_space_members_space_clickup_user\n  ON public.space_members(space_id, clickup_user_id);\n\nDROP TRIGGER IF EXISTS set_space_members_updated_at ON public.space_members;\nCREATE TRIGGER set_space_members_updated_at\n  BEFORE UPDATE ON public.space_members\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();\n\nALTER TABLE public.space_members ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"No direct space member reads\" ON public.space_members;\nCREATE POLICY \"No direct space member reads\"\n  ON public.space_members FOR SELECT TO authenticated USING (false);\nDROP POLICY IF EXISTS \"No anonymous space member reads\" ON public.space_members;\nCREATE POLICY \"No anonymous space member reads\"\n  ON public.space_members FOR SELECT TO anon USING (false);\nDROP POLICY IF EXISTS \"No direct space member inserts\" ON public.space_members;\nCREATE POLICY \"No direct space member inserts\"\n  ON public.space_members FOR INSERT TO authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct space member updates\" ON public.space_members;\nCREATE POLICY \"No direct space member updates\"\n  ON public.space_members FOR UPDATE TO authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct space member deletes\" ON public.space_members;\nCREATE POLICY \"No direct space member deletes\"\n  ON public.space_members FOR DELETE TO authenticated USING (false);\n\nALTER TABLE public.videos\n  ADD COLUMN IF NOT EXISTS space_id UUID;\n\nDO $$ BEGIN\n  ALTER TABLE public.videos\n    ADD CONSTRAINT videos_space_id_fkey\n    FOREIGN KEY (space_id) REFERENCES public.spaces(id) ON DELETE RESTRICT;\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE INDEX IF NOT EXISTS idx_videos_space_id\n  ON public.videos(space_id);\n\n-- One deterministic TrackUp Space per existing ClickUp Workspace.\nINSERT INTO public.spaces (name, slug, clickup_workspace_id)\nSELECT\n  left(w.name, 160),\n  left('clickup-' || regexp_replace(lower(w.clickup_team_id), '[^a-z0-9]+', '-', 'g'), 96),\n  w.id\nFROM public.workspaces AS w\nON CONFLICT (clickup_workspace_id) DO NOTHING;\n\n-- Existing connected profiles receive a Space membership once. DO NOTHING is\n-- intentional: a later migration or local admin action must not be overwritten.\nINSERT INTO public.space_members (space_id, profile_id, role, status, joined_at)\nSELECT\n  s.id,\n  c.profile_id,\n  CASE\n    WHEN p.role IN ('owner'::public.user_role, 'admin'::public.user_role)\n      THEN 'admin'::public.space_member_role\n    ELSE 'member'::public.space_member_role\n  END,\n  'active'::public.space_member_status,\n  timezone('utc', now())\nFROM public.clickup_connections AS c\nJOIN public.spaces AS s ON s.clickup_workspace_id = c.workspace_id\nJOIN public.profiles AS p ON p.id = c.profile_id\nON CONFLICT (space_id, profile_id) DO NOTHING;\n\n-- Preserve existing resource ownership while adding a Space root.\nUPDATE public.videos AS v\nSET space_id = s.id\nFROM public.spaces AS s\nWHERE v.space_id IS NULL\n  AND s.clickup_workspace_id = v.workspace_id;\n"
+    ],
+    "version": "20260823232041"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260824000008_create_organizations_and_memberships",
+    "rollback": null,
+    "statements": [
+      "-- TrackUp: additive Organization hierarchy above the existing Spaces model.\n-- This migration preserves existing Space/resource/tracking IDs and data.\n\nDO $$ BEGIN\n  CREATE TYPE public.organization_member_role AS ENUM ('admin', 'member');\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nDO $$ BEGIN\n  CREATE TYPE public.organization_member_status AS ENUM ('active', 'suspended', 'removed');\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE TABLE IF NOT EXISTS public.organizations (\n  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  name                 TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 160),\n  slug                 TEXT NOT NULL CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,95}[a-z0-9]$'),\n  clickup_workspace_id UUID REFERENCES public.workspaces(id) ON DELETE SET NULL,\n  created_by           UUID REFERENCES public.profiles(id) ON DELETE SET NULL,\n  settings             JSONB NOT NULL DEFAULT '{}'::jsonb\n                       CHECK (jsonb_typeof(settings) = 'object' AND octet_length(settings::text) <= 8192),\n  archived_at          TIMESTAMPTZ,\n  created_at           TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  updated_at           TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  CONSTRAINT organizations_slug_unique UNIQUE (slug),\n  CONSTRAINT organizations_clickup_workspace_unique UNIQUE (clickup_workspace_id)\n);\n\nCREATE INDEX IF NOT EXISTS idx_organizations_clickup_workspace_id\n  ON public.organizations(clickup_workspace_id);\nCREATE INDEX IF NOT EXISTS idx_organizations_created_by\n  ON public.organizations(created_by);\nCREATE INDEX IF NOT EXISTS idx_organizations_archived_at\n  ON public.organizations(archived_at);\n\nDROP TRIGGER IF EXISTS set_organizations_updated_at ON public.organizations;\nCREATE TRIGGER set_organizations_updated_at\n  BEFORE UPDATE ON public.organizations\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();\n\nALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"No direct organization reads\" ON public.organizations;\nCREATE POLICY \"No direct organization reads\"\n  ON public.organizations FOR SELECT TO authenticated USING (false);\nDROP POLICY IF EXISTS \"No anonymous organization reads\" ON public.organizations;\nCREATE POLICY \"No anonymous organization reads\"\n  ON public.organizations FOR SELECT TO anon USING (false);\nDROP POLICY IF EXISTS \"No direct organization inserts\" ON public.organizations;\nCREATE POLICY \"No direct organization inserts\"\n  ON public.organizations FOR INSERT TO authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct organization updates\" ON public.organizations;\nCREATE POLICY \"No direct organization updates\"\n  ON public.organizations FOR UPDATE TO authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct organization deletes\" ON public.organizations;\nCREATE POLICY \"No direct organization deletes\"\n  ON public.organizations FOR DELETE TO authenticated USING (false);\n\nCREATE TABLE IF NOT EXISTS public.organization_members (\n  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  organization_id  UUID NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT,\n  profile_id       UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,\n  role             public.organization_member_role NOT NULL DEFAULT 'member',\n  status           public.organization_member_status NOT NULL DEFAULT 'active',\n  joined_at        TIMESTAMPTZ,\n  created_at       TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  updated_at       TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  CONSTRAINT organization_members_org_profile_unique UNIQUE (organization_id, profile_id)\n);\n\nCREATE INDEX IF NOT EXISTS idx_organization_members_organization_id\n  ON public.organization_members(organization_id);\nCREATE INDEX IF NOT EXISTS idx_organization_members_profile_id\n  ON public.organization_members(profile_id);\nCREATE INDEX IF NOT EXISTS idx_organization_members_org_status\n  ON public.organization_members(organization_id, status);\nCREATE INDEX IF NOT EXISTS idx_organization_members_org_role_status\n  ON public.organization_members(organization_id, role, status);\n\nDROP TRIGGER IF EXISTS set_organization_members_updated_at ON public.organization_members;\nCREATE TRIGGER set_organization_members_updated_at\n  BEFORE UPDATE ON public.organization_members\n  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();\n\nALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS \"No direct organization member reads\" ON public.organization_members;\nCREATE POLICY \"No direct organization member reads\"\n  ON public.organization_members FOR SELECT TO authenticated USING (false);\nDROP POLICY IF EXISTS \"No anonymous organization member reads\" ON public.organization_members;\nCREATE POLICY \"No anonymous organization member reads\"\n  ON public.organization_members FOR SELECT TO anon USING (false);\nDROP POLICY IF EXISTS \"No direct organization member inserts\" ON public.organization_members;\nCREATE POLICY \"No direct organization member inserts\"\n  ON public.organization_members FOR INSERT TO authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct organization member updates\" ON public.organization_members;\nCREATE POLICY \"No direct organization member updates\"\n  ON public.organization_members FOR UPDATE TO authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct organization member deletes\" ON public.organization_members;\nCREATE POLICY \"No direct organization member deletes\"\n  ON public.organization_members FOR DELETE TO authenticated USING (false);\n\nALTER TABLE public.spaces\n  ADD COLUMN IF NOT EXISTS organization_id UUID;\n\nDO $$ BEGIN\n  ALTER TABLE public.spaces\n    ADD CONSTRAINT spaces_organization_id_fkey\n    FOREIGN KEY (organization_id) REFERENCES public.organizations(id) ON DELETE RESTRICT;\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE INDEX IF NOT EXISTS idx_spaces_organization_id\n  ON public.spaces(organization_id);\nCREATE INDEX IF NOT EXISTS idx_spaces_organization_archived_at\n  ON public.spaces(organization_id, archived_at);\n\n-- One deterministic Organization for each existing Space, including spaces that\n-- are not linked to ClickUp. ClickUp is an optional relationship, not the tenant root.\nINSERT INTO public.organizations (name, slug, clickup_workspace_id, created_by, settings)\nSELECT\n  left(s.name, 160),\n  'organization-' || left(replace(s.id::text, '-', ''), 24),\n  s.clickup_workspace_id,\n  s.created_by,\n  '{}'::jsonb\nFROM public.spaces AS s\nON CONFLICT (clickup_workspace_id) DO NOTHING;\n\nUPDATE public.spaces AS s\nSET organization_id = o.id\nFROM public.organizations AS o\nWHERE s.organization_id IS NULL\n  AND o.slug = 'organization-' || left(replace(s.id::text, '-', ''), 24);\n\nDO $$ BEGIN\n  IF EXISTS (SELECT 1 FROM public.spaces WHERE organization_id IS NULL) THEN\n    RAISE EXCEPTION 'Cannot enforce organization_id: one or more spaces are unmapped';\n  END IF;\nEND $$;\n\nALTER TABLE public.spaces\n  ALTER COLUMN organization_id SET NOT NULL;\n\n-- Preserve the strongest existing Space role as the Organization role.\nINSERT INTO public.organization_members (organization_id, profile_id, role, status, joined_at)\nSELECT\n  s.organization_id,\n  sm.profile_id,\n  CASE WHEN bool_or(sm.role = 'admin'::public.space_member_role) THEN 'admin'::public.organization_member_role ELSE 'member'::public.organization_member_role END,\n  'active'::public.organization_member_status,\n  min(sm.joined_at)\nFROM public.spaces AS s\nJOIN public.space_members AS sm ON sm.space_id = s.id\nWHERE sm.status = 'active'\nGROUP BY s.organization_id, sm.profile_id\nON CONFLICT (organization_id, profile_id) DO NOTHING;\n"
+    ],
+    "version": "20260824003714"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260824000009_add_typed_playback_telemetry",
+    "rollback": null,
+    "statements": [
+      "-- TrackUp: typed playback telemetry and server receipt timestamps.\n-- Existing events remain readable; legacy provider fields remain NULL/unknown.\n\nALTER TABLE public.watch_events\n  ADD COLUMN IF NOT EXISTS playback_rate NUMERIC(5,2),\n  ADD COLUMN IF NOT EXISTS from_rate NUMERIC(5,2),\n  ADD COLUMN IF NOT EXISTS to_rate NUMERIC(5,2),\n  ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ;\n\nUPDATE public.watch_events\nSET received_at = created_at\nWHERE received_at IS NULL;\n\nALTER TABLE public.watch_events\n  ALTER COLUMN received_at SET DEFAULT timezone('utc', now()),\n  ALTER COLUMN received_at SET NOT NULL;\n\nDO $$ BEGIN\n  ALTER TABLE public.watch_events\n    ADD CONSTRAINT watch_events_playback_rate_nonnegative\n    CHECK (playback_rate IS NULL OR playback_rate > 0);\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nDO $$ BEGIN\n  ALTER TABLE public.watch_events\n    ADD CONSTRAINT watch_events_from_rate_nonnegative\n    CHECK (from_rate IS NULL OR from_rate > 0);\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nDO $$ BEGIN\n  ALTER TABLE public.watch_events\n    ADD CONSTRAINT watch_events_to_rate_nonnegative\n    CHECK (to_rate IS NULL OR to_rate > 0);\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE INDEX IF NOT EXISTS idx_watch_events_session_received_at\n  ON public.watch_events(session_id, received_at);\n\nCOMMENT ON COLUMN public.watch_events.playback_rate IS\n  'Provider-reported playback rate at event time; NULL when not recorded.';\nCOMMENT ON COLUMN public.watch_events.from_rate IS\n  'Provider-reported previous playback rate for rate_change events; NULL when not recorded.';\nCOMMENT ON COLUMN public.watch_events.to_rate IS\n  'Provider-reported new playback rate for rate_change events; NULL when not recorded.';\nCOMMENT ON COLUMN public.watch_events.received_at IS\n  'Server/database ingestion time; created_at remains the legacy receipt timestamp.';\n"
+    ],
+    "version": "20260824003757"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "20260824000010_add_clickup_space_and_cron_evidence",
+    "rollback": null,
+    "statements": [
+      "-- TrackUp: additive ClickUp hierarchy metadata and trusted cron execution evidence.\n-- Existing historical rows are preserved. No tracking/session/event rows are changed.\n\nALTER TABLE public.organizations\n  ADD COLUMN IF NOT EXISTS clickup_sync_status TEXT NOT NULL DEFAULT 'never',\n  ADD COLUMN IF NOT EXISTS clickup_last_synced_at TIMESTAMPTZ,\n  ADD COLUMN IF NOT EXISTS clickup_sync_error TEXT;\n\nDO $$ BEGIN\n  ALTER TABLE public.organizations\n    ADD CONSTRAINT organizations_clickup_sync_status_check\n    CHECK (clickup_sync_status IN ('never', 'running', 'success', 'partial', 'failed'));\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE INDEX IF NOT EXISTS idx_organizations_clickup_sync_status\n  ON public.organizations(clickup_sync_status, clickup_last_synced_at DESC);\n\nALTER TABLE public.spaces\n  ADD COLUMN IF NOT EXISTS clickup_space_id TEXT,\n  ADD COLUMN IF NOT EXISTS clickup_sync_status TEXT NOT NULL DEFAULT 'never',\n  ADD COLUMN IF NOT EXISTS clickup_last_synced_at TIMESTAMPTZ,\n  ADD COLUMN IF NOT EXISTS clickup_sync_error TEXT;\n\nDO $$ BEGIN\n  ALTER TABLE public.spaces\n    ADD CONSTRAINT spaces_clickup_sync_status_check\n    CHECK (clickup_sync_status IN ('never', 'running', 'success', 'partial', 'failed'));\nEXCEPTION\n  WHEN duplicate_object THEN NULL;\nEND $$;\n\nCREATE UNIQUE INDEX IF NOT EXISTS uq_spaces_clickup_space_id\n  ON public.spaces(clickup_space_id)\n  WHERE clickup_space_id IS NOT NULL;\nCREATE INDEX IF NOT EXISTS idx_spaces_clickup_sync_status\n  ON public.spaces(clickup_sync_status, clickup_last_synced_at DESC);\n\nCOMMENT ON COLUMN public.organizations.clickup_sync_status IS\n  'Last persisted ClickUp Workspace sync state. never is used until an explicit sync is attempted.';\nCOMMENT ON COLUMN public.spaces.clickup_space_id IS\n  'ClickUp Space identity. NULL for legacy TrackUp Spaces created before explicit ClickUp Space mapping.';\nCOMMENT ON COLUMN public.spaces.clickup_workspace_id IS\n  'Legacy ClickUp Workspace relationship retained for backward compatibility; new hierarchy mapping uses organizations.clickup_workspace_id plus spaces.clickup_space_id.';\n\nCREATE TABLE IF NOT EXISTS public.cron_executions (\n  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  job_name           TEXT NOT NULL CHECK (char_length(job_name) BETWEEN 1 AND 120),\n  schedule           TEXT NOT NULL CHECK (char_length(schedule) BETWEEN 1 AND 80),\n  execution_key      TEXT NOT NULL CHECK (char_length(execution_key) BETWEEN 1 AND 240),\n  started_at         TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  finished_at        TIMESTAMPTZ,\n  status             TEXT NOT NULL CHECK (status IN ('started', 'succeeded', 'failed')),\n  http_status        INTEGER CHECK (http_status IS NULL OR (http_status >= 100 AND http_status <= 599)),\n  latency_ms         INTEGER CHECK (latency_ms IS NULL OR (latency_ms >= 0 AND latency_ms <= 86400000)),\n  health_status      TEXT CHECK (health_status IS NULL OR health_status IN ('healthy', 'degraded', 'unknown')),\n  error_code         TEXT CHECK (error_code IS NULL OR char_length(error_code) <= 160),\n  created_at         TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),\n  CONSTRAINT cron_executions_key_unique UNIQUE (job_name, execution_key)\n);\n\nCREATE INDEX IF NOT EXISTS idx_cron_executions_job_started_at\n  ON public.cron_executions(job_name, started_at DESC);\nCREATE INDEX IF NOT EXISTS idx_cron_executions_status_started_at\n  ON public.cron_executions(status, started_at DESC);\n\nALTER TABLE public.cron_executions ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"No direct cron execution reads\" ON public.cron_executions;\nCREATE POLICY \"No direct cron execution reads\"\n  ON public.cron_executions FOR SELECT TO authenticated USING (false);\nDROP POLICY IF EXISTS \"No anonymous cron execution reads\" ON public.cron_executions;\nCREATE POLICY \"No anonymous cron execution reads\"\n  ON public.cron_executions FOR SELECT TO anon USING (false);\nDROP POLICY IF EXISTS \"No direct cron execution inserts\" ON public.cron_executions;\nCREATE POLICY \"No direct cron execution inserts\"\n  ON public.cron_executions FOR INSERT TO authenticated WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct cron execution updates\" ON public.cron_executions;\nCREATE POLICY \"No direct cron execution updates\"\n  ON public.cron_executions FOR UPDATE TO authenticated USING (false) WITH CHECK (false);\nDROP POLICY IF EXISTS \"No direct cron execution deletes\" ON public.cron_executions;\nCREATE POLICY \"No direct cron execution deletes\"\n  ON public.cron_executions FOR DELETE TO authenticated USING (false);"
+    ],
+    "version": "20260824110206"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "harden_function_security",
+    "rollback": null,
+    "statements": [
+      "REVOKE ALL ON FUNCTION public.get_current_user_role() FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.get_current_user_role() FROM anon, authenticated;\nREVOKE ALL ON FUNCTION public.is_admin_or_owner() FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.is_admin_or_owner() FROM anon, authenticated;\nREVOKE ALL ON FUNCTION public.is_owner() FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.is_owner() FROM anon, authenticated;\nREVOKE ALL ON FUNCTION public.handle_updated_at() FROM PUBLIC;\nREVOKE ALL ON FUNCTION public.handle_updated_at() FROM anon, authenticated;\n\nCREATE OR REPLACE FUNCTION public.handle_updated_at()\nRETURNS trigger\nLANGUAGE plpgsql\nSET search_path = public\nAS $$\nBEGIN\n  NEW.updated_at = timezone('utc'::text, now());\n  RETURN NEW;\nEND;\n$$;\n\nDO $$\nBEGIN\n  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN\n    REVOKE ALL ON FUNCTION public.rls_auto_enable() FROM PUBLIC;\n    REVOKE ALL ON FUNCTION public.rls_auto_enable() FROM anon, authenticated;\n  END IF;\nEND;\n$$;\n"
+    ],
+    "version": "20260824135132"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "harden_legacy_rls_ingestion",
+    "rollback": null,
+    "statements": [
+      "DROP POLICY IF EXISTS \"Authenticated users can read workspaces\" ON public.workspaces;\nCREATE POLICY \"No direct workspace reads\"\n  ON public.workspaces\n  FOR SELECT\n  TO anon, authenticated\n  USING (false);\n\nDROP POLICY IF EXISTS \"Anon can insert watch sessions\" ON public.watch_sessions;\nDROP POLICY IF EXISTS \"Anon can insert watch events\" ON public.watch_events;\n\nREVOKE ALL ON TABLE public.workspaces FROM anon, authenticated;\nREVOKE ALL ON TABLE public.watch_sessions FROM anon, authenticated;\nREVOKE ALL ON TABLE public.watch_events FROM anon, authenticated;\n"
+    ],
+    "version": "20260824141529"
+  },
+  {
+    "created_by": "safalmoaz16@gmail.com",
+    "idempotency_key": null,
+    "name": "add_detailed_playback_events",
+    "rollback": null,
+    "statements": [
+      "ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'session_started'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'player_ready'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'metadata_loaded'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'seek_started'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'seek_completed'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'playback_progress'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'session_ended'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'buffering_started'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'buffering_ended'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'playback_rate_changed'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'volume_changed'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'mute_changed'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'fullscreen_entered'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'fullscreen_exited'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'visibility_hidden'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'visibility_visible'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'quality_changed'; ALTER TYPE public.watch_event_type ADD VALUE IF NOT EXISTS 'player_error'; CREATE INDEX IF NOT EXISTS idx_watch_events_event_type ON public.watch_events(event_type); COMMENT ON TYPE public.watch_event_type IS 'Observed TrackUp playback lifecycle and provider telemetry events; unsupported provider events are not fabricated.'; COMMENT ON COLUMN public.watch_events.metadata IS 'Bounded non-PII event context such as provider_state, player_state, seek_to_seconds, delta_seconds, volume, mute, visibility, error details, device, browser, and OS.';"
+    ],
+    "version": "20260824170201"
+  }
+]

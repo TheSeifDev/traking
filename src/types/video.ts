@@ -1,4 +1,4 @@
-﻿/**
+/**
  * TrackUp Domain Types: Videos, Watch Links, Sessions, Events
  */
 
@@ -31,7 +31,8 @@ export interface Workspace {
 
 export interface Video {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
+  organization_id?: string | null;
   space_id?: string | null;
   created_by: string | null;
   title: string;

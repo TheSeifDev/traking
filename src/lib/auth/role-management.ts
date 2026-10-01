@@ -28,6 +28,7 @@
 
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireAuth, AuthError } from "@/src/lib/auth/session";
+import { revokeAllUserSessions } from "./session-store";
 import {
   USER_ROLES,
   isValidManagedRole,
@@ -174,6 +175,9 @@ export async function changeUserRole(
       return { success: false, error: "database_error" };
     }
 
+    // Revoke any active sessions to enforce fresh login with the new role
+    void revokeAllUserSessions(targetUserId);
+
     // ── 10: Write audit record ──────────────────────────────────────────────
     // Fire-and-forget: audit failure must never block the successful operation.
     void supabase.from("role_change_audit").insert({
@@ -265,6 +269,10 @@ export async function setUserActiveStatus(
 
     if (updateError) {
       return { success: false, error: "database_error" };
+    }
+
+    if (!isActive) {
+      void revokeAllUserSessions(targetUserId);
     }
 
     return {

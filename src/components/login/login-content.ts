@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   LockKeyhole,
-  RefreshCw,
   ShieldCheck,
   Users,
   Zap,
@@ -16,41 +15,41 @@ export type LoginContentItem = {
 
 export const LOGIN_BENEFITS: readonly LoginContentItem[] = [
   {
+    icon: ShieldCheck,
+    title: "Sovereign Authentication",
+    description: "Enterprise-grade server-side sessions with cryptographic token hashing and zero third-party dependencies.",
+  },
+  {
     icon: LockKeyhole,
-    title: "Scoped access",
-    description: "TrackUp uses ClickUp OAuth and checks access on protected requests for your authorized workspace context.",
+    title: "Role-Based Access Control",
+    description: "Strict Owner, Admin, and Viewer access hierarchies protecting all video telemetry and analytics.",
   },
   {
     icon: Zap,
-    title: "One-Click Access",
-    description: "No extra accounts. No extra passwords. Just continue with your ClickUp account.",
-  },
-  {
-    icon: RefreshCw,
-    title: "Connected workspace",
-    description: "Load your authorized ClickUp workspace and member context inside TrackUp.",
+    title: "Granular Playback Intelligence",
+    description: "Sub-second heatmaps, drop-off curves, and verified viewer engagement across all video sources.",
   },
   {
     icon: BarChart3,
-    title: "Evidence-based analytics",
-    description: "Review persisted viewer activity and provider-backed metrics when reliable telemetry is available.",
+    title: "Evidence-Based Analytics",
+    description: "Review persisted viewer activity and telemetry with zero guesswork and robust data isolation.",
   },
 ];
 
 export const LOGIN_STEPS: readonly LoginContentItem[] = [
   {
-    icon: ShieldCheck,
-    title: "You'll be redirected to ClickUp",
-    description: "Sign in to your ClickUp account and authorize TrackUp.",
+    icon: Users,
+    title: "Owner-Provisioned Access",
+    description: "Your account is created and authorized directly by your organization's TrackUp Owner.",
   },
   {
-    icon: Users,
-    title: "We'll fetch your workspace info",
-    description: "We'll securely import your user and workspace data.",
+    icon: ShieldCheck,
+    title: "Encrypted Credential Verification",
+    description: "Passwords are verified using memory-hard Argon2id hashing with constant-time protections.",
   },
   {
     icon: BarChart3,
-    title: "You're all set!",
-    description: "Open TrackUp and review persisted viewing activity with provider-aware measurement.",
+    title: "Connected Video Intelligence",
+    description: "Seamlessly access your workspaces, manage tracking links, and inspect viewer telemetry.",
   },
 ];

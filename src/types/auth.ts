@@ -54,11 +54,17 @@ export function isValidManagedRole(role: unknown): role is ManagedRole {
  */
 export interface Profile {
   id: string;
+  username?: string | null;
   clickup_user_id: string | null;
   name: string | null;
   email: string;
   role: UserRole;
   is_active: boolean;
+  must_change_password?: boolean;
+  failed_login_attempts?: number;
+  locked_until?: string | null;
+  password_changed_at?: string;
+  last_login_at?: string | null;
   created_at: string;
   updated_at: string;
   last_seen_at: string | null;
@@ -85,12 +91,15 @@ export interface TeamMember extends Profile {
 
 /**
  * Session representation of an Authenticated User
+ * Sensitive attributes like password_hash are NEVER included.
  */
 export interface AuthenticatedUser {
   id: string;
+  username?: string | null;
   email: string;
   role: UserRole;
   is_active: boolean;
   name: string | null;
   clickup_user_id: string | null;
 }
+

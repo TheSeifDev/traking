@@ -55,19 +55,8 @@ export class AuthError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Cookie parsing helpers (private)
-// ---------------------------------------------------------------------------
-
-/**
- * Reads and verifies the signed `trackup_user` cookie set by the OAuth callback.
- * Returns the verified object or null – does NOT validate against the DB yet.
- */
-async function readSessionCookie(): Promise<AuthenticatedUser | null> {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("trackup_user")?.value;
-  return verifySignedSessionCookie(raw);
-}
+import { validateSession } from "./session-store";
+import { SESSION_COOKIE_NAME } from "./session-token";
 
 // ---------------------------------------------------------------------------
 // Primary utilities
@@ -75,15 +64,30 @@ async function readSessionCookie(): Promise<AuthenticatedUser | null> {
 
 /**
  * Returns the authenticated user by:
- * 1. Reading the session cookie for the user id.
- * 2. Fetching the matching profile row from the database.
- * 3. Re-validating role and active status from the DB (never trusts the cookie role alone).
+ * 1. Validating the native trackup_session against the database session store.
+ * 2. Or falling back to verifying the signed session cookie and fetching the DB profile.
+ * 3. Checking live is_active and valid role in all cases.
  *
  * Returns null when not authenticated, profile is missing, role is invalid,
  * or the account is inactive.
  */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
-  const session = await readSessionCookie();
+  const cookieStore = await cookies();
+
+  // 1. Try native database session
+  const nativeToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (nativeToken) {
+    const sessionResult = await validateSession(nativeToken);
+    if (sessionResult) {
+      return sessionResult.user;
+    }
+  }
+
+  // 2. Fallback to legacy cookie if present
+  const legacyRaw = cookieStore.get("trackup_user")?.value;
+  if (!legacyRaw) return null;
+
+  const session = await verifySignedSessionCookie(legacyRaw);
   if (!session) return null;
 
   try {
@@ -100,6 +104,7 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
 
     return {
       id: profile.id,
+      username: profile.username ?? null,
       email: profile.email,
       role: profile.role,
       is_active: profile.is_active,
@@ -116,15 +121,15 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
  * Validates active status and role. Returns null on any failure.
  */
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const session = await readSessionCookie();
-  if (!session) return null;
+  const user = await getCurrentUser();
+  if (!user) return null;
 
   try {
     const supabase = createAdminClient();
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", session.id)
+      .eq("id", user.id)
       .maybeSingle();
 
     if (error || !profile) return null;
@@ -179,43 +184,20 @@ export async function hasPermission(permission: Permission): Promise<boolean> {
  * Returns the AuthenticatedUser so callers don't need a second call.
  */
 export async function requireAuth(): Promise<AuthenticatedUser> {
-  const session = await readSessionCookie();
-  if (!session) {
+  const user = await getCurrentUser();
+  if (!user) {
     throw new AuthError("unauthenticated", "Authentication required");
   }
 
-  try {
-    const supabase = createAdminClient();
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.id)
-      .maybeSingle();
-
-    if (error || !profile) {
-      throw new AuthError("missing_profile", "User profile not found");
-    }
-
-    if (!profile.is_active) {
-      throw new AuthError("inactive_account", "Account is inactive");
-    }
-
-    if (!isValidRole(profile.role)) {
-      throw new AuthError("invalid_role", "User profile has an unrecognised role");
-    }
-
-    return {
-      id: profile.id,
-      email: profile.email,
-      role: profile.role,
-      is_active: profile.is_active,
-      name: profile.name,
-      clickup_user_id: profile.clickup_user_id,
-    };
-  } catch (err) {
-    if (err instanceof AuthError) throw err;
-    throw new AuthError("database_error", "Failed to validate session");
+  if (!user.is_active) {
+    throw new AuthError("inactive_account", "Account is inactive");
   }
+
+  if (!isValidRole(user.role)) {
+    throw new AuthError("invalid_role", "User profile has an unrecognised role");
+  }
+
+  return user;
 }
 
 /**

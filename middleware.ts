@@ -68,16 +68,25 @@ interface CookieSession {
   role: string;
 }
 
+const SESSION_COOKIE_NAME = "trackup_session";
+
 async function readSessionCookieFast(request: NextRequest): Promise<CookieSession | null> {
+  // 1. Check native TrackUp session token
+  const nativeToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (nativeToken && nativeToken.length >= 32) {
+    return { id: "native-session", role: "" };
+  }
+
+  // 2. Fallback to legacy signed cookie during migration
   const raw = request.cookies.get("trackup_user")?.value;
   const verified = await verifySignedSessionCookie(raw);
   return verified ? { id: verified.id, role: verified.role } : null;
 }
 
 function getSupabaseResponse(request: NextRequest): NextResponse {
-  // TrackUp authentication is based on the signed trackup_user cookie and
+  // TrackUp authentication is based on the native server-side session and
   // server-side profile validation. Supabase SSR token refresh is optional.
-  // Public/OAuth routes must not crash when a deployment omits public Supabase
+  // Public routes must not crash when a deployment omits public Supabase
   // variables; protected pages still perform their own server guard.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
     return NextResponse.next();
@@ -109,45 +118,27 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtectedPath(pathname)) {
-    const rawCookie = request.cookies.get("trackup_user")?.value;
-    const hasTrackupUserCookie = Boolean(rawCookie);
-    const verificationResult = session ? "valid" : hasTrackupUserCookie ? "invalid" : "missing";
-
     if (!isAuthenticated) {
-      console.info("[TEMPORARY DIAGNOSTIC] Middleware rejecting protected request", {
-        hostname: request.nextUrl.hostname,
-        pathname,
-        userAgent: request.headers.get("user-agent"),
-        hasTrackupUserCookie,
-        verificationResult,
-        redirectReason: "unauthenticated_session",
-      });
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
 
-    console.info("[TEMPORARY DIAGNOSTIC] Middleware accepted protected request", {
-      hostname: request.nextUrl.hostname,
-      pathname,
-      userAgent: request.headers.get("user-agent"),
-      hasTrackupUserCookie: true,
-      verificationResult: "valid",
-    });
-
-    const role = session.role;
-
-    if (isOwnerOnlyAdminPath(pathname)) {
-      if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
-        return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
-      }
-    } else if (isOwnerPath(pathname)) {
-      if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
-        return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
-      }
-    } else if (isAdminPath(pathname)) {
-      if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.ADMIN)) {
-        return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
+    // Role-based fast routing when role is present in signed session claims
+    if (session.role) {
+      const role = session.role;
+      if (isOwnerOnlyAdminPath(pathname)) {
+        if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
+          return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
+        }
+      } else if (isOwnerPath(pathname)) {
+        if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.OWNER)) {
+          return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
+        }
+      } else if (isAdminPath(pathname)) {
+        if (!isValidRole(role) || !hasMinimumRole(role, USER_ROLES.ADMIN)) {
+          return NextResponse.redirect(new URL("/dashboard?error=forbidden", request.url));
+        }
       }
     }
   }

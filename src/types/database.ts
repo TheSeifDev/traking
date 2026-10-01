@@ -21,36 +21,125 @@ export interface Database {
       profiles: {
         Row: {
           id: string;
+          username: string | null;
           clickup_user_id: string | null;
           name: string | null;
           email: string;
+          password_hash: string | null;
           role: UserRole;
           is_active: boolean;
+          must_change_password: boolean;
+          failed_login_attempts: number;
+          locked_until: string | null;
+          password_changed_at: string;
+          last_login_at: string | null;
           created_at: string;
           updated_at: string;
           last_seen_at: string | null;
         };
         Insert: {
           id?: string;
+          username?: string | null;
           clickup_user_id?: string | null;
           name?: string | null;
           email: string;
+          password_hash?: string | null;
           role?: UserRole;
           is_active?: boolean;
+          must_change_password?: boolean;
+          failed_login_attempts?: number;
+          locked_until?: string | null;
+          password_changed_at?: string;
+          last_login_at?: string | null;
           created_at?: string;
           updated_at?: string;
           last_seen_at?: string | null;
         };
         Update: {
           id?: string;
+          username?: string | null;
           clickup_user_id?: string | null;
           name?: string | null;
           email?: string;
+          password_hash?: string | null;
           role?: UserRole;
           is_active?: boolean;
+          must_change_password?: boolean;
+          failed_login_attempts?: number;
+          locked_until?: string | null;
+          password_changed_at?: string;
+          last_login_at?: string | null;
           created_at?: string;
           updated_at?: string;
           last_seen_at?: string | null;
+        };
+        Relationships: [];
+      };
+      user_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          session_token_hash: string;
+          expires_at: string;
+          last_used_at: string;
+          created_at: string;
+          is_revoked: boolean;
+          revoked_at: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          session_token_hash: string;
+          expires_at: string;
+          last_used_at?: string;
+          created_at?: string;
+          is_revoked?: boolean;
+          revoked_at?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          session_token_hash?: string;
+          expires_at?: string;
+          last_used_at?: string;
+          created_at?: string;
+          is_revoked?: boolean;
+          revoked_at?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_sessions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      auth_rate_limits: {
+        Row: {
+          key: string;
+          attempts: number;
+          first_attempt_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          key: string;
+          attempts?: number;
+          first_attempt_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          key?: string;
+          attempts?: number;
+          first_attempt_at?: string;
+          expires_at?: string;
         };
         Relationships: [];
       };
@@ -546,7 +635,8 @@ export interface Database {
       videos: {
         Row: {
           id: string;
-          workspace_id: string;
+          workspace_id: string | null;
+          organization_id: string | null;
           space_id: string | null;
           created_by: string | null;
           title: string;
@@ -559,7 +649,8 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          workspace_id: string;
+          workspace_id?: string | null;
+          organization_id?: string | null;
           space_id?: string | null;
           created_by?: string | null;
           title: string;
@@ -572,7 +663,8 @@ export interface Database {
         };
         Update: {
           id?: string;
-          workspace_id?: string;
+          workspace_id?: string | null;
+          organization_id?: string | null;
           space_id?: string | null;
           created_by?: string | null;
           title?: string;
