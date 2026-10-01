@@ -54,7 +54,7 @@ export const GET = withDashboardAuth(async (request: NextRequest, user) => {
       const scope = organizationDataScope(organization);
       if (!scope) return NextResponse.json({ videos: [], summary: emptySummary, organization: { id: organization.id, name: organization.name }, active_space_scope: "all", space_connected: false });
       const [rawVideos, analytics] = await Promise.all([
-        listVideos(scope),
+        listVideos(scope, user),
         getWorkspaceAnalytics(scope, undefined, undefined, false),
       ]);
       const videos = addLibraryAnalytics(rawVideos, analytics.viewer_sessions, analytics.total_videos === rawVideos.length);

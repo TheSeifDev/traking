@@ -23,9 +23,9 @@ export default function SpaceDashboard({ organization, space, analytics, videoCo
           <header className="flex flex-col gap-5 border-b border-white/8 pb-7 sm:flex-row sm:items-end sm:justify-between">
             <div>
               {organization && <Link href={`/organizations/${organization.id}`} className="text-xs text-violet-300 hover:text-violet-200">{organization.name} <span className="px-1 text-white/25">/</span> {displayName}</Link>}
-              <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Space dashboard</p>
+              <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Team dashboard</p>
               <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">{displayName}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Space inside {organization?.name ?? "your TrackUp organization"}. This view is limited to your active membership in this Space.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Team inside {organization?.name ?? "your TrackUp organization"}. Videos and analytics in this view are scoped to your active membership in this Team.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href={`/videos${query}`} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-xs font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"><PlaySquare size={15} />Videos</Link>
@@ -36,7 +36,7 @@ export default function SpaceDashboard({ organization, space, analytics, videoCo
           {analytics && canManage ? (
             <>
               <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/9 sm:grid-cols-4">
-                <Metric label="Videos" value={String(videoCount)} detail="Space library" icon={PlaySquare} />
+                <Metric label="Videos" value={String(videoCount)} detail="Team library" icon={PlaySquare} />
                 <Metric label="Sessions" value={String(analytics.total_sessions)} detail="Persisted viewer sessions" icon={Activity} />
                 <Metric label="Unique viewers" value={String(analytics.unique_viewers)} detail="Profile-bound identities" icon={UsersRound} />
                 <Metric label="Watch time" value={formatDuration(analytics.total_measurable_watch_time_seconds)} detail={analytics.playback_metrics_available ? "Measured telemetry" : "No measurable telemetry"} icon={Clock3} />

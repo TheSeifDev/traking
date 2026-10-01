@@ -12,6 +12,8 @@ import { getAppUrl } from "@/src/lib/app-url";
 import { buildPlaybackHeatmap, aggregateHeatmaps, type PlaybackHeatmap } from "@/src/lib/analytics/ranges";
 import type { AnalyticsDataScope, VideoDataScope } from "@/src/lib/spaces/data-scope";
 import { getProviderLabel, providerScope, providerSupportsDetailedTelemetry } from "@/src/lib/playback/providers";
+import type { AuthenticatedUser } from "@/src/types/auth";
+import { canUserAccessContent, getUserAccessibleSpaceIds } from "@/src/lib/spaces/content-scope";
 
 interface AnalyticsSessionRow {
   id: string;
@@ -309,9 +311,12 @@ function buildViewerSessionAnalytics(
 }
 
 /**
- * Lists all videos for a workspace, with view counts.
+ * Lists all videos for a workspace or team, with view counts.
+ * Enforces server-side content scope:
+ * - For Organization scope: returns org-wide videos (space_id IS NULL) + videos for teams user belongs to.
+ * - For Space/Team scope: returns videos for that space if user is authorized.
  */
-export async function listVideos(scope: VideoDataScope): Promise<Video[]> {
+export async function listVideos(scope: VideoDataScope, user?: AuthenticatedUser): Promise<Video[]> {
   try {
     const supabase = createAdminClient();
     let videoQuery = supabase
@@ -329,7 +334,31 @@ export async function listVideos(scope: VideoDataScope): Promise<Video[]> {
         )
       `)
       .eq("organization_id", scope.organizationId);
-    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+
+    if (scope.type === "space") {
+      if (user) {
+        const canAccess = await canUserAccessContent(user, {
+          organization_id: scope.organizationId,
+          space_id: scope.spaceId,
+        });
+        if (!canAccess) return [];
+      }
+      videoQuery = videoQuery.eq("space_id", scope.spaceId);
+    } else if (scope.type === "organization") {
+      if (user) {
+        const accessibleSpaces = await getUserAccessibleSpaceIds(user, scope.organizationId);
+        if (accessibleSpaces !== "ALL") {
+          if (accessibleSpaces.length === 0) {
+            // User can only see organization-wide content
+            videoQuery = videoQuery.is("space_id", null);
+          } else {
+            // User can see organization-wide content + content from their teams
+            videoQuery = videoQuery.or(`space_id.is.null,space_id.in.(${accessibleSpaces.join(",")})`);
+          }
+        }
+      }
+    }
+
     const { data, error } = await videoQuery.order("created_at", { ascending: false });
 
     if (error) {
@@ -391,10 +420,14 @@ export async function listVideos(scope: VideoDataScope): Promise<Video[]> {
 }
 
 /**
- * Fetches a single video, verifying workspace ownership.
- * Returns null if not found or not in the workspace.
+ * Fetches a single video, verifying workspace and team authorization.
+ * Returns null if not found or if the user is not authorized.
  */
-export async function getVideo(videoId: string, scope: VideoDataScope): Promise<Video | null> {
+export async function getVideo(
+  videoId: string,
+  scope?: VideoDataScope,
+  user?: AuthenticatedUser,
+): Promise<Video | null> {
   try {
     const supabase = createAdminClient();
     let videoQuery = supabase
@@ -411,12 +444,27 @@ export async function getVideo(videoId: string, scope: VideoDataScope): Promise<
           watch_sessions(id, viewer_identifier, viewer_profile_id, started_at, last_seen_at, completion_percentage)
         )
       `)
-      .eq("id", videoId)
-      .eq("organization_id", scope.organizationId);
-    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+      .eq("id", videoId);
+
+    if (scope) {
+      videoQuery = videoQuery.eq("organization_id", scope.organizationId);
+      if (scope.type === "space") {
+        videoQuery = videoQuery.or(`space_id.eq.${scope.spaceId},space_id.is.null`);
+      }
+    }
+
     const { data, error } = await videoQuery.maybeSingle();
 
     if (error || !data) return null;
+
+    if (user) {
+      if (!data.organization_id) return null;
+      const allowed = await canUserAccessContent(user, {
+        organization_id: data.organization_id,
+        space_id: data.space_id,
+      });
+      if (!allowed) return null;
+    }
 
     const rawWatchLinks = (data.watch_links ?? []) as Array<{
       id: string;
@@ -671,24 +719,36 @@ export async function revokeWatchLink(
 
 /**
  * Returns aggregated analytics for a single video.
- * Only reads sessions/events via the service-role client.
+ * Enforces server-side authorization: user must have access to the video's scope.
  */
 export async function getVideoAnalytics(
   videoId: string,
   scope: VideoDataScope,
+  user?: AuthenticatedUser,
 ): Promise<VideoAnalytics | null> {
   try {
     const supabase = createAdminClient();
 
     let videoQuery = supabase
       .from("videos")
-      .select("id, title, duration, source_type")
+      .select("id, organization_id, space_id, title, duration, source_type")
       .eq("id", videoId)
       .eq("organization_id", scope.organizationId);
-    if (scope.type === "space") videoQuery = videoQuery.eq("space_id", scope.spaceId);
+    if (scope.type === "space") {
+      videoQuery = videoQuery.or(`space_id.eq.${scope.spaceId},space_id.is.null`);
+    }
     const { data: video } = await videoQuery.maybeSingle();
 
     if (!video) return null;
+
+    if (user) {
+      if (!video.organization_id) return null;
+      const allowed = await canUserAccessContent(user, {
+        organization_id: video.organization_id,
+        space_id: video.space_id,
+      });
+      if (!allowed) return null;
+    }
 
     const { data: rawSessions, error: sessionsError } = await supabase
       .from("watch_sessions")

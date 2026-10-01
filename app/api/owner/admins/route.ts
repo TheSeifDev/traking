@@ -37,6 +37,39 @@ async function readTargetUserId(request: NextRequest): Promise<string | null> {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+import { createAdminClient } from "@/utils/supabase/admin";
+
+export const GET = withRole(
+  USER_ROLES.OWNER,
+  async () => {
+    const supabase = createAdminClient();
+    const { data: admins, error } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        username,
+        email,
+        name,
+        role,
+        is_active,
+        must_change_password,
+        last_login_at,
+        created_at,
+        updated_at,
+        last_seen_at
+      `)
+      .in("role", [USER_ROLES.OWNER, USER_ROLES.ADMIN])
+      .order("role", { ascending: true }) // owner first, then admin
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: "database_error" }, { status: 500 });
+    }
+
+    return NextResponse.json({ admins: admins ?? [] }, { status: 200 });
+  },
+);
+
 export const POST = withRole(
   USER_ROLES.OWNER,
   async (request: NextRequest) => {

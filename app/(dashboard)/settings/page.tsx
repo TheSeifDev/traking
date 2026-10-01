@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Building2, CheckCircle2, KeyRound, Settings, Shield, SlidersHorizontal, User } from "lucide-react";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
+import ChangePasswordCard from "@/src/components/auth/ChangePasswordCard";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -112,24 +113,26 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         </section>
 
         <div className="grid gap-4 lg:grid-cols-2">
+          <ChangePasswordCard />
+
           <section className="rounded-2xl border border-white/8 bg-white/[0.035] p-5 shadow-xl shadow-black/10 sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 text-blue-300">
                 <KeyRound size={18} />
               </div>
               <div>
-                <h2 className="font-semibold text-white">Authentication</h2>
-                <p className="mt-1 text-xs text-white/35">TrackUp keeps the internal viewer authenticated and enforces sovereign security.</p>
+                <h2 className="font-semibold text-white">Authentication & Sovereignty</h2>
+                <p className="mt-1 text-xs text-white/35">TrackUp enforces sovereign security and identity controls server-side.</p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
               <div className="flex items-center gap-3 rounded-xl border border-white/7 bg-black/10 p-3 text-sm text-white/65">
                 <CheckCircle2 size={15} className="text-emerald-300" />
-                TrackUp sovereign credential login active
+                TrackUp sovereign Argon2id credential authentication active
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-white/7 bg-black/10 p-3 text-sm text-white/65">
                 <CheckCircle2 size={15} className="text-emerald-300" />
-                {isAllSpaces ? "Organization scope checked server-side" : "Space scope checked server-side"}
+                {isAllSpaces ? "Organization scope checked server-side" : "Team scope checked server-side"}
               </div>
             </div>
           </section>

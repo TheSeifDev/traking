@@ -1,10 +1,16 @@
-/** /owner/admins – Platform Administrators management (Owner and Admins only) */
+/**
+ * /owner/users – User Accounts management surface (Owner only)
+ *
+ * Displays all platform user accounts and allows manual user provisioning,
+ * platform role assignment, account activation/deactivation, password reset,
+ * and Organization + Team membership management.
+ */
 import { guardOwner } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import DashboardShell from "@/src/components/dashboard/DashboardShell";
-import OwnerAdminsManager from "@/src/components/owner/OwnerAdminsManager";
+import UserAccountsManager from "@/src/components/owner/UserAccountsManager";
 
-export default async function OwnerAdminsPage() {
+export default async function OwnerUsersPage() {
   const user = await guardOwner();
   const activeSpace = await resolveActiveSpaceForUser(user);
 
@@ -19,7 +25,7 @@ export default async function OwnerAdminsPage() {
       activeSpacePreferenceInvalid={activeSpace.activeSpacePreferenceInvalid}
       activeSpaceContext={activeSpace.context}
     >
-      <OwnerAdminsManager currentUserId={user.id} />
+      <UserAccountsManager currentUserId={user.id} />
     </DashboardShell>
   );
 }

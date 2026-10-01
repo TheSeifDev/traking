@@ -17,7 +17,7 @@ export const GET = withDashboardAuth(async (request: NextRequest, user, context)
     const access = await resolveSpaceAdminForUser(request, user);
     const scope = spaceDataScope(access.space);
     if (!scope) return NextResponse.json({ error: "space_required" }, { status: 400 });
-    const analytics = await getVideoAnalytics(id, scope);
+    const analytics = await getVideoAnalytics(id, scope, user);
     if (!analytics) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ analytics, space: { id: access.space.id, name: access.space.name } });
   } catch {

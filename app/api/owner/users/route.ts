@@ -12,31 +12,88 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { USER_ROLES, isValidManagedRole, type ManagedRole } from "@/src/types/auth";
 import { hashPassword, validatePasswordPolicy } from "@/src/lib/auth/password";
 import { writeOwnerLog } from "@/src/lib/observability/logger";
+import { getSpaceDisplayName, isLegacyOrganizationContainerSpace } from "@/src/lib/spaces/labels";
 
 export const GET = withRole(USER_ROLES.OWNER, async () => {
   const supabase = createAdminClient();
-  const { data: users, error } = await supabase
-    .from("profiles")
-    .select(`
-      id,
-      username,
-      email,
-      name,
-      role,
-      is_active,
-      must_change_password,
-      last_login_at,
-      created_at,
-      updated_at,
-      last_seen_at
-    `)
-    .order("created_at", { ascending: false });
 
-  if (error) {
+  const [
+    { data: users, error: usersErr },
+    { data: orgMembers },
+    { data: spaces },
+    { data: spaceMembers },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(`
+        id,
+        username,
+        email,
+        name,
+        role,
+        is_active,
+        must_change_password,
+        last_login_at,
+        created_at,
+        updated_at,
+        last_seen_at
+      `)
+      .order("created_at", { ascending: false }),
+    supabase.from("organization_members").select("id, profile_id, status").eq("status", "active"),
+    supabase.from("spaces").select("id, name, slug, organization_id").is("archived_at", null),
+    supabase.from("space_members").select("id, space_id, profile_id, status").eq("status", "active"),
+  ]);
+
+  if (usersErr) {
     return NextResponse.json({ error: "database_error" }, { status: 500 });
   }
 
-  return NextResponse.json({ users: users ?? [] }, { status: 200 });
+  // Get active organization name for collision check
+  const { data: org } = await supabase.from("organizations").select("name").limit(1).maybeSingle();
+  const orgName = org?.name ?? null;
+
+  const validSpaces = (spaces ?? []).filter((s) => !isLegacyOrganizationContainerSpace(s, orgName));
+  const spaceById = new Map(validSpaces.map((s) => [s.id, s]));
+
+  // Group space memberships by profile_id
+  const teamsByProfileId = new Map<string, Array<{ id: string; name: string }>>();
+  for (const sm of spaceMembers ?? []) {
+    const space = spaceById.get(sm.space_id);
+    if (!space) continue;
+    const current = teamsByProfileId.get(sm.profile_id) ?? [];
+    current.push({ id: space.id, name: getSpaceDisplayName(space) });
+    teamsByProfileId.set(sm.profile_id, current);
+  }
+
+  const enrichedUsers = (users ?? []).map((u) => ({
+    ...u,
+    teams: teamsByProfileId.get(u.id) ?? [],
+  }));
+
+  // Clean distinct team counts
+  const teamCounts: Record<string, number> = {};
+  for (const space of validSpaces) {
+    const displayName = getSpaceDisplayName(space);
+    const count = (spaceMembers ?? []).filter((sm) => sm.space_id === space.id).length;
+    teamCounts[displayName] = count;
+  }
+
+  return NextResponse.json({
+    users: enrichedUsers,
+    counts: {
+      total_accounts: users?.length ?? 0,
+      organization_members: orgMembers?.length ?? 0,
+      active_accounts: users?.filter((u) => u.is_active).length ?? 0,
+      admins: users?.filter((u) => u.role === "admin").length ?? 0,
+      viewers: users?.filter((u) => u.role === "viewer").length ?? 0,
+      team_counts: teamCounts,
+    },
+    available_teams: validSpaces.map((s) => ({
+      id: s.id,
+      name: getSpaceDisplayName(s),
+      slug: s.slug,
+    })),
+  }, { status: 200 });
 });
 
 export const POST = withRole(USER_ROLES.OWNER, async (request: NextRequest, owner) => {
@@ -134,7 +191,7 @@ export const POST = withRole(USER_ROLES.OWNER, async (request: NextRequest, owne
     return NextResponse.json({ error: "database_error" }, { status: 500 });
   }
 
-  // 8. Associate new user with default organization and spaces
+  // 8. Associate new user with organization and teams
   try {
     const { data: defaultOrg } = await supabase
       .from("organizations")
@@ -152,26 +209,44 @@ export const POST = withRole(USER_ROLES.OWNER, async (request: NextRequest, owne
         joined_at: nowIso,
       }, { onConflict: "organization_id,profile_id" });
 
-      const { data: defaultSpace } = await supabase
-        .from("spaces")
-        .select("id")
-        .eq("organization_id", defaultOrg.id)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      // If specific team_ids provided, assign to those teams
+      const targetTeamIds = Array.isArray((body as Record<string, unknown>).team_ids)
+        ? ((body as Record<string, unknown>).team_ids as string[]).filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+        : [];
 
-      if (defaultSpace) {
-        await supabase.from("space_members").upsert({
-          space_id: defaultSpace.id,
-          profile_id: newProfile.id,
-          role: assignedRole === USER_ROLES.ADMIN ? "admin" : "member",
-          status: "active",
-          joined_at: nowIso,
-        }, { onConflict: "space_id,profile_id" });
+      if (targetTeamIds.length > 0) {
+        for (const teamId of targetTeamIds) {
+          await supabase.from("space_members").upsert({
+            space_id: teamId,
+            profile_id: newProfile.id,
+            role: assignedRole === USER_ROLES.ADMIN ? "admin" : "member",
+            status: "active",
+            joined_at: nowIso,
+          }, { onConflict: "space_id,profile_id" });
+        }
+      } else {
+        // Fallback to first available team space
+        const { data: defaultSpace } = await supabase
+          .from("spaces")
+          .select("id")
+          .eq("organization_id", defaultOrg.id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (defaultSpace) {
+          await supabase.from("space_members").upsert({
+            space_id: defaultSpace.id,
+            profile_id: newProfile.id,
+            role: assignedRole === USER_ROLES.ADMIN ? "admin" : "member",
+            status: "active",
+            joined_at: nowIso,
+          }, { onConflict: "space_id,profile_id" });
+        }
       }
     }
   } catch (orgErr) {
-    console.warn("Non-fatal: could not auto-bind user to organization:", orgErr);
+    console.warn("Non-fatal: could not auto-bind user to organization or teams:", orgErr);
   }
 
   // 9. Audit log

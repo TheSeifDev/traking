@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2, Menu, X } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2, Menu, X, Users, Shield, Layers3 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { useEffect, useRef, useState } from "react";
 import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
@@ -23,18 +23,7 @@ interface DashboardShellProps {
   activeSpaceContext?: ActiveSpaceContext;
 }
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Organizations", href: "/organizations", icon: Building2 },
-  { label: "Spaces", href: "/spaces", icon: LayoutDashboard },
-  { label: "Videos", href: "/videos", icon: Video },
-  { label: "Analytics", href: "/analytics", icon: BarChart3 },
-  { label: "Watch links", href: "/watch-links", icon: Link2 },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
 
-const ownerNavItem = { label: "Owner console", href: "/owner", icon: ShieldCheck };
-const ownerTeamNavItem = { label: "Team members", href: "/owner/admins", icon: UsersRound };
 
 export default function DashboardShell({
   children,
@@ -78,7 +67,7 @@ export default function DashboardShell({
     || pathname.startsWith("/analytics")
     || pathname.startsWith("/watch-links")
     || pathname === "/settings"
-    || pathname.startsWith("/owner/admins");
+    || pathname.startsWith("/owner");
   const requestedAllSpaces = Boolean(requestedOrganizationId && isOrganizationScopedResourceRoute && !routeSpace);
   const selectedOrganizationId = routeSpace?.organization_id
     ?? (activeOrganizationId && organizations.some((organization) => organization.id === activeOrganizationId) ? activeOrganizationId : null)
@@ -107,13 +96,53 @@ export default function DashboardShell({
   const spaceMembersNavItem = selectedSpaceId && canManageActiveSpace
     ? { label: "Space members", href: `/spaces/${selectedSpaceId}/members`, icon: UsersRound }
     : null;
-  const visibleNavItems = [
-    navItems[0],
-    navItems[1],
-    ...(organizationMembersNavItem ? [organizationMembersNavItem] : []),
-    ...navItems.slice(2),
-    ...(spaceMembersNavItem ? [spaceMembersNavItem] : []),
-    ...(user.role === "owner" ? [ownerNavItem, ownerTeamNavItem] : []),
+
+  type NavItem = { label: string; href: string; icon: typeof LayoutDashboard };
+  type NavSection = { title: string; items: NavItem[] };
+
+  const sections: NavSection[] = [
+    {
+      title: "Operations",
+      items: [
+        { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "Organization",
+      items: [
+        { label: "Overview", href: "/organizations", icon: Building2 },
+        ...(organizationMembersNavItem ? [organizationMembersNavItem] : []),
+        { label: "Settings", href: "/settings", icon: Settings },
+      ],
+    },
+    {
+      title: "Teams",
+      items: [
+        { label: "All Teams", href: "/spaces", icon: Layers3 },
+        ...selectableSpaces.map((space) => ({
+          label: getSpaceDisplayName(space),
+          href: `/spaces/${space.id}`,
+          icon: Users,
+        })),
+        ...(spaceMembersNavItem ? [spaceMembersNavItem] : []),
+      ],
+    },
+    {
+      title: "Content",
+      items: [
+        { label: "Videos", href: "/videos", icon: Video },
+        { label: "Watch Links", href: "/watch-links", icon: Link2 },
+        { label: "Analytics", href: "/analytics", icon: BarChart3 },
+      ],
+    },
+    ...(user.role === "owner" ? [{
+      title: "Owner",
+      items: [
+        { label: "Users", href: "/owner/users", icon: UsersRound },
+        { label: "Administrators", href: "/owner/admins", icon: Shield },
+        { label: "Audit Logs", href: "/owner", icon: ShieldCheck },
+      ],
+    }] : []),
   ];
 
   useEffect(() => {
@@ -163,7 +192,7 @@ export default function DashboardShell({
       }, [activeOrganizationId, activeSpaceContext.type, activeSpaceId, activeSpaceNeedsPersistence, activeSpacePreferenceInvalid, requestedAllSpaces, requestedOrganizationId, routeSpace]);
 
   const scopedHref = (href: string) => {
-    if (href === "/organizations" || href === "/owner" || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
+    if (href === "/organizations" || href.startsWith("/owner") || href.startsWith("/spaces/") || href.startsWith("/organizations/")) return href;
     if (href === "/spaces") return selectedOrganizationId ? `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}` : href;
     if (!selectedSpaceId && activeSpaceContext.type === "all" && selectedOrganizationId && ["/dashboard", "/videos", "/analytics", "/watch-links", "/settings"].includes(href)) {
       return `${href}?organization_id=${encodeURIComponent(selectedOrganizationId)}`;
@@ -174,7 +203,12 @@ export default function DashboardShell({
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/owner") return pathname === "/owner";
+    if (href === "/owner/users") return pathname.startsWith("/owner/users");
+    if (href === "/owner/admins") return pathname.startsWith("/owner/admins");
     if (href === "/organizations") return pathname === "/organizations" || (pathname.startsWith("/organizations/") && !pathname.includes("/members"));
+    if (href === "/spaces") return pathname === "/spaces";
+    if (href.startsWith("/spaces/")) return pathname === href || pathname.startsWith(`${href}/`);
     if (href.includes("/members")) return pathname === href || pathname.startsWith(`${href}/`);
     return pathname.startsWith(href);
   }
@@ -182,12 +216,12 @@ export default function DashboardShell({
   const organizationContext = selectedOrganization?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
   const displayedSpaceContext = requestedAllSpaces
-    ? "All Spaces"
+    ? "All Teams"
     : selectedSpace
       ? (spaceContext ?? selectedSpace.name)
       : activeSpaceContext.type === "all"
-      ? "All Spaces"
-      : selectableSpaces.length > 1 ? "Select a Space" : selectableSpaces.length === 0 ? "No accessible Spaces" : "Select a Space";
+      ? "All Teams"
+      : selectableSpaces.length > 1 ? "Select a Team" : selectableSpaces.length === 0 ? "No accessible Teams" : "Select a Team";
 
   return (
     <>
@@ -212,16 +246,36 @@ export default function DashboardShell({
             )}
 
             <div className="min-w-0 px-1 py-1">
-              <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Active Team</span>
               <p className="truncate text-sm font-medium text-white/65" title={displayedSpaceContext}>{displayedSpaceContext}</p>
             </div>
           </div>
 
-          <nav className="flex-1 space-y-1 px-3 pt-4">
-            {visibleNavItems.map(({ label, href, icon: Icon }) => {
-              const active = isActive(href);
-              return <Link key={href} href={scopedHref(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${active ? "border border-violet-500/20 bg-violet-600/20 text-violet-300" : "text-white/50 hover:bg-white/5 hover:text-white"}`}><Icon size={16} className={active ? "text-violet-400" : "text-white/40"} />{label}</Link>;
-            })}
+          <nav className="flex-1 space-y-4 overflow-y-auto px-3 pt-3">
+            {sections.map((section) => (
+              <div key={section.title} className="space-y-1">
+                <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                  {section.title}
+                </p>
+                {section.items.map(({ label, href, icon: Icon }) => {
+                  const active = isActive(href);
+                  return (
+                    <Link
+                      key={href}
+                      href={scopedHref(href)}
+                      className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150 ${
+                        active
+                          ? "border border-violet-500/20 bg-violet-600/20 text-violet-300"
+                          : "text-white/50 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <Icon size={15} className={active ? "text-violet-400" : "text-white/40"} />
+                      {label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
           <div className="space-y-1 border-t border-white/8 px-3 pb-4 pt-4">
@@ -282,16 +336,37 @@ export default function DashboardShell({
                                   </div>
                                 )}
                                 <div className="min-w-0 px-1 py-1">
-                                  <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
+                                  <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Active Team</span>
                                   <p className="truncate text-sm font-medium text-white/65" title={displayedSpaceContext}>{displayedSpaceContext}</p>
                                 </div>
                               </div>
 
-                              <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-4">
-                                {visibleNavItems.map(({ label, href, icon: Icon }) => {
-                                  const active = isActive(href);
-                                  return <Link key={href} href={scopedHref(href)} onClick={() => setMobileNavOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${active ? "border border-violet-500/20 bg-violet-600/20 text-violet-300" : "text-white/60 hover:bg-white/5 hover:text-white"}`}><Icon size={16} className={active ? "text-violet-400" : "text-white/40"} />{label}</Link>;
-                                })}
+                              <nav className="flex-1 space-y-4 overflow-y-auto px-3 pt-3">
+                                {sections.map((section) => (
+                                  <div key={section.title} className="space-y-1">
+                                    <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                                      {section.title}
+                                    </p>
+                                    {section.items.map(({ label, href, icon: Icon }) => {
+                                      const active = isActive(href);
+                                      return (
+                                        <Link
+                                          key={href}
+                                          href={scopedHref(href)}
+                                          onClick={() => setMobileNavOpen(false)}
+                                          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150 ${
+                                            active
+                                              ? "border border-violet-500/20 bg-violet-600/20 text-violet-300"
+                                              : "text-white/60 hover:bg-white/5 hover:text-white"
+                                          }`}
+                                        >
+                                          <Icon size={15} className={active ? "text-violet-400" : "text-white/40"} />
+                                          {label}
+                                        </Link>
+                                      );
+                                    })}
+                                  </div>
+                                ))}
                               </nav>
 
                               <div className="space-y-1 border-t border-white/8 px-3 pb-4 pt-4">
