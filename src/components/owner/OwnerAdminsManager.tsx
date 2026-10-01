@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { TeamMember, UserRole } from "@/src/types/auth";
 import { TrackUpContent, TrackUpPageHeader, TrackUpPageShell } from "@/src/components/ui/trackup";
+import { confirmAction } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 interface OwnerAdminsManagerProps {
   currentUserId: string;
@@ -74,9 +75,13 @@ export default function OwnerAdminsManager({ currentUserId }: OwnerAdminsManager
   }, [loadAdmins]);
 
   async function handleDemoteToViewer(targetUserId: string, username: string) {
-    if (!window.confirm(`Are you sure you want to demote administrator '${username}' to a standard Viewer?`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `Demote administrator '${username}' to Viewer?`,
+      description: "This removes administrator authority while preserving the user account.",
+      confirmLabel: "Demote Administrator",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setMutating(targetUserId);
     setError(null);
     setNotice(null);
@@ -102,9 +107,13 @@ export default function OwnerAdminsManager({ currentUserId }: OwnerAdminsManager
 
   async function handleToggleActive(targetUserId: string, currentActive: boolean, username: string) {
     const action = currentActive ? "deactivate" : "reactivate";
-    if (!window.confirm(`Are you sure you want to ${action} administrator '${username}'?`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `${currentActive ? "Deactivate" : "Reactivate"} administrator '${username}'?`,
+      description: currentActive ? "The administrator will lose access until an owner reactivates the account." : "The administrator will regain access using their existing role and permissions.",
+      confirmLabel: currentActive ? "Deactivate Administrator" : "Reactivate Administrator",
+      tone: currentActive ? "danger" : "default",
+    });
+    if (!confirmed) return;
     setMutating(targetUserId);
     setError(null);
     setNotice(null);

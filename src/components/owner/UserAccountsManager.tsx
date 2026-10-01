@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { TrackUpContent, TrackUpPageHeader, TrackUpPageShell } from "@/src/components/ui/trackup";
+import { confirmAction } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 export interface EnrichedUserAccount {
   id: string;
@@ -190,9 +191,13 @@ export default function UserAccountsManager({ currentUserId }: UserAccountsManag
 
   async function handleToggleActive(targetUserId: string, currentActive: boolean, username: string) {
     const action = currentActive ? "deactivate" : "reactivate";
-    if (!window.confirm(`Are you sure you want to ${action} user '${username}'?`)) {
-      return;
-    }
+    const confirmed = await confirmAction({
+      title: `${currentActive ? "Deactivate" : "Reactivate"} user '${username}'?`,
+      description: currentActive ? "The user will lose access until an owner reactivates the account." : "The user will regain access using their existing role and permissions.",
+      confirmLabel: currentActive ? "Deactivate User" : "Reactivate User",
+      tone: currentActive ? "danger" : "default",
+    });
+    if (!confirmed) return;
     setMutating(targetUserId);
     setError(null);
     setNotice(null);

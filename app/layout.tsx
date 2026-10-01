@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
+import TrackUpFeedbackProvider from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -84,6 +85,7 @@ export default function RootLayout({
         "
       >
         {children}
+        <TrackUpFeedbackProvider />
       </body>
     </html>
   );

@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState } from "react";
 import { AlertCircle, ArrowUpRight, CheckCircle, Copy, ExternalLink, Link2, Loader2, Plus, ShieldCheck, XCircle } from "lucide-react";
 import type { WatchLink } from "@/src/types/video";
+import { confirmAction } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 interface WatchLinkPanelProps {
   videoId: string;
@@ -79,10 +80,15 @@ export default function WatchLinkPanel({ videoId, existingLinks: initial, canMan
   }
 
   async function handleRevoke(linkId: string) {
-    if (!canManage || !window.confirm("Revoke this link? New sessions will be rejected, while existing analytics remain available.")) return;
+    if (!canManage) return;
+    const confirmed = await confirmAction({
+      title: "Revoke this watch link?",
+      body: "New viewer sessions will be rejected immediately. Existing analytics and historical data remain available.",
+      confirmLabel: "Revoke Link",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setRevoking(linkId);
-    setNotice(null);
-    setError(null);
     try {
       const res = await fetch(scopedPath(`/api/videos/${videoId}/watch-link`), {
         method: "DELETE",

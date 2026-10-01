@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Loader2, Search, ShieldCheck, UserPlus, UserRound, UserX, UsersRound } from "lucide-react";
 import type { SpaceMemberCandidate, SpaceMemberView } from "@/src/lib/spaces/service";
+import { confirmAction, notify } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 function displayName(member: SpaceMemberView): string {
   return member.profile.name?.trim() || member.profile.email;
@@ -108,17 +109,21 @@ export default function SpaceMembersManager({ spaceId, initialMembers }: { space
       if (data.member) setMembers((current) => current.map((item) => item.profile_id === member.profile_id ? data.member as SpaceMemberView : item));
       setNotice(`Updated ${displayName(member)} to Space ${nextRole}. Organization role was not changed.`);
     } catch {
-      setError("Network error while changing the member role.");
+      notify.error("Network error", "Could not update the member role.");
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(member: SpaceMemberView) {
-    if (!window.confirm(`Remove ${displayName(member)} from this Space? Their TrackUp account and historical tracking remain intact.`)) return;
+    const confirmed = await confirmAction({
+      title: `Remove ${displayName(member)} from this Space?`,
+      body: "Their TrackUp account and historical tracking remain intact. Only Space access will be removed.",
+      confirmLabel: "Remove from Space",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(member.profile_id);
-    setError(null);
-    setNotice(null);
     try {
       const response = await fetch(`/api/spaces/${spaceId}/members/${member.profile_id}`, { method: "DELETE" });
       const data = await response.json().catch(() => ({}));
@@ -129,7 +134,7 @@ export default function SpaceMembersManager({ spaceId, initialMembers }: { space
       setMembers((current) => current.filter((item) => item.profile_id !== member.profile_id));
       setNotice(`${displayName(member)} no longer has access to this Space. Their Organization role and historical tracking remain intact.`);
     } catch {
-      setError("Network error while removing the member.");
+      notify.error("Network error", "Could not remove the member.");
     } finally {
       setBusy(null);
     }

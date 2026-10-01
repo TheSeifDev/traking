@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2, Menu, X, Users, Shield, Layers3 } from "lucide-react";
+import { LayoutDashboard, Video, BarChart3, Settings, LogOut, UsersRound, Link2, ShieldCheck, Building2, FileSearch, Menu, X, Users, Shield, Layers3 } from "lucide-react";
 import type { UserRole } from "@/src/types/auth";
 import { useEffect, useRef, useState } from "react";
 import type { AccessibleOrganization, AccessibleSpace } from "@/src/types/space";
@@ -136,11 +136,12 @@ export default function DashboardShell({
       ],
     },
     ...(user.role === "owner" ? [{
-      title: "Owner",
+      title: "Owner Console",
       items: [
+        { label: "Overview", href: "/owner", icon: LayoutDashboard },
         { label: "Users", href: "/owner/users", icon: UsersRound },
         { label: "Administrators", href: "/owner/admins", icon: Shield },
-        { label: "Audit Logs", href: "/owner", icon: ShieldCheck },
+        { label: "Audit Logs", href: "/owner/audit-logs", icon: FileSearch },
       ],
     }] : []),
   ];
@@ -206,6 +207,7 @@ export default function DashboardShell({
     if (href === "/owner") return pathname === "/owner";
     if (href === "/owner/users") return pathname.startsWith("/owner/users");
     if (href === "/owner/admins") return pathname.startsWith("/owner/admins");
+    if (href === "/owner/audit-logs") return pathname.startsWith("/owner/audit-logs");
     if (href === "/organizations") return pathname === "/organizations" || (pathname.startsWith("/organizations/") && !pathname.includes("/members"));
     if (href === "/spaces") return pathname === "/spaces";
     if (href.startsWith("/spaces/")) return pathname === href || pathname.startsWith(`${href}/`);

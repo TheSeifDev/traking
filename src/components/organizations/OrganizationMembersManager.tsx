@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Loader2, Search, ShieldCheck, UserPlus, UserRound, UserX, UsersRound } from "lucide-react";
 import type { OrganizationMemberCandidate, OrganizationMemberView } from "@/src/lib/organizations/service";
+import { confirmAction, notify } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 function displayName(member: OrganizationMemberView): string {
   return member.profile.name?.trim() || member.profile.email;
@@ -131,17 +132,21 @@ export default function OrganizationMembersManager({ organizationId, organizatio
       if (data.member) setMembers((current) => current.map((item) => item.profile_id === member.profile_id ? data.member as OrganizationMemberView : item));
       setNotice(`${displayName(member)} is now an Organization ${nextRole}.`);
     } catch {
-      setError("Network error while changing the Organization role.");
+      notify.error("Network error", "Could not update the Organization role.");
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(member: OrganizationMemberView) {
-    if (!window.confirm(`Remove ${displayName(member)} from ${organizationName}? Their TrackUp account and historical tracking remain intact.`)) return;
+    const confirmed = await confirmAction({
+      title: `Remove ${displayName(member)} from ${organizationName}?`,
+      body: "Their TrackUp account and historical tracking remain intact. Only Organization access will be removed.",
+      confirmLabel: "Remove Member",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(member.profile_id);
-    setError(null);
-    setNotice(null);
     try {
       const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(member.profile_id)}`, { method: "DELETE" });
       const data = await response.json().catch(() => ({}));
@@ -152,7 +157,7 @@ export default function OrganizationMembersManager({ organizationId, organizatio
       setMembers((current) => current.filter((item) => item.profile_id !== member.profile_id));
       setNotice(`${displayName(member)} no longer has access to this Organization. Historical tracking remains intact.`);
     } catch {
-      setError("Network error while removing the Organization member.");
+      notify.error("Network error", "Could not remove the Organization member.");
     } finally {
       setBusy(null);
     }

@@ -28,6 +28,7 @@ import CreateVideoDialog from "@/src/components/dashboard/CreateVideoDialog";
 import type { UserRole } from "@/src/types/auth";
 import type { Video as VideoType, VideoSourceType } from "@/src/types/video";
 import { getProviderAdapter } from "@/src/lib/playback/providers";
+import { confirmAction } from "@/src/components/feedback/TrackUpFeedbackProvider";
 
 const SOURCE_LABELS: Record<VideoSourceType, string> = {
   youtube: "YouTube",
@@ -218,7 +219,14 @@ export default function VideoList({ role, spaceId = null, organizationId = null,
   async function handleRevoke(video: VideoType) {
     if (!canManage) return;
     const activeLink = (video.watch_links ?? []).find((link) => isActiveLink(link, currentTime));
-    if (!activeLink || !window.confirm(`Revoke viewer access for “${video.title}”?`)) return;
+    if (!activeLink) return;
+    const confirmed = await confirmAction({
+      title: `Revoke viewer access for “${video.title}”?`,
+      description: "New viewer sessions will be rejected immediately. Historical analytics remain available.",
+      confirmLabel: "Revoke Access",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setRevoking(video.id);
     setNotice(null);
     setError(null);
@@ -248,7 +256,14 @@ export default function VideoList({ role, spaceId = null, organizationId = null,
   }
 
   async function handleDelete(video: VideoType) {
-    if (!canManage || !window.confirm(`Delete “${video.title}” and its watch data?`)) return;
+    if (!canManage) return;
+    const confirmed = await confirmAction({
+      title: `Delete “${video.title}” and its watch data?`,
+      description: "This permanently removes the video and its associated watch data.",
+      confirmLabel: "Delete Video",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setDeleting(video.id);
     setNotice(null);
     setError(null);
