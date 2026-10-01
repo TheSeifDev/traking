@@ -14,7 +14,7 @@ const HowItWorksCTA = () => {
           <div>
             <h2 className="text-xl font-bold md:text-2xl">Ready to See It in Action?</h2>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
-              Start with your ClickUp account and use TrackUp&apos;s provider-aware viewer links and measured activity where supported.
+              Sign in with your TrackUp credentials and use provider-aware viewer links and measured activity where supported.
             </p>
           </div>
 
@@ -24,7 +24,7 @@ const HowItWorksCTA = () => {
               href="/login"
               className="flex h-11 items-center gap-2.5 rounded-xl bg-linear-to-r from-[#8b3dff] to-[#5d4cff] px-6 text-sm font-semibold text-white shadow-[0_8px_30px_rgba(105,65,255,0.28)] transition-all hover:-translate-y-px hover:shadow-[0_10px_35px_rgba(105,65,255,0.4)]"
             >
-              Continue with ClickUp
+              Sign In to TrackUp
             </Link>
 
             <Link href="/features" className="flex items-center gap-2 text-xs font-medium text-white/70 transition-colors hover:text-white">

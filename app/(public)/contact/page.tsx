@@ -30,7 +30,7 @@ export default function ContactPage() {
               <a href="https://github.com/TheSeifDev/traking/issues" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"><GitBranch size={16} />Open GitHub Issues <ExternalLink size={14} /></a>
               <Link href="/login" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white/75 transition hover:border-white/20 hover:text-white"><LogIn size={16} />Return to sign in</Link>
             </div>
-            <p className="mt-6 border-t border-white/8 pt-5 text-xs leading-6 text-white/35">Do not include ClickUp access tokens, session cookies, Watch Link tokens, or other secrets in a public issue. Redact private viewer and organization data from screenshots and logs.</p>
+            <p className="mt-6 border-t border-white/8 pt-5 text-xs leading-6 text-white/35">Do not include passwords, session cookies, Watch Link tokens, or other secrets in a public issue. Redact private viewer and organization data from screenshots and logs.</p>
           </div>
         </div>
       </section>

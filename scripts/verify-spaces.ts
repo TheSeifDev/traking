@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { isSpaceRole, readSpaceSelector } from "../src/lib/spaces/access";
-import { getSafeSpaceDisplayName, getSpaceDisplayName, hasOrganizationSpaceLabelCollision, isLegacyOrganizationContainerSpace, isSelectableChildSpace } from "../src/lib/spaces/labels";
+import { getSafeSpaceDisplayName, getSpaceDisplayName, hasOrganizationSpaceLabelCollision, isSelectableChildSpace } from "../src/lib/spaces/labels";
 import { organizationDataScope } from "../src/lib/spaces/data-scope";
 
 let passed = 0;
@@ -33,14 +33,12 @@ assert(readSpaceSelector(new Request("https://trackup.test/videos")) === null, "
 assert(getSafeSpaceDisplayName("PHANTOMS | ORG", "PHANTOMS | ORG") === "Legacy Space label (review required)", "Organization/Space label collision is never presented as the Organization itself");
 assert(hasOrganizationSpaceLabelCollision("PHANTOMS | ORG", "PHANTOMS | ORG"), "legacy Organization/Space label collision is detectable");
 assert(getSafeSpaceDisplayName("AI Team-Phantoms", "PHANTOMS | ORG") === "AI Team-Phantoms", "real Space labels remain selectable under their Organization");
-const legacyContainer = { name: "PHANTOMS | ORG", clickup_workspace_id: "workspace-1", clickup_space_id: null };
-const linkedChild = { name: "Software Team", clickup_workspace_id: null, clickup_space_id: "space-1" };
-assert(isLegacyOrganizationContainerSpace(legacyContainer, "PHANTOMS | ORG"), "an unbound Organization-label workspace row is diagnosed as a legacy container");
-assert(!isSelectableChildSpace(legacyContainer, "PHANTOMS | ORG"), "the Organization-label workspace row is never put in a Space selector");
-assert(!isSelectableChildSpace({ name: "PHANTOMS | ORG", clickup_workspace_id: null, clickup_space_id: null }, "PHANTOMS | ORG"), "an older Organization-label row without workspace mapping is also excluded from child Space scope");
-assert(isSelectableChildSpace(linkedChild, "PHANTOMS | ORG") && getSpaceDisplayName(linkedChild) === "Software Team", "a linked ClickUp Space remains a selectable child with its real name");
-const organizationScope = organizationDataScope({ id: "organization-1", clickup_workspace_id: "workspace-1" });
-assert(organizationScope?.type === "organization" && organizationScope.organizationId === "organization-1" && organizationScope.workspaceId === "workspace-1", "Owner All Spaces has an explicit organization scope");
+const legacyContainer = { name: "PHANTOMS | ORG" };
+const linkedChild = { name: "Software Team" };
+assert(hasOrganizationSpaceLabelCollision(legacyContainer.name, "PHANTOMS | ORG"), "legacy Organization/Space label collision is detectable");
+assert(isSelectableChildSpace(linkedChild, "PHANTOMS | ORG") && getSpaceDisplayName(linkedChild) === "Software Team", "a sovereign Space remains a selectable child with its real name");
+const organizationScope = organizationDataScope({ id: "organization-1" });
+assert(organizationScope?.type === "organization" && organizationScope.organizationId === "organization-1", "Owner All Spaces has an explicit organization scope");
 
 section("Additive migration and database isolation");
 const migration = source("supabase/migrations/20260824000007_create_spaces_and_memberships.sql");
@@ -73,15 +71,14 @@ assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpace
 assert(access.includes("resolveSpaceAdminForUser") && access.includes("authorizeSpaceAdmin(explicitSpaceId, user)"), "admin selector is followed by admin authorization");
 assert(access.includes("access.organization_membership?.role === \"admin\""), "Organization admins retain Space-admin authority through the Organization hierarchy");
 assert(access.includes("getAccessibleSpaces") && access.includes("from(\"spaces\")") && access.includes("isOwner(user.role)"), "owner directory can enumerate active Spaces without membership fabrication");
-assert(access.includes("hydrateOrganizationWorkspaceIds") && access.includes("organization.clickup_workspace_id") && access.includes("resolvedSpace"), "child Spaces inherit the linked Organization workspace in the trusted access projection");
-assert(access.includes('.filter((membership) => membership.role === "admin")') && access.includes('organizationMembership?.role === "admin"'), "only Organization admins receive organization-wide Space visibility");
-assert(access.includes("hasOrganizationAdminAccess") && access.includes("hasActiveSpaceAccess = hasActiveOrganizationAccess && membership?.status === \"active\""), "ordinary Organization members require direct active Space membership");
+assert(access.includes("resolveSpaceForUser") && access.includes("authorizeSpaceMember"), "child Spaces are resolved and authorized in the trusted access projection");
+assert(access.includes('.filter((membership) => membership.role === "admin")'), "only Organization admins receive organization-wide Space visibility");
 assert(organizationService.includes('from("space_members")') && organizationService.includes('permittedSpaceIds') && organizationService.includes('query.in("id", permittedSpaceIds)'), "Organization Space listing is restricted to explicit direct memberships for ordinary members");
 assert(spaceService.includes("cannot_modify_owner") && spaceService.includes("cannot_modify_self") && spaceService.includes("last_admin_required"), "membership mutations protect platform owner, self, and last admin");
-assert(spaceService.includes("source: \"manual\"") && spaceService.includes("clickup_user_id: null"), "manual membership creation has explicit source metadata");
+assert(spaceService.includes('status: "active"') && spaceService.includes('role !== "admin" && role !== "member"'), "membership creation validates roles and sets active status");
 assert(spaceService.includes("profiles") && spaceService.includes("is_active") && !spaceService.includes("insert({ email"), "member management uses existing active profiles and does not create guests");
 assert(spaceService.includes('from("organization_members")') && spaceService.includes('eq("organization_id", access.space.organization_id)') && spaceService.includes('eq("status", "active")') && spaceService.includes('error: "organization_mismatch"'), "Space assignment requires an active Organization member server-side");
-assert(access.includes("activeOrganizationIds") && access.includes("directSpacesWithOrganizationAccess") && access.includes("hasOrganizationAdminAccess") && access.includes("hasActiveSpaceAccess = hasActiveOrganizationAccess"), "direct Space access cannot survive inactive Organization membership");
+assert(access.includes("organizationRoleById") && access.includes("!organizationRoleById.has(space.organization_id)"), "direct Space access cannot survive inactive Organization membership");
 
 section("Space API route protection and resource IDOR defense");
 const routeContracts: Array<[string, string[]]> = [
@@ -92,7 +89,6 @@ const routeContracts: Array<[string, string[]]> = [
   ["app/api/spaces/active/route.ts", ["withAuth", "setActiveSpacePreference", "getSpaceForUser", "authorizeOrganizationMember"]],
   ["app/api/spaces/[spaceId]/member-candidates/route.ts", ["withDashboardAuth", "searchSpaceMemberCandidates"]],
   ["app/api/spaces/[spaceId]/analytics/route.ts", ["withDashboardAuth", "authorizeSpaceAdmin"]],
-  ["app/api/spaces/[spaceId]/sync-clickup/route.ts", ["withDashboardAuth", "authorizeSpaceAdmin", "syncClickUpAuthorizedTeams"]],
   ["app/api/organizations/route.ts", ["withDashboardAuth", "listOrganizationsForUser"]],
   ["app/api/organizations/[organizationId]/route.ts", ["withDashboardAuth", "getOrganizationForUser", "listOrganizationSpaces"]],
   ["app/api/organizations/[organizationId]/spaces/route.ts", ["withDashboardAuth", "createSpace", "listOrganizationSpaces"]],
@@ -114,8 +110,8 @@ for (const [path, terms] of routeContracts) {
   assert(terms.every((term) => content.includes(term)), `${path} has its complete authenticated Space contract`);
 }
 const videoService = source("src/lib/videos/service.ts");
-assert(videoService.includes('scope: VideoDataScope') && videoService.includes('scope.type === "organization"') && videoService.includes('.eq("workspace_id", scope.workspaceId)') && videoService.includes('.eq("space_id", scope.spaceId)'), "resource service applies explicit organization or Space predicates");
-assert(videoService.includes('organizationId') && videoService.includes('clickup_workspace_id') && !videoService.includes('spaceIds'), "Owner organization scope is validated against its organization/workspace and does not use child-Space allowlists");
+assert(videoService.includes('scope: VideoDataScope') && videoService.includes('.eq("organization_id", scope.organizationId)') && videoService.includes('.eq("space_id", scope.spaceId)'), "resource service applies explicit organization or Space predicates");
+assert(videoService.includes('organizationId') && !videoService.includes('spaceIds'), "Owner organization scope is validated against its organization and does not use child-Space allowlists");
 assert(videoService.includes("getVideoViewerAnalytics") && videoService.includes("getVideoSessionAnalytics") && videoService.includes("viewer_profile_id"), "analytics service exposes scoped viewer/session data");
 assert(videoService.includes("watch_sessions(id, viewer_identifier, viewer_profile_id, started_at, last_seen_at, completion_percentage)") && videoService.includes("session_count: linkSessions.length") && videoService.includes("first_opened_at: orderedSessions[0]?.started_at"), "Video Details derives watch-link usage from persisted sessions");
 assert(videoService.includes("includePlaybackEvents = true") && videoService.includes("playback_events: []") && source("app/(dashboard)/dashboard/page.tsx").includes("getWorkspaceAnalytics(scope, undefined, undefined, false)"), "overview analytics can omit raw event payloads while retaining bounded summaries");
@@ -135,18 +131,11 @@ assert(providerError.includes("getTrackingSessionSpaceId(sessionId, user.id)") &
 assert(trackingService.includes("viewer_profile_id: viewerIdentity") && trackingService.includes("hashViewerIdentity") && trackingService.includes("session_token"), "tracking storage retains profile, stable hash, and session capability");
 assert(trackingService.includes("space_id") && trackingService.includes("getTrackingSessionSpaceId"), "tracking resolves Space through persisted link/video relation");
 
-section("Conservative ClickUp synchronization");
-const sync = source("src/lib/clickup/sync.ts");
-const callback = source("app/api/auth/clickup/callback/route.ts");
-const clickupClient = source("src/lib/clickup/client.ts");
-assert(sync.includes("available: false") && sync.includes("available: true"), "ClickUp member responses are never assumed authoritative-complete");
-assert(!sync.includes('status: \"suspended\"') && !sync.includes('status: "removed"'), "sync does not silently suspend/remove absent members");
-assert(sync.includes("existing?.source ?? \"clickup\"") && sync.includes("existing?.joined_at ?? now"), "sync preserves existing membership source and join timestamp");
-assert(!sync.includes('from("profiles").insert') && !sync.includes('from("profiles").upsert'), "sync never fabricates TrackUp profiles from ClickUp payloads");
-assert(sync.includes("getClickUpSpacesForSync") && sync.includes("clickup_space_id") && sync.includes("organization_id: organizationId") && !sync.includes("findLinkedSpace"), "ClickUp sync maps provider Spaces under an existing Organization and never treats Workspace as a Space");
-assert(callback.includes("getAuthorizedTeams") && callback.includes("upsertClickUpConnections") && callback.includes("syncClickUpAuthorizedTeams"), "OAuth callback persists all authorized teams and invokes safe sync after provisioning");
-assert(callback.includes("createSignedSessionCookie") && callback.includes("new URL(destination, request.url)"), "OAuth session and return redirect architecture remains intact");
-assert(clickupClient.includes("/api/v2/team") && clickupClient.includes("getClickUpTokenForWorkspace") && clickupClient.includes("/space?archived=false") && !clickupClient.includes("console.log(token"), "manual sync uses stored server token only, reads explicit Spaces, and never logs it");
+section("Sovereign Space isolation and ClickUp removal");
+assert(!existsSync("src/lib/clickup/sync.ts"), "src/lib/clickup/sync.ts is removed");
+assert(!existsSync("src/lib/clickup/client.ts"), "src/lib/clickup/client.ts is removed");
+assert(!existsSync("app/api/spaces/[spaceId]/sync-clickup/route.ts"), "Space ClickUp sync route is removed");
+assert(!existsSync("app/api/auth/clickup/callback/route.ts"), "ClickUp OAuth callback route is removed");
 
 section("UI scope and capability honesty");
 const shell = source("src/components/dashboard/DashboardShell.tsx");
@@ -243,7 +232,7 @@ assert(overview.includes("canManage: boolean") && overview.includes("spaceId") &
 assert(analyticsDashboard.includes("spaceId") && analyticsDashboard.includes("scoped") && analyticsDashboard.includes("ViewerAnalyticsPanel") && analyticsDashboard.includes("spaceId={spaceId"), "analytics drilldowns retain Space context");
 assert(viewerPanel.includes("spaceId?") && viewerPanel.includes("playback_events.length") && viewerPanel.includes("Not measured") && viewerPanel.includes("View timeline") && viewerPanel.includes("Previous") && viewerPanel.includes("Next") && viewerPanel.includes("hidden overflow-hidden") && viewerPanel.includes("md:hidden"), "viewer/session analytics renders structured desktop table, mobile cards, pagination, real events, and honest unavailable states");
 assert(viewerPanel.includes('mode?: "sessions" | "viewers"') && viewerPanel.includes("ViewerDirectory") && viewerPanel.includes("viewerPageCount") && analyticsDashboard.includes('mode="sessions"') && analyticsDashboard.includes('mode="viewers"'), "Sessions and Viewers tabs render distinct session-table and viewer-directory surfaces");
-assert(membersManager.includes("/sync-clickup") && membersManager.includes("clickupConnected"), "membership UI exposes explicit ClickUp sync only when connected");
+assert(!membersManager.includes("/sync-clickup") && !membersManager.includes("clickupConnected"), "membership UI exposes no ClickUp sync action");
 assert(spacesDirectory.includes("isLegacyOrganizationContainerSpace") && spacesDirectory.includes("getSpaceDisplayName(space)") && spacesDirectory.includes("activeSpaceId") && spacesDirectory.includes("/api/spaces/active") && spacesDirectory.includes("Current Space") && !spacesDirectory.includes("getSafeSpaceDisplayName"), "Space directory selects and marks the authorized active child Space");
 assert(spacesDirectory.includes("All Spaces") && spacesDirectory.includes("selectAllSpaces") && spacesDirectory.includes('scope: "all"') && spacesDirectory.includes("allSpacesActive"), "Owner Spaces directory exposes a persisted All Spaces context");
 assert(spaceDashboard.includes("getSpaceDisplayName(space)") && !spaceDashboard.includes("getSafeSpaceDisplayName"), "Space dashboard never uses the diagnostic label as its primary title");

@@ -166,7 +166,6 @@ export const POST = withRole(USER_ROLES.OWNER, async (request: NextRequest, owne
           profile_id: newProfile.id,
           role: assignedRole === USER_ROLES.ADMIN ? "admin" : "member",
           status: "active",
-          source: "manual",
           joined_at: nowIso,
         }, { onConflict: "space_id,profile_id" });
       }

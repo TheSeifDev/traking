@@ -55,7 +55,6 @@ export function isValidManagedRole(role: unknown): role is ManagedRole {
 export interface Profile {
   id: string;
   username?: string | null;
-  clickup_user_id: string | null;
   name: string | null;
   email: string;
   role: UserRole;
@@ -100,6 +99,5 @@ export interface AuthenticatedUser {
   role: UserRole;
   is_active: boolean;
   name: string | null;
-  clickup_user_id: string | null;
 }
 

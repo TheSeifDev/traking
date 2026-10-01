@@ -16,7 +16,7 @@ export default function OrganizationsDirectory({ organizations }: { organization
         <header className="border-b border-white/8 pb-7">
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Tenant hierarchy</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">Organizations</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Organizations contain Spaces. Access is controlled by persisted TrackUp memberships; ClickUp is an optional identity and synchronization relationship.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Organizations contain Spaces. Access is controlled by persisted TrackUp memberships.</p>
         </header>
         {organizations.length === 0 ? (
           <div className="flex min-h-80 flex-col items-center justify-center rounded-3xl border border-dashed border-white/12 bg-white/[0.018] px-6 py-12 text-center">
@@ -38,7 +38,7 @@ export default function OrganizationsDirectory({ organizations }: { organization
                 </div>
                 <div className="mt-7 space-y-3 border-t border-white/8 pt-4">
                   <div className="flex items-center justify-between gap-3 text-xs"><span className="text-white/38">Your access</span><span className="font-medium text-violet-200">{roleLabel(organization)}</span></div>
-                  <div className="flex items-center justify-between gap-3 text-xs"><span className="text-white/38">ClickUp relationship</span>{organization.clickup_workspace_id ? <span className="inline-flex items-center gap-1 text-emerald-200/75"><CheckCircle2 size={13} />Linked</span> : <span className="text-white/35">Optional</span>}</div>
+                  <div className="flex items-center justify-between gap-3 text-xs"><span className="text-white/38">Status</span><span className="inline-flex items-center gap-1 text-emerald-200/75"><CheckCircle2 size={13} />Active</span></div>
                 </div>
               </Link>
             ))}

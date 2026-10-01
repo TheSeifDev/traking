@@ -212,7 +212,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       role: isValidRole(profile.role) ? profile.role : "viewer",
       is_active: profile.is_active,
       name: profile.name ?? null,
-      clickup_user_id: profile.clickup_user_id ?? null,
     };
 
     // 11. Create response & attach secure HttpOnly cookie

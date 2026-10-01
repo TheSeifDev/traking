@@ -22,11 +22,11 @@ const FinalCTA = ({
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.045em] text-white sm:text-3xl">{title}</h2>
           <p className="mx-auto mt-3 max-w-2xl text-xs leading-5 text-white/45 sm:text-sm">{description}</p>
           <Link href="/login" className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-linear-to-r from-[#8b3dff] to-[#5d4cff] px-5 text-sm font-semibold text-white shadow-[0_8px_30px_rgba(105,65,255,0.3)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_38px_rgba(105,65,255,0.42)] active:scale-[0.98]">
-            Continue with ClickUp
+            Sign In to TrackUp
             <ArrowRight size={16} />
           </Link>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[10px] text-white/45">
-            <TrustPoint text="Start with your ClickUp account" />
+            <TrustPoint text="Sovereign team access" />
             <TrustPoint text="Provider-aware measurement" />
             <TrustPoint text="Scoped viewer links" />
           </div>

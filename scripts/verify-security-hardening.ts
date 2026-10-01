@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createSignedSessionCookie, verifySignedSessionCookie } from "../src/lib/auth/session-cookie";
-import { getClickUpRedirectUri } from "../src/lib/app-url";
 import { USER_ROLES, type AuthenticatedUser } from "../src/types/auth";
 
 let passed = 0;
@@ -28,7 +27,6 @@ const viewer: AuthenticatedUser = {
   role: USER_ROLES.VIEWER,
   is_active: true,
   name: "Viewer",
-  clickup_user_id: "cu_viewer",
 };
 
 async function runTests(): Promise<void> {
@@ -149,7 +147,6 @@ async function runTests(): Promise<void> {
   const presenceMigration = readFileSync("supabase/migrations/20260824000003_add_profile_last_seen_rpc.sql", "utf8");
   const invitationService = readFileSync("src/lib/auth/invitations.ts", "utf8");
   const invitationCookie = readFileSync("src/lib/auth/invitation-cookie.ts", "utf8");
-  const inviteStartRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
   const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
   const functionSecurityMigration = readFileSync("supabase/migrations/20260824000011_harden_function_security.sql", "utf8");
   const legacyRlsMigration = readFileSync("supabase/migrations/20260824000012_harden_legacy_rls_ingestion.sql", "utf8");
@@ -165,7 +162,7 @@ async function runTests(): Promise<void> {
   assert(trackingService.includes('.select("id, expires_at, revoked_at")') && trackingService.includes("const { data: activeLink"), "session creation re-checks link lifecycle before insert");
   assert(trackingService.includes("new Date(activeLink.expires_at) <= new Date()"), "session creation rejects expiry at the current instant");
   assert(watchLinkService.includes("export async function revokeWatchLink"), "video service exposes real link revocation");
-  assert(watchLinkService.includes('.eq("workspace_id", workspaceId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video workspace ownership");
+  assert(watchLinkService.includes('.eq("organization_id", organizationId)') && watchLinkService.includes('.eq("video_id", videoId)'), "link revocation verifies video organization ownership");
   assert(watchLinkService.includes('.is("revoked_at", null)'), "link revocation is idempotently scoped to active links");
   assert(watchLinkService.includes("23505") && watchLinkService.includes("toResult(racedLink, true)"), "watch-link generation safely reuses the active link across concurrent requests");
   assert(watchLinkRoute.includes("link.reused ? 200 : 201"), "watch-link API distinguishes a newly created link from an existing active link");
@@ -174,7 +171,7 @@ async function runTests(): Promise<void> {
   assert(ownerAdminsRoute.includes("changeUserRole") && !ownerAdminsRoute.includes("TODO: implement"), "owner admin route performs real role mutations");
   assert(watchLinkPanel.includes('method: "DELETE"') && watchLinkPanel.includes("revoked_at"), "watch-link UI reflects server revocation state");
   assert(watchLinkPanel.includes("appOrigin") && !watchLinkPanel.includes("window.location.origin"), "watch-link UI builds URLs without server-side window access");
-  assert(watchPage.includes("getCurrentUser") && watchPage.includes("LoginRequired") && !watchPage.includes("ViewerIdentityGate") && !watchPage.includes("viewer_identity"), "viewer requires ClickUp-authenticated TrackUp identity");
+  assert(watchPage.includes("getCurrentUser") && watchPage.includes("LoginRequired") && !watchPage.includes("ViewerIdentityGate") && !watchPage.includes("viewer_identity"), "viewer requires authenticated TrackUp identity");
   assert(watchLinkService.includes("viewer_profile_id") && watchLinkService.includes("viewer_identifier ?? session.id") && !watchLinkService.includes("viewer_identity_id"), "analytics summaries preserve profile identity and legacy anonymous fallback");
   assert(videoList.includes('video.playback_metrics_available && video.avg_completion !== null') && !videoList.includes('avg_completion ?? 0'), "video library does not turn unsupported completion into zero");
   assert(videoList.includes("getProviderAdapter") && videoList.includes("thumbnail_url") && videoList.includes("getLinkState") && videoList.includes("Active"), "video library derives provider thumbnails, link status, and the single active-link state from real fields");
@@ -206,7 +203,6 @@ async function runTests(): Promise<void> {
   assert(invitationService.includes("randomBytes(32)") && invitationService.includes("createHash(\"sha256\")") && invitationService.includes("last_sent_at"), "invitation service generates raw token once and stores only its digest");
   assert(invitationService.includes("delivery_not_configured") && invitationService.includes("if (!delivery.success)"), "invitation success is gated on transactional provider response");
   assert(invitationCookie.includes("tokenHash") && invitationCookie.includes("timingSafeEqual") && !invitationCookie.includes("rawToken"), "OAuth context cookie is signed and contains no raw token");
-  assert(inviteStartRoute.includes("createInvitationContextCookie") && inviteStartRoute.includes("hashInvitationToken"), "invite start converts token to signed hashed OAuth context");
   assert(presenceRoute.includes("withAuth") && presenceRoute.includes("user.id") && !presenceRoute.includes("request.json"), "presence route uses only authenticated session identity");
   assert(roleManagement.includes("isOwner(requester.role)") && !roleManagement.includes("isAdminOrOwner(requester.role)") && !roleManagement.includes("createClickUpInvite"), "global role/status management is owner-only");
   assert(ownerAdminsRoute.includes("withRole") && ownerAdminsRoute.includes("USER_ROLES.OWNER") && !ownerAdminsRoute.includes("withPermission"), "owner admin mutation route is owner-only at the HTTP boundary");
@@ -245,31 +241,26 @@ async function runTests(): Promise<void> {
   assert(analyticsService.includes("viewer_profile_id") && analyticsService.includes("buildViewerSummaries") && analyticsService.includes("telemetry_health"), "analytics service exposes identified viewer summaries and telemetry health");
   assert(analyticsDetail.includes("Watched coverage") && analyticsDetail.includes("No playback data") && analyticsDetail.includes("Not available from provider") && analyticsDetail.includes("Session timeline"), "analytics detail UI exposes honest heatmap and event states");
 
-  section("OAuth state and service-role checks");
+  section("Sovereign security headers and service-role checks");
 
   const appUrlHelper = readFileSync("src/lib/app-url.ts", "utf8");
   const nextConfig = readFileSync("next.config.ts", "utf8");
-  const oauthStart = readFileSync("app/api/auth/clickup/route.ts", "utf8");
-  const oauthCallback = readFileSync("app/api/auth/clickup/callback/route.ts", "utf8");
   const logoutRoute = readFileSync("app/api/auth/logout/route.ts", "utf8");
   const videoServiceForUrls = readFileSync("src/lib/videos/service.ts", "utf8");
   const adminClient = readFileSync("utils/supabase/admin.ts", "utf8");
   const middleware = readFileSync("middleware.ts", "utf8");
   const originalNodeEnv = process.env.NODE_ENV;
-  const originalRedirectUri = process.env.CLICKUP_REDIRECT_URI;
 
   assert(appUrlHelper.includes('const PRODUCTION_APP_URL = "https://trakeup.vercel.app"'), "production app origin is the Trakeup domain");
   assert(nextConfig.includes('key: "Content-Security-Policy"') && nextConfig.includes("frame-src https://www.youtube.com") && nextConfig.includes("https://player.vimeo.com") && nextConfig.includes("https://drive.google.com") && nextConfig.includes("https://t.me") && nextConfig.includes("connect-src 'self'"), "CSP is present and allows only the registered provider embed/player network contracts");
+  assert(!nextConfig.includes("api.clickup.com"), "CSP does not allow ClickUp API endpoints");
+  assert(!nextConfig.includes("/auth/clickup"), "next.config.ts contains no ClickUp rewrites");
+  assert(!existsSync("app/api/auth/clickup/route.ts") && !existsSync("app/api/auth/clickup/callback/route.ts"), "ClickUp OAuth routes are completely removed");
   assert(nextConfig.includes('key: "Referrer-Policy"') && nextConfig.includes('strict-origin-when-cross-origin'), "YouTube embeds receive a referrer policy required for player configuration");
   assert(nextConfig.includes('key: "X-Content-Type-Options"') && nextConfig.includes('value: "nosniff"') && nextConfig.includes('key: "X-Frame-Options"') && nextConfig.includes('value: "DENY"') && nextConfig.includes('key: "Permissions-Policy"'), "baseline browser hardening headers are configured");
 
-  // Functional regression check: the strict production CSP is pinned
-  // byte-for-byte, and 'unsafe-eval' may only appear on the development
-  // server. React's development runtime probes indirect eval once per RSC
-  // stream to reconstruct server-component call stacks; production bundles
-  // never evaluate code, so the shipped policy must never allow it.
   const PINNED_PRODUCTION_CSP =
-    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com https://player.vimeo.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' blob: https:; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me; connect-src 'self' https://*.supabase.co https://api.clickup.com https://www.youtube.com https://*.youtube.com https://*.googlevideo.com https://*.vimeo.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me;";
+    "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com https://player.vimeo.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' blob: https:; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me; connect-src 'self' https://*.supabase.co https://www.youtube.com https://*.youtube.com https://*.googlevideo.com https://*.vimeo.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me;";
   type SecurityHeaderRoute = { source: string; headers: Array<{ key: string; value: string }> };
   const nextConfigModule = (await import("../next.config")).default as unknown as {
     headers: () => Promise<SecurityHeaderRoute[]>;
@@ -300,37 +291,16 @@ async function runTests(): Promise<void> {
   if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
   else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
 
-  assert(appUrlHelper.includes('const DEVELOPMENT_CLICKUP_REDIRECT_URI = `https://localhost:3000${CLICKUP_CALLBACK_PATH}`'), "local OAuth callback is the HTTPS localhost URI");
-  assert(appUrlHelper.includes('const PRODUCTION_CLICKUP_REDIRECT_URI = `${PRODUCTION_APP_URL}${CLICKUP_CALLBACK_PATH}`'), "production OAuth callback is the Trakeup HTTPS URI");
   assert(appUrlHelper.includes('process.env.NODE_ENV === "production" ? PRODUCTION_APP_URL : DEVELOPMENT_APP_URL'), "app URL fallback is environment-aware");
-  assert(appUrlHelper.includes("const expected = process.env.NODE_ENV === \"production\""), "OAuth callback selection is environment-aware");
   assert(appUrlHelper.includes("isLocalAppUrl") && appUrlHelper.includes("return PRODUCTION_APP_URL"), "production rejects loopback app URLs");
-  process.env.CLICKUP_REDIRECT_URI = "http://stale.example/callback";
-  Reflect.set(process.env, "NODE_ENV", "development");
-  assert(getClickUpRedirectUri() === "https://localhost:3000/api/auth/clickup/callback", "development selects the localhost callback regardless of stale production config");
-  Reflect.set(process.env, "NODE_ENV", "production");
-  assert(getClickUpRedirectUri() === "https://trakeup.vercel.app/api/auth/clickup/callback", "production selects the HTTPS Trakeup callback regardless of stale local config");
-  if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
-  else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
-  if (originalRedirectUri === undefined) delete process.env.CLICKUP_REDIRECT_URI;
-  else process.env.CLICKUP_REDIRECT_URI = originalRedirectUri;
-  // Robust: strip comments + whitespace, then check for any localhost/loopback
-  // URL literal regardless of quoting style. The previous exact-string match
-  // would silently miss single-quoted or template-literal forms and could
-  // false-positive on a localhost mention inside a comment.
+
   const stripCommentsAndWhitespace = (source: string): string => source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1")
     .replace(/\s+/g, " ");
-  const oauthStartStripped = stripCommentsAndWhitespace(oauthStart);
   const videoServiceStripped = stripCommentsAndWhitespace(videoServiceForUrls);
   const logoutStripped = stripCommentsAndWhitespace(logoutRoute);
   const localhostLiteral = /(['"`])https?:\/\/(?:localhost|127\.0\.0\.1)(:\d+)?\1/;
-  assert(
-    oauthStartStripped.includes("getClickUpRedirectUri") && !localhostLiteral.test(oauthStartStripped),
-    "OAuth start uses canonical redirect configuration without localhost fallback"
-  );
-  assert(oauthCallback.includes("getClickUpRedirectUri") && oauthCallback.includes("redirect_uri: redirectUri"), "OAuth token exchange uses the same environment-aware callback URI");
   assert(
     logoutStripped.includes("getAppUrl") && !localhostLiteral.test(logoutStripped),
     "logout uses canonical production origin"
@@ -341,15 +311,8 @@ async function runTests(): Promise<void> {
   );
   const authRedirect = readFileSync("src/lib/auth/redirect.ts", "utf8");
   assert(authRedirect.includes("getSafeAuthReturnPath") && authRedirect.includes("startsWith(\"//\")"), "auth return path rejects external and protocol-relative redirects");
-  assert(oauthStart.includes("trackup_oauth_state") && oauthStart.includes("AUTH_RETURN_COOKIE"), "OAuth start stores state and return cookies");
-assert(oauthStart.includes("https://app.clickup.com/api?"), "OAuth start uses ClickUp authorization URL");
-  assert(oauthCallback.includes("state !== expectedState") && oauthCallback.includes("new URL(destination, request.url)"), "OAuth callback validates state and returns to the preserved path");
-assert(oauthCallback.includes("https://api.clickup.com/api/v2/oauth/token"), "OAuth callback uses ClickUp token URL");
-assert(oauthCallback.includes("https://api.clickup.com/api/v2/team"), "OAuth callback verifies authorized Workspaces");
-assert(oauthCallback.includes("Authorization: `Bearer ${accessToken}`"), "OAuth API requests use Bearer token header");
-assert(oauthCallback.includes("createSignedSessionCookie"), "OAuth callback writes signed session cookie");
-assert(!adminClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;"), "admin client does not fall back to public key");
-assert(middleware.includes("getSupabaseResponse") && middleware.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), "middleware does not crash when optional public Supabase env is missing");
+  assert(!adminClient.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;"), "admin client does not fall back to public key");
+  assert(middleware.includes("getSupabaseResponse") && middleware.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), "middleware does not crash when optional public Supabase env is missing");
 
   const total = passed + failed;
   console.log(`\n${"=".repeat(56)}`);

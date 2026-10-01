@@ -179,7 +179,6 @@ export async function seedOwner(options?: {
           profile_id: created.id,
           role: "admin",
           status: "active",
-          source: "manual",
           joined_at: nowIso,
         }, { onConflict: "space_id,profile_id" });
       }

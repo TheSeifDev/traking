@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Loader2, RefreshCw, Search, ShieldCheck, UserPlus, UserRound, UserX, UsersRound } from "lucide-react";
+import { ArrowLeft, Loader2, Search, ShieldCheck, UserPlus, UserRound, UserX, UsersRound } from "lucide-react";
 import type { SpaceMemberCandidate, SpaceMemberView } from "@/src/lib/spaces/service";
 
 function displayName(member: SpaceMemberView): string {
@@ -40,13 +40,12 @@ function errorCopy(value: unknown): string {
   return messages[value] ?? value;
 }
 
-export default function SpaceMembersManager({ spaceId, initialMembers, clickupConnected }: { spaceId: string; initialMembers: SpaceMemberView[]; clickupConnected: boolean }) {
+export default function SpaceMembersManager({ spaceId, initialMembers }: { spaceId: string; initialMembers: SpaceMemberView[] }) {
   const [members, setMembers] = useState(initialMembers);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<SpaceMemberCandidate[]>([]);
   const [selectedRole, setSelectedRole] = useState<"admin" | "member">("member");
   const [busy, setBusy] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,27 +114,6 @@ export default function SpaceMembersManager({ spaceId, initialMembers, clickupCo
     }
   }
 
-  async function syncClickUp() {
-    setSyncing(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const response = await fetch(`/api/spaces/${spaceId}/sync-clickup`, { method: "POST" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(errorCopy(data.error));
-        return;
-      }
-      const summary = data.summary as { memberships_added_or_updated?: number; memberships_suspended?: number } | undefined;
-      setNotice(`ClickUp sync completed: ${summary?.memberships_added_or_updated ?? 0} memberships updated, ${summary?.memberships_suspended ?? 0} suspended.`);
-      window.location.reload();
-    } catch {
-      setError("Network error while syncing ClickUp members.");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   async function remove(member: SpaceMemberView) {
     if (!window.confirm(`Remove ${displayName(member)} from this Space? Their TrackUp account and historical tracking remain intact.`)) return;
     setBusy(member.profile_id);
@@ -169,7 +147,6 @@ export default function SpaceMembersManager({ spaceId, initialMembers, clickupCo
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 rounded-xl border border-white/9 bg-white/[0.03] px-3 py-2 text-xs text-white/45"><ShieldCheck size={15} className="text-violet-300" />Server-side Space controls</div>
-            {clickupConnected && <button onClick={() => void syncClickUp()} disabled={syncing} className="inline-flex items-center gap-2 rounded-xl border border-violet-300/15 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-400/15 disabled:opacity-50">{syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}Sync ClickUp</button>}
           </div>
         </header>
 
@@ -183,12 +160,12 @@ export default function SpaceMembersManager({ spaceId, initialMembers, clickupCo
             <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#10102d] px-3 py-2 text-xs text-white/45">Space access<select aria-label="Space access role" value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as "admin" | "member")} className="rounded-lg bg-transparent px-1 py-1 text-sm text-white outline-none"><option value="member">Space member</option><option value="admin">Space admin</option></select></label>
             <button onClick={() => void search()} disabled={busy === "search"} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:opacity-50">{busy === "search" ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}Search</button>
           </div>
-          {candidates.length > 0 && <div className="mt-4 grid gap-2">{candidates.map((candidate) => <div key={candidate.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/8 bg-black/10 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-white/80">{candidate.name || candidate.email}</p><p className="truncate text-xs text-white/35">{candidate.email}{candidate.clickup_user_id ? ` · ClickUp ${candidate.clickup_user_id}` : ""}</p></div><button onClick={() => void add(candidate.id)} disabled={busy === candidate.id} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.08] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/15 hover:text-white disabled:opacity-50">{busy === candidate.id ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}Add to Space</button></div>)}</div>}
+          {candidates.length > 0 && <div className="mt-4 grid gap-2">{candidates.map((candidate) => <div key={candidate.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/8 bg-black/10 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-white/80">{candidate.name || candidate.email}</p><p className="truncate text-xs text-white/35">{candidate.email}</p></div><button onClick={() => void add(candidate.id)} disabled={busy === candidate.id} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.08] px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/15 hover:text-white disabled:opacity-50">{busy === candidate.id ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}Add to Space</button></div>)}</div>}
         </section>
 
         <section className="overflow-hidden rounded-3xl border border-white/9 bg-white/[0.035]">
           <div className="flex items-center justify-between gap-4 border-b border-white/8 px-5 py-4 sm:px-6"><div><h2 className="text-sm font-semibold text-white">Active Space members</h2><p className="mt-1 text-xs text-white/35">{members.length} member{members.length === 1 ? "" : "s"} assigned to this Space</p></div><UsersRound size={18} className="text-violet-300/70" /></div>
-          {members.length === 0 ? <p className="px-5 py-12 text-center text-sm text-white/35">No active members are assigned to this Space.</p> : <div className="divide-y divide-white/8">{members.map((member) => <div key={member.id} className="flex flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200"><UserRound size={17} /></span><div className="min-w-0"><p className="truncate text-sm font-medium text-white/80">{displayName(member)}</p><p className="truncate text-xs text-white/35">{member.profile.email}{member.profile.clickup_user_id ? ` · ClickUp ${member.profile.clickup_user_id}` : ""}</p></div></div><div className="flex flex-wrap items-center gap-2 lg:justify-end"><div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-wide text-white/30">Organization role</p><p className={`mt-1 text-[10px] font-semibold tracking-wide ${organizationRoleClasses(organizationRole(member))}`}>{organizationRole(member)}</p></div><div className="rounded-xl border border-cyan-300/10 bg-cyan-400/[0.06] px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-wide text-white/30">Space access</p><p className="mt-1 text-[10px] font-semibold tracking-wide text-cyan-200">{spaceRole(member)}</p></div><span className="rounded-lg bg-emerald-400/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200/75">{member.status}</span><button onClick={() => void changeRole(member)} disabled={busy === member.profile_id} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white/55 transition hover:border-white/20 hover:text-white disabled:opacity-50">{busy === member.profile_id ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}{member.role === "admin" ? "Make Space member" : "Make Space admin"}</button><button onClick={() => void remove(member)} disabled={busy === member.profile_id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-300/10 px-2.5 py-1.5 text-xs text-red-200/65 transition hover:bg-red-400/10 hover:text-red-100 disabled:opacity-50"><UserX size={13} />Remove from Space</button></div></div>)}</div>}
+          {members.length === 0 ? <p className="px-5 py-12 text-center text-sm text-white/35">No active members are assigned to this Space.</p> : <div className="divide-y divide-white/8">{members.map((member) => <div key={member.id} className="flex flex-col gap-4 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200"><UserRound size={17} /></span><div className="min-w-0"><p className="truncate text-sm font-medium text-white/80">{displayName(member)}</p><p className="truncate text-xs text-white/35">{member.profile.email}</p></div></div><div className="flex flex-wrap items-center gap-2 lg:justify-end"><div className="rounded-xl border border-white/8 bg-black/10 px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-wide text-white/30">Organization role</p><p className={`mt-1 text-[10px] font-semibold tracking-wide ${organizationRoleClasses(organizationRole(member))}`}>{organizationRole(member)}</p></div><div className="rounded-xl border border-cyan-300/10 bg-cyan-400/[0.06] px-3 py-2"><p className="text-[9px] font-semibold uppercase tracking-wide text-white/30">Space access</p><p className="mt-1 text-[10px] font-semibold tracking-wide text-cyan-200">{spaceRole(member)}</p></div><span className="rounded-lg bg-emerald-400/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200/75">{member.status}</span><button onClick={() => void changeRole(member)} disabled={busy === member.profile_id} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-white/55 transition hover:border-white/20 hover:text-white disabled:opacity-50">{busy === member.profile_id ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}{member.role === "admin" ? "Make Space member" : "Make Space admin"}</button><button onClick={() => void remove(member)} disabled={busy === member.profile_id} className="inline-flex items-center gap-1.5 rounded-lg border border-red-300/10 px-2.5 py-1.5 text-xs text-red-200/65 transition hover:bg-red-400/10 hover:text-red-100 disabled:opacity-50"><UserX size={13} />Remove from Space</button></div></div>)}</div>}
         </section>
       </div>
     </div>

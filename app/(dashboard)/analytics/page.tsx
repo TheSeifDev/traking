@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
@@ -40,7 +40,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   if (resolution.context.type === "all") {
     const organization = resolution.organization;
     const scope = organization ? organizationDataScope(organization) : null;
-    if (!organization || !scope) return <AnalyticsEmptyState title="Connect a ClickUp Workspace" detail="Connect the selected Organization before reading its analytics." />;
+    if (!organization || !scope) return <AnalyticsEmptyState title="No Organization Selected" detail="Select an Organization to view its analytics." />;
     // Organization "All Spaces" aggregate viewer activity is an admin/owner
     // surface. A viewer-level org member must receive their own personal
     // sessions scoped to their authenticated profile, not the org-wide list.
@@ -53,11 +53,6 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           organization_id: organization.id,
           name: organization.name,
           slug: organization.slug,
-          clickup_workspace_id: organization.clickup_workspace_id,
-          clickup_space_id: null,
-          clickup_sync_status: "success",
-          clickup_last_synced_at: null,
-          clickup_sync_error: null,
           created_by: null,
           settings: {},
           archived_at: null,
@@ -87,7 +82,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   const access = resolution.access;
   const scope = spaceDataScope(access.space);
   const canManage = access.is_platform_owner || access.membership?.role === "admin";
-  if (!scope) return <AnalyticsEmptyState title="Connect a ClickUp Workspace" detail="Connect this Space before reading its analytics." href={`/spaces/${access.space.id}`} />;
+  if (!scope) return <AnalyticsEmptyState title="Space unavailable" detail="Select an active Space before reading its analytics." href={`/spaces/${access.space.id}`} />;
 
   if (!canManage) {
     const personalAnalytics = await getWorkspaceAnalytics(scope, user.id);

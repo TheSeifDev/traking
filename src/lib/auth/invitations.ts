@@ -77,7 +77,7 @@ function invitationStatus(row: {
 function toInvitationSummary(row: {
   id: string;
   email: string;
-  role: ManagedRole;
+  role: string;
   created_at: string;
   expires_at: string;
   accepted_at: string | null;
@@ -87,31 +87,13 @@ function toInvitationSummary(row: {
   return {
     id: row.id,
     email: row.email,
-    role: row.role,
+    role: row.role as ManagedRole,
     created_at: row.created_at,
     expires_at: row.expires_at,
     accepted_at: row.accepted_at,
     revoked_at: row.revoked_at,
     last_sent_at: row.last_sent_at,
     status: invitationStatus(row),
-  };
-}
-
-function toAuthenticatedUser(profile: {
-  id: string;
-  email: string;
-  role: AuthenticatedUser["role"];
-  is_active: boolean;
-  name: string | null;
-  clickup_user_id: string | null;
-}): AuthenticatedUser {
-  return {
-    id: profile.id,
-    email: profile.email,
-    role: profile.role,
-    is_active: profile.is_active,
-    name: profile.name,
-    clickup_user_id: profile.clickup_user_id,
   };
 }
 
@@ -163,16 +145,16 @@ function invitationEmail(input: {
             <p style="margin:0 0 16px"><strong>${inviterLabel}</strong> invited you to join TrackUp as a <strong>${roleLabel}</strong>.</p>
             <p style="margin:0 0 24px;color:#4d4a68">TrackUp keeps shared video review organized, private, and measurable inside one workspace.</p>
             <p style="margin:0 0 24px"><a href="${safeUrl}" style="display:inline-block;background:#6d28d9;color:#ffffff;padding:13px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Accept invitation</a></p>
-            <p style="margin:0 0 8px;color:#67637e;font-size:13px">This invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.</p>
+            <p style="margin:0 0 8px;color:#67637e;font-size:13px">This invitation expires in 7 days and can be used once. Set up your TrackUp password to accept this invitation.</p>
             <p style="margin:16px 0 0;color:#67637e;font-size:12px;word-break:break-all">If the button does not work, copy and paste this URL into your browser:<br><a href="${safeUrl}" style="color:#5b3fd1">${safeUrl}</a></p>
           </td></tr>
-          <tr><td style="padding:20px 28px 26px;border-top:1px solid #eeeaf8;color:#85819a;font-size:12px">This is a secure TrackUp invitation. If you were not expecting it, you can safely ignore this email.<br><span style="display:inline-block;margin-top:8px;color:#aaa6b8">TrackUp · Private video review for ClickUp-connected teams</span></td></tr>
+          <tr><td style="padding:20px 28px 26px;border-top:1px solid #eeeaf8;color:#85819a;font-size:12px">This is a secure TrackUp invitation. If you were not expecting it, you can safely ignore this email.<br><span style="display:inline-block;margin-top:8px;color:#aaa6b8">TrackUp · Private video review and intelligence platform</span></td></tr>
         </table>
       </td></tr>
     </table>
   </body>
 </html>`,
-    text: `${plainGreeting}\n\n${plainInviterLabel} invited you to join TrackUp as a ${roleLabel}.\n\nTrackUp keeps shared video review organized, private, and measurable inside one workspace.\n\nAccept your invitation: ${input.url}\n\nThis invitation expires in 7 days and can be used once. Sign in to ClickUp with the same email address that received this message.\n\nIf you were not expecting this invitation, you can safely ignore this email.\n\nTrackUp`,
+    text: `${plainGreeting}\n\n${plainInviterLabel} invited you to join TrackUp as a ${roleLabel}.\n\nTrackUp keeps shared video review organized, private, and measurable inside one workspace.\n\nAccept your invitation: ${input.url}\n\nThis invitation expires in 7 days and can be used once. Set up your TrackUp password to accept this invitation.\n\nIf you were not expecting this invitation, you can safely ignore this email.\n\nTrackUp`,
   };
 }
 
@@ -210,7 +192,7 @@ async function loadInvitationWithProfile(invitationId: string) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, email, name, role, is_active, clickup_user_id, created_at, updated_at, last_seen_at")
+    .select("id, email, name, role, is_active, created_at, updated_at, last_seen_at")
     .eq("id", data.profile_id)
     .maybeSingle();
   if (profileError || !profile) return null;
@@ -228,7 +210,7 @@ export async function listTeamMembers(): Promise<TeamMember[] | null> {
   try {
     const supabase = createAdminClient();
     const [{ data: profiles, error: profileError }, { data: invitations, error: invitationError }] = await Promise.all([
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role, is_active, created_at, updated_at, last_seen_at").order("created_at", { ascending: true }),
+      supabase.from("profiles").select("id, name, email, role, is_active, created_at, updated_at, last_seen_at").order("created_at", { ascending: true }),
       supabase.from("invitations").select("id, profile_id, email, role, created_at, expires_at, accepted_at, revoked_at, last_sent_at").order("created_at", { ascending: false }),
     ]);
     if (profileError || invitationError || !profiles || !invitations) return null;
@@ -265,11 +247,11 @@ export async function createInvitation(email: string, name: string | null, reque
     const supabase = createAdminClient();
     const { data: existing, error: existingError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, created_at, updated_at, last_seen_at")
+      .select("id, name, email, role, is_active, created_at, updated_at, last_seen_at")
       .eq("email", normalizedEmail)
       .maybeSingle();
     if (existingError) return { success: false, error: "database_error" };
-    if (existing?.clickup_user_id) return { success: false, error: "user_exists" };
+    if (existing?.is_active) return { success: false, error: "user_exists" };
 
     let profile = existing;
     if (profile) {
@@ -277,7 +259,7 @@ export async function createInvitation(email: string, name: string | null, reque
         .from("profiles")
         .update({ name: displayName || profile.name, role: requestedRole, is_active: false })
         .eq("id", profile.id)
-        .select("id, clickup_user_id, name, email, role, is_active, created_at, updated_at, last_seen_at")
+        .select("id, name, email, role, is_active, created_at, updated_at, last_seen_at")
         .single();
       if (updateError || !updated) return { success: false, error: "database_error" };
       profile = updated;
@@ -285,7 +267,7 @@ export async function createInvitation(email: string, name: string | null, reque
       const { data: created, error: insertError } = await supabase
         .from("profiles")
         .insert({ email: normalizedEmail, name: displayName, role: requestedRole, is_active: false })
-        .select("id, clickup_user_id, name, email, role, is_active, created_at, updated_at, last_seen_at")
+        .select("id, name, email, role, is_active, created_at, updated_at, last_seen_at")
         .single();
       if (insertError || !created) return { success: false, error: "database_error" };
       profile = created;
@@ -334,7 +316,7 @@ export async function resendInvitation(invitationId: string): Promise<Invitation
     const { invitation, profile } = loaded;
     if (invitation.accepted_at) return { success: false, error: "already_accepted" };
     if (invitation.revoked_at) return { success: false, error: "revoked" };
-    if (profile.clickup_user_id) return { success: false, error: "user_exists" };
+    if (profile.is_active) return { success: false, error: "user_exists" };
 
     const supabase = createAdminClient();
     await supabase.from("invitations").update({ revoked_at: new Date().toISOString() }).eq("id", invitation.id).is("accepted_at", null).is("revoked_at", null);
@@ -346,7 +328,7 @@ export async function resendInvitation(invitationId: string): Promise<Invitation
       .single();
     if (replacementError || !replacement) return { success: false, error: "database_error" };
 
-    const delivery = await sendInvitationEmail({ invitationId: replacement.id, email: profile.email, name: profile.name, role: replacement.role, rawToken, inviterName: requester.name });
+    const delivery = await sendInvitationEmail({ invitationId: replacement.id, email: profile.email, name: profile.name, role: replacement.role as ManagedRole, rawToken, inviterName: requester.name });
     if (!delivery.success) {
       await supabase.from("invitations").update({ revoked_at: new Date().toISOString() }).eq("id", replacement.id).is("accepted_at", null);
       return delivery;
@@ -380,39 +362,6 @@ export async function revokeInvitation(invitationId: string): Promise<{ success:
     if (error) return { success: false, error: "database_error" };
     if (!data) return { success: false, error: "not_found" };
     return { success: true };
-  } catch {
-    return { success: false, error: "database_error" };
-  }
-}
-
-export async function acceptInvitationForClickUpUser(input: {
-  invitationId: string;
-  tokenHash: string;
-  email: string;
-  clickupUserId: string;
-  name: string | null;
-}): Promise<InvitationAcceptanceResult> {
-  const normalizedEmail = normalizeEmail(input.email);
-  if (!normalizedEmail || !/^[a-f0-9]{64}$/.test(input.tokenHash)) return { success: false, error: "invalid_token" };
-  try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.rpc("accept_invitation", {
-      p_invitation_id: input.invitationId,
-      p_token_hash: input.tokenHash,
-      p_email: normalizedEmail,
-      p_clickup_user_id: input.clickupUserId,
-      p_name: input.name,
-    });
-    if (error || !data) {
-      const message = error?.message ?? "";
-      if (message.includes("invitation_accepted")) return { success: false, error: "already_accepted" };
-      if (message.includes("invitation_revoked")) return { success: false, error: "revoked" };
-      if (message.includes("invitation_expired")) return { success: false, error: "expired" };
-      if (message.includes("invitation_email_mismatch")) return { success: false, error: "email_mismatch" };
-      if (message.includes("profile_identity_mismatch")) return { success: false, error: "profile_identity_mismatch" };
-      return { success: false, error: "invalid_token" };
-    }
-    return { success: true, user: toAuthenticatedUser(data) };
   } catch {
     return { success: false, error: "database_error" };
   }

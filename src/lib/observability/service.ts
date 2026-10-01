@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getWorkspaceAnalytics } from "@/src/lib/videos/service";
-import { workspaceDataScope } from "@/src/lib/spaces/data-scope";
 import { checkDatabaseHealth } from "@/src/lib/health/db";
 import { sanitizeOwnerMetadata, type SafeOwnerLog, type ObservabilityCategory, type ObservabilityLevel } from "./logger";
 import type { ViewerSessionAnalytics, WatchEventSummary, WorkspaceAnalytics } from "@/src/types/video";
@@ -150,12 +149,12 @@ function filterSessions(sessions: ViewerSessionAnalytics[], filters: OwnerSessio
   });
 }
 
-export async function getOwnerWorkspaceAnalytics(workspaceId: string): Promise<WorkspaceAnalytics> {
-  return getWorkspaceAnalytics(workspaceDataScope(workspaceId));
+export async function getOwnerWorkspaceAnalytics(organizationId: string): Promise<WorkspaceAnalytics> {
+  return getWorkspaceAnalytics({ type: "organization", organizationId });
 }
 
-export async function listOwnerSessions(workspaceId: string, filters: OwnerSessionFilters = {}) {
-  const analytics = await getWorkspaceAnalytics(workspaceDataScope(workspaceId));
+export async function listOwnerSessions(organizationId: string, filters: OwnerSessionFilters = {}) {
+  const analytics = await getWorkspaceAnalytics({ type: "organization", organizationId });
   const filtered = filterSessions(analytics.viewer_sessions.slice(0, OWNER_SESSION_SOURCE_LIMIT), filters);
   const offset = boundedOffset(filters.offset);
   const limit = boundedLimit(filters.limit);
@@ -169,8 +168,8 @@ export async function listOwnerSessions(workspaceId: string, filters: OwnerSessi
   };
 }
 
-export async function getOwnerSession(workspaceId: string, sessionId: string): Promise<OwnerSessionDetail | null> {
-  const analytics = await getWorkspaceAnalytics(workspaceDataScope(workspaceId));
+export async function getOwnerSession(organizationId: string, sessionId: string): Promise<OwnerSessionDetail | null> {
+  const analytics = await getWorkspaceAnalytics({ type: "organization", organizationId });
   const session = analytics.viewer_sessions.find((item) => item.session_id === sessionId);
   return session ? mapSessionDetail(session) : null;
 }
@@ -199,8 +198,8 @@ export async function listOwnerLogs(filters: OwnerLogFilters = {}) {
   const logs: SafeOwnerLog[] = (data ?? []).map((log) => ({
     id: log.id,
     created_at: log.created_at,
-    level: log.level,
-    category: log.category,
+    level: log.level as "INFO" | "WARN" | "ERROR",
+    category: log.category as SafeOwnerLog["category"],
     action: log.action,
     user_id: log.user_id,
     video_id: log.video_id,

@@ -1,5 +1,4 @@
 import { createAdminClient } from "@/utils/supabase/admin";
-import { isOwner } from "@/src/lib/auth/rbac";
 import { authorizeOrganizationAdmin, authorizeSpaceAdmin, authorizeSpaceMember, getAccessibleSpaces } from "@/src/lib/spaces/access";
 import type { AuthenticatedUser } from "@/src/types/auth";
 import type { Database, OrganizationMemberStatus, SpaceMemberRole, SpaceMemberStatus } from "@/src/types/database";
@@ -8,16 +7,14 @@ import type { AccessibleSpace, Space, SpaceMember } from "@/src/types/space";
 const MAX_SPACE_MEMBERS = 500;
 const SPACE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,95}[a-z0-9]$/;
 
-type OrganizationInsert = Database["public"]["Tables"]["organizations"]["Insert"];
 type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
 type SpaceInsert = Database["public"]["Tables"]["spaces"]["Insert"];
 type MembershipRow = Database["public"]["Tables"]["space_members"]["Row"];
 
-const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, created_by, settings, archived_at, created_at, updated_at";
 
 type ProfileSummary = {
   id: string;
-  clickup_user_id: string | null;
   name: string | null;
   email: string;
   role: AuthenticatedUser["role"];
@@ -33,14 +30,13 @@ export interface SpaceMemberView extends SpaceMember {
   organization_status: OrganizationMemberStatus | null;
 }
 
-export type SpaceMemberCandidate = Pick<ProfileSummary, "id" | "clickup_user_id" | "name" | "email" | "role">;
+export type SpaceMemberCandidate = Pick<ProfileSummary, "id" | "name" | "email" | "role">;
 
 export type SpaceMutationError =
   | "forbidden"
   | "invalid_name"
   | "invalid_slug"
   | "slug_taken"
-  | "clickup_workspace_not_found"
   | "database_error"
   | "member_not_found"
   | "membership_exists"
@@ -88,85 +84,29 @@ export async function getSpaceForUser(spaceId: string, user: AuthenticatedUser) 
 
 export async function createSpace(
   user: AuthenticatedUser,
-  input: { name: string; slug?: string | null; organizationId?: string | null; clickupWorkspaceId?: string | null },
+  input: { name: string; slug?: string | null; organizationId: string },
 ): Promise<{ success: true; space: Space; membership: SpaceMember } | { success: false; error: SpaceMutationError }> {
   const requestedOrganizationId = input.organizationId?.trim() || null;
-  if (!isOwner(user.role) && !requestedOrganizationId) return { success: false, error: "forbidden" };
-  if (requestedOrganizationId) {
-    try {
-      await authorizeOrganizationAdmin(requestedOrganizationId, user);
-    } catch {
-      return { success: false, error: "forbidden" };
-    }
+  if (!requestedOrganizationId) return { success: false, error: "forbidden" };
+
+  try {
+    await authorizeOrganizationAdmin(requestedOrganizationId, user);
+  } catch {
+    return { success: false, error: "forbidden" };
   }
+
   const name = input.name.trim();
   if (!name || name.length > 160) return { success: false, error: "invalid_name" };
   const slug = normalizeSpaceSlug(input.slug, name);
   if (!SPACE_SLUG_PATTERN.test(slug)) return { success: false, error: "invalid_slug" };
-  const clickupWorkspaceId = input.clickupWorkspaceId?.trim() || null;
 
   try {
     const supabase = createAdminClient();
-    let organizationId = requestedOrganizationId;
-    let createdOrganizationId: string | null = null;
-    if (clickupWorkspaceId) {
-      const { data: workspace, error: workspaceError } = await supabase
-        .from("workspaces")
-        .select("id")
-        .eq("id", clickupWorkspaceId)
-        .maybeSingle();
-      if (workspaceError) return { success: false, error: "database_error" };
-      if (!workspace) return { success: false, error: "clickup_workspace_not_found" };
-
-      if (organizationId) {
-        const { data: organization, error: organizationError } = await supabase
-          .from("organizations")
-          .select("id, clickup_workspace_id")
-          .eq("id", organizationId)
-          .maybeSingle();
-        if (organizationError) return { success: false, error: "database_error" };
-        if (!organization || (organization.clickup_workspace_id && organization.clickup_workspace_id !== clickupWorkspaceId)) {
-          return { success: false, error: "organization_mismatch" };
-        }
-        if (!organization.clickup_workspace_id) {
-          const { error: linkError } = await supabase.from("organizations").update({ clickup_workspace_id: clickupWorkspaceId }).eq("id", organizationId);
-          if (linkError) return { success: false, error: linkError.code === "23505" ? "organization_mismatch" : "database_error" };
-        }
-      } else {
-        const { data: linkedOrganization, error: linkedOrganizationError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("clickup_workspace_id", clickupWorkspaceId)
-          .maybeSingle();
-        if (linkedOrganizationError) return { success: false, error: "database_error" };
-        organizationId = linkedOrganization?.id ?? null;
-      }
-    }
-
-    if (!organizationId) {
-      if (!isOwner(user.role)) return { success: false, error: "forbidden" };
-      const organizationValues: OrganizationInsert = {
-        name,
-        slug: normalizeSpaceSlug(`${slug}-org`, `${name}-organization`),
-        clickup_workspace_id: clickupWorkspaceId,
-        created_by: user.id,
-        settings: {},
-      };
-      const { data: organization, error: organizationError } = await supabase
-        .from("organizations")
-        .insert(organizationValues)
-        .select("id")
-        .single();
-      if (organizationError || !organization) return { success: false, error: organizationError?.code === "23505" ? "slug_taken" : "database_error" };
-      organizationId = organization.id;
-      createdOrganizationId = organization.id;
-    }
 
     const values: SpaceInsert = {
-      organization_id: organizationId,
+      organization_id: requestedOrganizationId,
       name,
       slug,
-      clickup_workspace_id: clickupWorkspaceId,
       created_by: user.id,
       settings: {},
     };
@@ -176,7 +116,6 @@ export async function createSpace(
       .select(SPACE_FIELDS)
       .single();
     if (spaceError || !spaceRow) {
-      if (createdOrganizationId) await supabase.from("organizations").delete().eq("id", createdOrganizationId);
       return { success: false, error: spaceError?.code === "23505" ? "slug_taken" : "database_error" };
     }
 
@@ -187,16 +126,13 @@ export async function createSpace(
         profile_id: user.id,
         role: "admin" as SpaceMemberRole,
         status: "active" as SpaceMemberStatus,
-        source: "manual",
-        clickup_user_id: null,
-        last_synced_at: null,
         joined_at: new Date().toISOString(),
       })
-      .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
+      .select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at")
       .single();
+
     if (membershipError || !membershipRow) {
       await supabase.from("spaces").delete().eq("id", spaceRow.id);
-      if (createdOrganizationId) await supabase.from("organizations").delete().eq("id", createdOrganizationId);
       return { success: false, error: "database_error" };
     }
     return { success: true, space: toSpace(spaceRow), membership: membershipRow };
@@ -221,8 +157,8 @@ export async function searchSpaceMemberCandidates(spaceId: string, user: Authent
     const organizationProfileIds = (organizationMembers ?? []).map((membership) => membership.profile_id);
     if (organizationProfileIds.length === 0) return [];
     const [{ data: byEmail, error: emailError }, { data: byName, error: nameError }, { data: activeMemberships, error: membershipError }] = await Promise.all([
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, name, email, role").in("id", organizationProfileIds).eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
       supabase.from("space_members").select("profile_id").eq("space_id", spaceId).eq("status", "active").limit(MAX_SPACE_MEMBERS),
     ]);
     if (emailError || nameError || membershipError) return null;
@@ -245,7 +181,7 @@ export async function listSpaceMembers(spaceId: string, user: AuthenticatedUser)
     const supabase = createAdminClient();
     const { data: memberships, error: membershipError } = await supabase
       .from("space_members")
-      .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
+      .select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at")
       .eq("space_id", spaceId)
       .neq("status", "removed")
       .order("created_at", { ascending: true })
@@ -257,7 +193,7 @@ export async function listSpaceMembers(spaceId: string, user: AuthenticatedUser)
     const [{ data: profiles, error: profileError }, { data: organizationMembers, error: organizationMemberError }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+        .select("id, name, email, role, is_active, last_seen_at")
         .in("id", profileIds)
         .limit(MAX_SPACE_MEMBERS),
       supabase
@@ -290,7 +226,7 @@ async function loadMembership(spaceId: string, profileId: string): Promise<Membe
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("space_members")
-    .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
+    .select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at")
     .eq("space_id", spaceId)
     .eq("profile_id", profileId)
     .maybeSingle();
@@ -341,7 +277,7 @@ export async function addSpaceMember(
     const supabase = createAdminClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+      .select("id, name, email, role, is_active, last_seen_at")
       .eq("id", profileId)
       .maybeSingle();
     if (profileError) return { success: false, error: "database_error" };
@@ -361,8 +297,8 @@ export async function addSpaceMember(
     const existing = await loadMembership(spaceId, profileId);
     if (existing?.status === "active") return { success: false, error: "membership_exists" };
     const { data: member, error: memberError } = existing
-      ? await supabase.from("space_members").update({ role, status: "active", joined_at: new Date().toISOString() }).eq("id", existing.id).select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at").single()
-      : await supabase.from("space_members").insert({ space_id: spaceId, profile_id: profileId, role, status: "active", source: "manual", clickup_user_id: null, last_synced_at: null, joined_at: new Date().toISOString() }).select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at").single();
+      ? await supabase.from("space_members").update({ role, status: "active", joined_at: new Date().toISOString() }).eq("id", existing.id).select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at").single()
+      : await supabase.from("space_members").insert({ space_id: spaceId, profile_id: profileId, role, status: "active", joined_at: new Date().toISOString() }).select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at").single();
     if (memberError || !member) return { success: false, error: "database_error" };
     const organizationRole = await getOrganizationRoleForProfile(access.space.organization_id, profile.id, profile.role);
     if (!organizationRole) return { success: false, error: "database_error" };
@@ -387,7 +323,7 @@ export async function updateSpaceMemberRole(
     const supabase = createAdminClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+      .select("id, name, email, role, is_active, last_seen_at")
       .eq("id", profileId)
       .maybeSingle();
     if (profileError) return { success: false, error: "database_error" };
@@ -400,7 +336,7 @@ export async function updateSpaceMemberRole(
       .from("space_members")
       .update({ role })
       .eq("id", existing.id)
-      .select("id, space_id, profile_id, role, status, joined_at, source, clickup_user_id, last_synced_at, created_at, updated_at")
+      .select("id, space_id, profile_id, role, status, joined_at, created_at, updated_at")
       .single();
     if (updateError || !member) return { success: false, error: "database_error" };
     const organizationRole = await getOrganizationRoleForProfile(access.space.organization_id, profile.id, profile.role);

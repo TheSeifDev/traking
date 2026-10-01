@@ -101,9 +101,6 @@ assert.doesNotMatch(observabilityConsole, /<aside[^>]*Control Room/);
 assert.doesNotMatch(observabilityConsole, /Legacy overview|Legacy logs|System detail/);
 assert.match(controlRoomUi, /metaKey \|\| event\.ctrlKey/);
 assert.match(controlRoomUi, /getSafeSpaceDisplayName/);
-assert.match(controlRoomUi, /Execution.*Observed.*Not observed/);
-assert.match(controlRoomUi, /Preview sync/);
-assert.match(controlRoomUi, /Apply sync/);
 assert.match(controlRoomUi, /No aggregate uptime claim/);
 assert.match(controlRoomUi, /No persisted feature-flag registry/);
 pass("Control Room UI exposes operational sections, keyboard search, safe hierarchy labels, and honest unavailable states");
@@ -122,25 +119,15 @@ assert.match(analyticsService, /sequence_number/);
 assert.match(analyticsService, /from_position/);
 pass("session inspector is contractually attached to existing event ordering/range logic");
 
-const hierarchyMigration = read("supabase/migrations/20260824000010_add_clickup_space_and_cron_evidence.sql");
-assert.match(hierarchyMigration, /clickup_space_id/);
-assert.match(hierarchyMigration, /cron_executions/);
-assert.match(hierarchyMigration, /execution_key/);
-assert.match(hierarchyMigration, /UNIQUE \(job_name, execution_key\)/);
-assert.match(hierarchyMigration, /No direct cron execution reads/);
-pass("hierarchy and cron evidence migration is additive, bounded, idempotent, and deny-by-default");
+const removalMigration = read("supabase/migrations/20261001000002_remove_clickup_integration.sql");
+assert.match(removalMigration, /DROP TABLE IF EXISTS public\.clickup_connections/);
+assert.match(removalMigration, /DROP TABLE IF EXISTS public\.video_clickup_tasks/);
+assert.match(removalMigration, /DROP COLUMN IF EXISTS clickup_workspace_id/);
+pass("ClickUp integration removal migration drops legacy tables and columns");
 
-const clickupSyncRoute = read("app/api/owner/clickup/sync/route.ts");
-assert.match(clickupSyncRoute, /withRole\(USER_ROLES\.OWNER/);
-assert.match(clickupSyncRoute, /mode === \"preview\"/);
-assert.match(clickupSyncRoute, /mode === \"apply\"/);
-assert.doesNotMatch(clickupSyncRoute, /access_token|request\.headers|getCookie/i);
-pass("Owner ClickUp sync route supports read-only preview and protected apply without exposing provider credentials");
-
-const clickupClient = read("src/lib/clickup/client.ts");
-assert.match(clickupClient, /api\/v2\/team\/\$\{encodeURIComponent\(clickupTeamId\)\}\/space/);
-assert.match(clickupClient, /private/);
-pass("ClickUp client reads explicit Spaces and preserves public/private roster evidence boundaries");
+assert.equal(fs.existsSync(path.join(root, "app/api/owner/clickup/sync/route.ts")), false);
+assert.equal(fs.existsSync(path.join(root, "src/lib/clickup/client.ts")), false);
+pass("Owner ClickUp sync route and client are completely removed");
 
 const migration = read("supabase/migrations/20260824000006_create_owner_logs.sql");
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.owner_logs/);

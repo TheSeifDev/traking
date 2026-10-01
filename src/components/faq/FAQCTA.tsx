@@ -33,7 +33,7 @@ const FAQCTA = () => {
             href="/login"
             className="group flex h-12 shrink-0 items-center gap-3 rounded-xl bg-linear-to-r from-[#8b3dff] to-[#5d4cff] px-6 text-sm font-semibold text-white shadow-[0_8px_30px_rgba(105,65,255,0.3)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgba(105,65,255,0.45)]"
           >
-            <span>Continue with ClickUp</span>
+            <span>Sign In to TrackUp</span>
             <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
           </Link>
         </div>

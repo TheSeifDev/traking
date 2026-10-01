@@ -9,7 +9,7 @@ export const faqCategories = [
   "All Questions",
   "Getting Started",
   "Tracking",
-  "ClickUp Integration",
+  "Team & Spaces",
   "Security & Privacy",
   "Billing",
 ];
@@ -19,7 +19,7 @@ export const faqItems: FAQItem[] = [
     id: 1,
     question: "What is TrackUp?",
     answer:
-      "TrackUp is a ClickUp-connected video access and analytics application. It provides scoped viewer links, persisted viewer sessions, and workspace, video, viewer, and session views based on the evidence stored by the current provider integration.",
+      "TrackUp is a sovereign video access and analytics application. It provides scoped viewer links, persisted viewer sessions, and organization, space, video, viewer, and session views based on the evidence stored by the current provider integration.",
     category: "Getting Started",
   },
   {
@@ -38,10 +38,10 @@ export const faqItems: FAQItem[] = [
   },
   {
     id: 4,
-    question: "How does ClickUp integration work?",
+    question: "How does team authentication and spaces work?",
     answer:
-      "ClickUp OAuth connects the authorized workspace identity to TrackUp. The current app supports workspace discovery and authorized task operations; video access and provider-aware playback evidence remain inside TrackUp’s scoped surfaces.",
-    category: "ClickUp Integration",
+      "TrackUp uses sovereign server-side authentication. Administrators create users with specific roles (Owner, Admin, Member), organize resources into Spaces within Organizations, and enforce permissions strictly on the server.",
+    category: "Team & Spaces",
   },
   {
     id: 5,

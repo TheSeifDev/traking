@@ -60,43 +60,19 @@ const Nav = () => {
 
         {/* Right side: theme + CTA */}
         <div className="ml-auto flex items-center gap-4 lg:gap-5">
-
-          {/* ClickUp CTA */}
+          {/* Sign In CTA */}
           <Link
             href="/login"
             className="
-              flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4
+              flex h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-xl px-5
               bg-linear-to-r from-[#8b3dff] to-[#5d4cff] 
               text-[13px] font-semibold text-white 
               shadow-[0_8px_30px_rgba(105,65,255,0.28)] transition-all duration-200 
               hover:-translate-y-px hover:shadow-[0_10px_35px_rgba(105,65,255,0.4)]
-              lg:h-11 lg:gap-2.5 lg:px-6 lg:text-[14px]
+              lg:h-11 lg:px-6 lg:text-[14px]
             "
           >
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              className="shrink-0"
-            >
-              <path
-                d="M6.2 9.4L12 5l5.8 4.4"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M5.5 13.2c.8 3.2 3.2 5.3 6.5 5.3s5.7-2.1 6.5-5.3"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="hidden lg:inline">Continue with ClickUp</span>
-            <span className="lg:hidden">Login</span>
+            <span>Sign In</span>
           </Link>
         </div>
       </nav>

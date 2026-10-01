@@ -23,7 +23,7 @@ const useCases = [
   },
   {
     title: "Project updates",
-    description: "Deliver a video update alongside the ClickUp workflow your team already uses, while keeping the video resource inside its scoped Space.",
+    description: "Deliver a video update alongside the collaborative workflows your team already uses, while keeping the video resource inside its scoped Space.",
     icon: BriefcaseBusiness,
     accent: "cyan",
   },
@@ -71,7 +71,7 @@ export default function UseCasesPage() {
         <div className="relative mx-auto max-w-5xl text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-violet-300/75">Built for internal video work</p>
           <h1 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">Make every shared video part of the <span className="bg-linear-to-r from-[#b83cff] via-[#8065ff] to-[#4ca8ff] bg-clip-text text-transparent">workflow.</span></h1>
-          <p className="mx-auto mt-6 max-w-3xl text-base leading-7 text-white/60 sm:text-lg">TrackUp helps ClickUp-connected teams share video through a scoped internal viewer and understand the viewing evidence that is actually persisted.</p>
+          <p className="mx-auto mt-6 max-w-3xl text-base leading-7 text-white/60 sm:text-lg">TrackUp helps teams share video through a scoped internal viewer and understand the viewing evidence that is actually persisted.</p>
         </div>
       </section>
       <section className="px-6 pb-20 lg:px-10">
@@ -93,7 +93,7 @@ export default function UseCasesPage() {
             <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Add a video, create a Watch Link, then investigate real activity.</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/45">The application keeps the source provider, viewer identity, session lifecycle, event persistence, analytics, and Organization/Space authorization connected. Unsupported telemetry remains explicitly unavailable.</p>
           </div>
-          <Link href="/login" className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">Continue with ClickUp <ArrowRight size={16} /></Link>
+          <Link href="/login" className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">Sign In to TrackUp <ArrowRight size={16} /></Link>
         </div>
       </section>
       <FinalCTA />

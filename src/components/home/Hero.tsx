@@ -4,7 +4,7 @@ import { ArrowRight, CheckCircle, Play, Eye, CheckCircle2 } from "lucide-react";
 
 const heroFeatures = [
   "Scoped Viewer Links",
-  "ClickUp Integration",
+  "Team Spaces & Roles",
   "Provider-Aware Analytics",
 ];
 
@@ -34,7 +34,6 @@ const Hero = () => {
         }
       `}</style>
 
-      {/* تعديل: min-h-screen وإضافة padding-top حتى يظهر المحتوى تحت الناف بار مباشرة */}
       <div className="mx-auto grid min-h-screen w-full max-w-360 grid-cols-1 items-center gap-12 px-6 pb-16 pt-24 md:px-10 lg:grid-cols-[1fr_1.15fr] lg:gap-8 lg:px-12 lg:pb-20 lg:pt-28">
 
         {/* ================= LEFT SIDE ================= */}
@@ -49,7 +48,7 @@ const Hero = () => {
 
           {/* Description */}
           <p className="mt-7 max-w-162.5 text-base leading-7 text-white/65 sm:text-lg">
-            Track real viewing sessions with ClickUp-connected access and
+            Track real viewing sessions with sovereign team access and
             provider-aware playback evidence, while unsupported metrics stay
             explicitly unavailable.
           </p>
@@ -78,24 +77,7 @@ const Hero = () => {
               {/* hover sheen */}
               <span className="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
 
-              {/* ClickUp icon */}
-              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="relative">
-                <path
-                  d="M6.2 9.4L12 5l5.8 4.4"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M5.5 13.2c.8 3.2 3.2 5.3 6.5 5.3s5.7-2.1 6.5-5.3"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </svg>
-
-              <span className="relative">Continue with ClickUp</span>
+              <span className="relative">Sign In to TrackUp</span>
 
               <ArrowRight size={18} className="relative transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
@@ -114,14 +96,14 @@ const Hero = () => {
 
           {/* Login Note */}
           <p className="mt-4 text-xs text-white/40 sm:text-sm">
-            Login with your ClickUp account — no separate register needed.
+            Sovereign credentials managed by your Organization administrator.
           </p>
         </div>
 
         {/* ================= RIGHT SIDE ================= */}
         <div className="relative flex items-center justify-center lg:justify-end">
 
-          {/* Hero Image — bled past the grid column so it reads bigger and more immersive */}
+          {/* Hero Image */}
           <div className="relative z-10 w-full lg:w-[125%] lg:-mr-16 xl:-mr-28">
             <div className="relative transform-[perspective(1600px)_rotateY(-6deg)_rotateX(2deg)] transition-transform duration-700 ease-out hover:transform-[perspective(1600px)_rotateY(0deg)_rotateX(0deg)]">
               <Image

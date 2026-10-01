@@ -42,7 +42,7 @@ type EventRow = {
 
 
 type User360Result = {
-  profile: Pick<ProfileRow, "id" | "name" | "email" | "clickup_user_id" | "role" | "is_active" | "created_at" | "last_seen_at">;
+  profile: Pick<ProfileRow, "id" | "name" | "email" | "role" | "is_active" | "created_at" | "last_seen_at">;
   organizations: Array<{ organization_id: string; organization_name: string; role: string; status: string }>;
   memberships: Array<{ organization_id: string; organization_name: string; space_id: string; space_name: string; role: string; status: string }>;
   videos: Array<{
@@ -121,7 +121,7 @@ export async function getUser360(profileId: string, scope: Scope, actor: Authent
   const supabase = createAdminClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, name, email, clickup_user_id, role, is_active, created_at, last_seen_at")
+    .select("id, name, email, role, is_active, created_at, last_seen_at")
     .eq("id", profileId)
     .maybeSingle();
   if (profileError || !profile) return null;

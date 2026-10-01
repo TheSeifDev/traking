@@ -2,7 +2,7 @@ import { BarChart3, Link2, Play, Users } from "lucide-react";
 
 const steps = [
   { number: "1", icon: Link2, title: "Add Video", description: "Add YouTube, Vimeo, direct media, Google Drive, or Telegram sources." },
-  { number: "2", icon: Users, title: "Assign & Share", description: "Create a scoped Watch Link or connect the video to an authorized ClickUp workflow." },
+  { number: "2", icon: Users, title: "Assign & Share", description: "Create a scoped Watch Link to share videos privately with your viewers." },
   { number: "3", icon: Play, title: "Track Engagement", description: "Persist sessions and player events only when the provider exposes reliable telemetry." },
   { number: "4", icon: BarChart3, title: "Get Insights", description: "Review viewer, video, and session analytics with unavailable states kept explicit." },
 ];

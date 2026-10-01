@@ -11,13 +11,6 @@ const statusCopy: Record<string, { title: string; body: string }> = {
   expired: { title: "Invitation expired", body: "Ask the team owner or admin to resend a new invitation." },
   revoked: { title: "Invitation revoked", body: "This invitation is no longer active. Ask the team owner or admin for a new link." },
   accepted: { title: "Invitation already accepted", body: "This single-use invitation has already been completed. You can sign in normally." },
-  email_mismatch: { title: "Email does not match", body: "Sign in to ClickUp with the same email address that received this invitation." },
-  profile_identity_mismatch: { title: "Account identity mismatch", body: "This ClickUp account is already linked to another TrackUp profile." },
-  auth_denied: { title: "ClickUp authorization was cancelled", body: "Authorization was not completed. You can try again while this invitation is still active." },
-  auth_failed: { title: "ClickUp authorization failed", body: "TrackUp could not complete ClickUp authorization. Please try again." },
-  workspace_auth_failed: { title: "Workspace authorization failed", body: "TrackUp could not verify an authorized ClickUp workspace." },
-  no_workspaces: { title: "No ClickUp workspace found", body: "Authorize at least one ClickUp workspace and try again." },
-  invalid_identity: { title: "ClickUp identity unavailable", body: "TrackUp could not verify the ClickUp email for this invitation." },
   server_error: { title: "Invitation setup failed", body: "TrackUp could not complete this invitation. Please try again later." },
 };
 
@@ -43,16 +36,33 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
 
   if (status !== "pending" || !invitation) {
     const copy = statusCopy[status] ?? statusCopy.invalid_token;
-    return <Card title={copy.title} body={copy.body}><div className="mt-6"><Link href="/login" className="text-sm font-medium text-violet-300 hover:text-violet-200">Go to sign in</Link></div></Card>;
+    return (
+      <Card title={copy.title} body={copy.body}>
+        <div className="mt-6">
+          <Link href="/login" className="inline-flex rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500">
+            Go to sign in
+          </Link>
+        </div>
+      </Card>
+    );
   }
 
   return (
-    <Card title="You are invited to TrackUp" body={`Continue with ClickUp using ${invitation.email}. Your ${invitation.role} access will be activated only after the same-email authentication succeeds.`}>
-      <form action="/api/invitations/start" method="post" className="mt-7">
-        <input type="hidden" name="token" value={token} />
-        <button type="submit" className="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500">Continue with ClickUp</button>
-      </form>
-      <p className="mt-4 text-xs leading-5 text-white/35">This secure invitation expires on {new Date(invitation.expires_at).toLocaleString()} and can be used once.</p>
+    <Card
+      title="You are invited to TrackUp"
+      body={`You have been invited to join TrackUp with ${invitation.email} as a ${invitation.role}. Sign in using your TrackUp credentials to access your workspace.`}
+    >
+      <div className="mt-7">
+        <Link
+          href="/login"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
+        >
+          Sign In to TrackUp
+        </Link>
+      </div>
+      <p className="mt-4 text-xs leading-5 text-white/35">
+        This secure invitation expires on {new Date(invitation.expires_at).toLocaleString()} and can be used once.
+      </p>
     </Card>
   );
 }

@@ -157,13 +157,13 @@ export default function WatchLinksManager({ videos: initialVideos, role, appOrig
 
         <section aria-label="Watch link summary" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/9 bg-white/9 md:grid-cols-4">
           <SummaryMetric label="Active links" value={summary.activeLinks} detail="One per video maximum" icon={Activity} tone="emerald" />
-          <SummaryMetric label="Videos" value={videos.length} detail="Workspace-scoped library" icon={FileVideo} />
+          <SummaryMetric label="Videos" value={videos.length} detail="Library" icon={FileVideo} />
           <SummaryMetric label="Total views" value={summary.totalViews} detail="Recorded watch sessions" icon={Eye} />
           <SummaryMetric label="Revoked links" value={summary.revokedLinks} detail="Retained for audit" icon={ShieldCheck} tone="amber" />
         </section>
 
         {!hasWorkspace ? (
-          <EmptyState title="Connect a ClickUp workspace" description="Connect a workspace before managing viewer access." icon={Link2} />
+          <EmptyState title="Select a Space" description="Select an accessible Space or Organization to manage viewer access." icon={Link2} />
         ) : videos.length === 0 ? (
           <EmptyState title="Your watch links will appear here" description="Add a video first, then create a secure TrackUp viewer link for it. The flow is Video → Watch Link → Viewer → Tracking → Analytics." icon={VideoIcon} actionHref={scopedQuery ? `/videos${scopedQuery}` : "/videos"} actionLabel={canManage ? "Create watch link from a video" : "Open video library"} />
         ) : (

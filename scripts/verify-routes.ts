@@ -17,7 +17,7 @@
  * Plus: API handler permission enforcement for each role.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 import { AuthError } from "../src/lib/auth/session";
 import {
@@ -64,7 +64,6 @@ function makeUser(role: UserRole, is_active = true): AuthenticatedUser {
     role,
     is_active,
     name: `Test ${role}`,
-    clickup_user_id: `cu_${role}`,
   };
 }
 
@@ -369,8 +368,8 @@ for (const code of codes) {
 // 11. Dashboard route is viewer-accessible (P0-1 regression guard)
 //
 // Background: app/(dashboard)/layout.tsx used to call guardRole(ADMIN, "/").
-// Every fresh ClickUp-authenticated user is provisioned as VIEWER, so they
-// landed on /dashboard after OAuth and were silently redirected back to the
+// Every newly created user defaults to VIEWER unless elevated by an Owner, so they
+// landed on /dashboard after login and were silently redirected back to the
 // marketing home page by handleAuthError. The layout was changed to guardAuth()
 // to let viewers in; privileged surfaces (admin / owner, member management,
 // settings) are now guarded at the page level. These tests pin that behaviour:
@@ -551,15 +550,16 @@ assert(
 
 // ---------------------------------------------------------------------------
 
-section("Login OAuth route wiring");
+section("Login and authentication route wiring");
 
 const loginHero = readFileSync("src/components/login/LoginHero.tsx", "utf8");
 const loginCard = readFileSync("src/components/login/LoginCard.tsx", "utf8");
-const clickupAuthRoute = readFileSync("app/api/auth/clickup/route.ts", "utf8");
+const loginRoute = readFileSync("app/api/auth/login/route.ts", "utf8");
+const logoutRoute = readFileSync("app/api/auth/logout/route.ts", "utf8");
+const changePasswordRoute = readFileSync("app/api/auth/change-password/route.ts", "utf8");
 const settingsPage = readFileSync("app/(dashboard)/settings/page.tsx", "utf8");
 const videoListRoute = readFileSync("app/api/videos/route.ts", "utf8");
 const videoDetailRoute = readFileSync("app/api/videos/[id]/route.ts", "utf8");
-const clickupTaskSearchRoute = readFileSync("app/api/clickup/tasks/route.ts", "utf8");
 
 assert(
   loginHero.includes("LoginForm") || loginHero.includes("LoginCard"),
@@ -570,12 +570,28 @@ assert(
   "LoginCard renders credentials login form"
 );
 assert(
-  clickupAuthRoute.includes("export async function GET"),
-  "ClickUp OAuth route exposes a GET handler"
+  !loginCard.toLowerCase().includes("clickup"),
+  "LoginCard contains no ClickUp references"
 );
 assert(
-  settingsPage.includes('href="/api/auth/clickup"'),
-  "settings reconnect CTA points to the implemented ClickUp OAuth route"
+  loginRoute.includes("export async function POST"),
+  "TrackUp native login route exposes a POST handler"
+);
+assert(
+  logoutRoute.includes("export async function POST"),
+  "TrackUp native logout route exposes a POST handler"
+);
+assert(
+  changePasswordRoute.includes("export const POST") || changePasswordRoute.includes("export async function POST"),
+  "TrackUp native change-password route exposes a POST handler"
+);
+assert(
+  !existsSync("app/api/auth/clickup/route.ts") && !existsSync("app/api/clickup/tasks/route.ts"),
+  "Obsolete ClickUp routes are completely removed"
+);
+assert(
+  !settingsPage.includes("/api/auth/clickup") && !settingsPage.toLowerCase().includes("clickup"),
+  "settings page contains no ClickUp reconnect CTA"
 );
 assert(
   videoListRoute.includes("withDashboardAuth") && videoListRoute.includes("resolveSpaceForUser") && videoListRoute.includes("spaceDataScope") && videoListRoute.includes("listVideos(scope)"),
@@ -584,10 +600,6 @@ assert(
 assert(
   videoDetailRoute.includes("withDashboardAuth") && videoDetailRoute.includes("resolveSpaceForUser") && videoDetailRoute.includes("spaceDataScope") && videoDetailRoute.includes("getVideo(id, scope)"),
   "video detail route enforces authenticated Space membership"
-);
-assert(
-  clickupTaskSearchRoute.includes("withDashboardAuth") && clickupTaskSearchRoute.includes("resolveSpaceAdminForUser") && clickupTaskSearchRoute.includes("workspace.clickup_team_id"),
-  "ClickUp task search route enforces Space-admin authorization and selected workspace"
 );
 
 // ---------------------------------------------------------------------------

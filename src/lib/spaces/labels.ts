@@ -4,14 +4,10 @@ export function normalizeHierarchyLabel(value: string): string {
 
 export type SpaceHierarchyLabelInput = {
   name: string;
-  clickup_space_id?: string | null;
-  clickup_workspace_id?: string | null;
 };
 
 /**
- * The stored Space name is the user-facing name. ClickUp sync persists the
- * canonical child-Space name into this field; it must never be replaced by a
- * diagnostic label when a provider name is unavailable.
+ * The stored Space name is the user-facing name.
  */
 export function getSpaceDisplayName(space: Pick<SpaceHierarchyLabelInput, "name">): string {
   const name = space.name.trim();
@@ -22,38 +18,24 @@ export function hasOrganizationSpaceLabelCollision(spaceName: string, organizati
   return Boolean(organizationName && normalizeHierarchyLabel(spaceName) === normalizeHierarchyLabel(organizationName));
 }
 
-/**
- * Legacy rows created before Organization/Space mapping can carry the
- * Organization name but no provider Space ID. They remain in storage for
- * historical data, but are not a selectable child Space until a real ClickUp
- * Space ID is bound. The provider workspace column is optional on older rows,
- * so the name collision plus missing provider Space ID is the safe signal.
- */
 export function isLegacyOrganizationContainerSpace(
   space: SpaceHierarchyLabelInput,
   organizationName: string | null | undefined,
 ): boolean {
-  return !space.clickup_space_id
-    && hasOrganizationSpaceLabelCollision(space.name, organizationName);
+  return hasOrganizationSpaceLabelCollision(space.name, organizationName);
 }
 
-/**
- * A linked ClickUp Space is a real child even if its name happens to match the
- * Organization. An unlinked Organization-label row is not shown as a normal
- * Space option.
- */
 export function isSelectableChildSpace(
   space: SpaceHierarchyLabelInput,
-  organizationName: string | null | undefined,
+  organizationName?: string | null,
 ): boolean {
-  return !isLegacyOrganizationContainerSpace(space, organizationName);
+  void organizationName;
+  return Boolean(space.name.trim());
 }
 
-/**
- * Compatibility helper for owner/diagnostic views. Normal navigation and
- * Space cards use getSpaceDisplayName directly and never call this fallback.
- */
 export function getSafeSpaceDisplayName(spaceName: string, organizationName?: string | null): string {
-  if (organizationName && hasOrganizationSpaceLabelCollision(spaceName, organizationName)) return "Legacy Space label (review required)";
+  if (hasOrganizationSpaceLabelCollision(spaceName, organizationName)) {
+    return "Legacy Space label (review required)";
+  }
   return getSpaceDisplayName({ name: spaceName });
 }

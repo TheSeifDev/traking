@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createInvitationContextCookie, verifyInvitationContextCookie } from "../src/lib/auth/invitation-cookie";
 import { hashInvitationToken } from "../src/lib/auth/invitations";
 import { sendTransactionalEmail } from "../src/lib/email/resend";
@@ -16,7 +16,6 @@ const acceptance = readFileSync("supabase/migrations/20260824000002_add_invitati
 const presence = readFileSync("supabase/migrations/20260824000003_add_profile_last_seen_rpc.sql", "utf8");
 const adminRoute = readFileSync("app/api/admin/users/route.ts", "utf8");
 const presenceRoute = readFileSync("app/api/auth/presence/route.ts", "utf8");
-const startRoute = readFileSync("app/api/invitations/start/route.ts", "utf8");
 const resend = readFileSync("src/lib/email/resend.ts", "utf8");
 const envExample = readFileSync(".env.example", "utf8");
 const rootLayout = readFileSync("app/layout.tsx", "utf8");
@@ -26,8 +25,6 @@ const mobileNav = readFileSync("src/components/navigation/MobileNav.tsx", "utf8"
 const dashboardShell = readFileSync("src/components/dashboard/DashboardShell.tsx", "utf8");
 const footer = readFileSync("src/components/home/Footer.tsx", "utf8");
 const watchPage = readFileSync("app/watch/[token]/page.tsx", "utf8");
-const loginIntegrationVisual = readFileSync("src/components/login/IntegrationVisual.tsx", "utf8");
-const clickUpIntegration = readFileSync("src/components/home/ClickUpIntegration.tsx", "utf8");
 const favicon = readFileSync("app/favicon.ico");
 const publicFavicon = readFileSync("public/favicon.ico");
 
@@ -40,14 +37,14 @@ assert(acceptance.includes("accepted_at IS NULL") && acceptance.includes("revoke
 assert(acceptance.includes("v_invitation.email <> v_email") && acceptance.includes("v_profile.email <> v_email"), "acceptance requires exact normalized same-email identity");
 assert(acceptance.includes("FOR UPDATE") && acceptance.includes("SET accepted_at = v_now"), "acceptance locks and marks one invitation atomically");
 assert(adminRoute.includes("withPermission") && adminRoute.includes("PERMISSIONS.USERS_MANAGE") && adminRoute.includes("delivery_not_configured"), "creation endpoint is protected and exposes configuration failure honestly");
-assert(startRoute.includes("hashInvitationToken") && startRoute.includes("createInvitationContextCookie"), "invite start carries only hashed context through OAuth");
+assert(!existsSync("app/api/invitations/start/route.ts"), "legacy OAuth invitation start route is deleted");
 assert(resend.includes("process.env.RESEND_API_KEY") && resend.includes("process.env.RESEND_FROM_EMAIL") && !resend.includes("use client"), "Resend configuration remains server-only and environment-driven");
 assert(envExample.includes("RESEND_API_KEY=") && envExample.includes("RESEND_FROM_EMAIL=") && envExample.includes("RESEND_REPLY_TO="), "Resend environment variables are documented without committed secrets");
 assert(service.includes("logo.webp") && service.includes("Accept invitation") && service.includes("expires in 7 days") && service.includes("text:") && !service.includes("<script"), "invitation email is branded, responsive-safe, and includes plain-text fallback");
 assert(service.includes("idempotencyKey: `trackup-invitation-${input.invitationId}`") && !service.includes("rawToken.slice"), "email idempotency key never contains raw invitation token material");
 assert(rootLayout.includes("metadataBase: new URL(\"https://trakeup.vercel.app\")") && rootLayout.includes("/favicon.ico") && rootLayout.includes("themeColor"), "root metadata uses TrackUp production identity and favicon");
 assert(!watchPlayer.includes("View in YouTube") && !watchPlayer.includes("view in YouTube"), "viewer contains no custom external YouTube CTA");
-assert([publicNav, mobileNav, dashboardShell, footer, watchPage, loginIntegrationVisual, clickUpIntegration].every((source) => source.includes('/logo.webp')), "TrackUp logo asset is used across public, dashboard, viewer, footer, and integration surfaces");
+assert([publicNav, mobileNav, dashboardShell, footer, watchPage].every((source) => source.includes('/logo.webp')), "TrackUp logo asset is used across public, dashboard, viewer, and footer surfaces");
 assert(favicon.length > 1000 && publicFavicon.length > 1000, "app and public favicons are non-empty TrackUp icon assets");
 assert(rootLayout.includes('apple: "/logo.webp"'), "metadata touch icon uses the official transparent TrackUp logo");
 assert(presence.includes("interval '5 minutes'") && presenceRoute.includes("withAuth") && presenceRoute.includes("user.id"), "presence uses authenticated identity and server debounce");

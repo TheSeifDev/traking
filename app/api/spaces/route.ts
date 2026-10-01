@@ -5,7 +5,6 @@ import { createSpace, listSpacesForUser } from "@/src/lib/spaces/service";
 function statusFor(error: string): number {
   if (error === "forbidden") return 403;
   if (error === "slug_taken") return 409;
-  if (error === "clickup_workspace_not_found") return 404;
   if (error === "organization_mismatch") return 409;
   if (error === "database_error") return 500;
   return 400;
@@ -27,9 +26,8 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
   const input = body as Record<string, unknown>;
   const name = typeof input.name === "string" ? input.name : "";
   const slug = typeof input.slug === "string" ? input.slug : null;
-  const organizationId = typeof input.organization_id === "string" ? input.organization_id : null;
-  const clickupWorkspaceId = typeof input.clickup_workspace_id === "string" ? input.clickup_workspace_id : null;
-  const result = await createSpace(user, { name, slug, organizationId, clickupWorkspaceId });
+  const organizationId = typeof input.organization_id === "string" ? input.organization_id : "";
+  const result = await createSpace(user, { name, slug, organizationId });
   if (!result.success) return NextResponse.json({ error: result.error }, { status: statusFor(result.error) });
   return NextResponse.json(result, { status: 201 });
 });

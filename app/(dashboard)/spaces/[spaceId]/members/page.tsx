@@ -19,7 +19,7 @@ export default async function SpaceMembersPage({ params }: PageContext) {
   if (!canManage) return <DeniedState />;
   const members = await listSpaceMembers(spaceId, user);
   if (members === null) return <DeniedState />;
-  return <SpaceMembersManager spaceId={spaceId} initialMembers={members} clickupConnected={Boolean(access.space.clickup_workspace_id)} />;
+  return <SpaceMembersManager spaceId={spaceId} initialMembers={members} />;
 }
 
 function DeniedState() {

@@ -118,7 +118,6 @@ export async function verifySignedSessionCookie(raw: string | undefined): Promis
       role: payload.role,
       is_active: payload.is_active,
       name: payload.name,
-      clickup_user_id: payload.clickup_user_id,
     };
   } catch {
     return null;

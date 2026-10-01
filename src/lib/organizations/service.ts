@@ -9,7 +9,7 @@ const MAX_ORGANIZATIONS = 100;
 const MAX_ORGANIZATION_SPACES = 100;
 const MAX_ORGANIZATION_MEMBERS = 500;
 
-const SPACE_FIELDS = "id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at";
+const SPACE_FIELDS = "id, organization_id, name, slug, created_by, settings, archived_at, created_at, updated_at";
 const MEMBER_FIELDS = "id, organization_id, profile_id, role, status, joined_at, created_at, updated_at";
 
 type SpaceRow = Database["public"]["Tables"]["spaces"]["Row"];
@@ -17,7 +17,6 @@ type OrganizationMemberRow = Database["public"]["Tables"]["organization_members"
 
 type ProfileSummary = {
   id: string;
-  clickup_user_id: string | null;
   name: string | null;
   email: string;
   role: AuthenticatedUser["role"];
@@ -29,7 +28,7 @@ export interface OrganizationMemberView extends OrganizationMember {
   profile: ProfileSummary;
 }
 
-export type OrganizationMemberCandidate = Pick<ProfileSummary, "id" | "clickup_user_id" | "name" | "email" | "role">;
+export type OrganizationMemberCandidate = Pick<ProfileSummary, "id" | "name" | "email" | "role">;
 
 export type OrganizationMutationError =
   | "forbidden"
@@ -99,8 +98,8 @@ export async function searchOrganizationMemberCandidates(organizationId: string,
     const supabase = createAdminClient();
     const [{ data: memberships, error: membershipError }, { data: byEmail, error: emailError }, { data: byName, error: nameError }] = await Promise.all([
       supabase.from("organization_members").select("profile_id").eq("organization_id", organizationId).eq("status", "active").limit(MAX_ORGANIZATION_MEMBERS),
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
-      supabase.from("profiles").select("id, clickup_user_id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("email", `%${normalizedQuery}%`).limit(25),
+      supabase.from("profiles").select("id, name, email, role").eq("is_active", true).neq("role", "owner").ilike("name", `%${normalizedQuery}%`).limit(25),
     ]);
     if (membershipError || emailError || nameError) return null;
     const activeMemberIds = new Set((memberships ?? []).map((membership) => membership.profile_id));
@@ -132,7 +131,7 @@ export async function listOrganizationMembers(organizationId: string, user: Auth
     const profileIds = memberships.map((membership) => membership.profile_id);
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+      .select("id, name, email, role, is_active, last_seen_at")
       .in("id", profileIds)
       .limit(MAX_ORGANIZATION_MEMBERS);
     if (profileError || !profiles) return null;
@@ -181,7 +180,7 @@ export async function addOrganizationMember(
     const supabase = createAdminClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+      .select("id, name, email, role, is_active, last_seen_at")
       .eq("id", profileId)
       .maybeSingle();
     if (profileError) return { success: false, error: "database_error" };
@@ -217,7 +216,7 @@ export async function updateOrganizationMemberRole(
     const supabase = createAdminClient();
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, clickup_user_id, name, email, role, is_active, last_seen_at")
+      .select("id, name, email, role, is_active, last_seen_at")
       .eq("id", profileId)
       .maybeSingle();
     if (profileError) return { success: false, error: "database_error" };

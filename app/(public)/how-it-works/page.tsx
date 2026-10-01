@@ -10,10 +10,10 @@ import HowItWorksCTA from "@/src/components/how-it-works/HowItWorksCTA";
 
 export const metadata: Metadata = {
   title: "How It Works",
-  description: "Sign in with ClickUp, share a scoped watch link, and review provider-aware playback evidence. TrackUp keeps video access private and analytics honest.",
+  description: "Sign in with sovereign credentials, share a scoped watch link, and review provider-aware playback evidence. TrackUp keeps video access private and analytics honest.",
   openGraph: {
-    title: "How TrackUp Works | ClickUp-connected video evidence",
-    description: "Sign in with ClickUp, share a scoped watch link, and review provider-aware playback evidence. TrackUp keeps video access private and analytics honest.",
+    title: "How TrackUp Works | Sovereign video evidence",
+    description: "Sign in with sovereign credentials, share a scoped watch link, and review provider-aware playback evidence. TrackUp keeps video access private and analytics honest.",
   },
 };
 

@@ -1,9 +1,9 @@
-﻿/**
+/**
  * /watch/[token] - Internal TrackUp viewer
  *
  * The token is resolved server-side. Invalid, expired, or revoked links are
  * not rendered, and the page stays non-indexable. Viewing requires an active
- * TrackUp session; the original viewer path is preserved through ClickUp OAuth.
+ * TrackUp session; the original viewer path is preserved through the TrackUp login redirect.
  */
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -38,13 +38,13 @@ function LoginRequired({ token }: { token: string }) {
         <p className="mt-6 text-xs uppercase tracking-[0.18em] text-violet-300/70">Private viewer</p>
         <h1 className="mt-2 text-2xl font-semibold">Sign in to watch this video</h1>
         <p className="mt-3 text-sm leading-6 text-white/50">
-          This TrackUp viewer requires an active ClickUp-connected account. After sign-in, you will return to this exact video.
+          This TrackUp viewer requires an active TrackUp account. After sign-in, you will return to this exact video.
         </p>
         <a
           href={loginUrl}
           className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-violet-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-400"
         >
-          Continue with ClickUp
+          Sign In to Watch
         </a>
         <p className="mt-4 text-xs text-white/30">TrackUp keeps the video inside this viewer and does not redirect to the provider.</p>
       </section>

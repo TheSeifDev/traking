@@ -110,7 +110,7 @@ export async function getCronExecutionSnapshot(): Promise<{
   last_latency_ms: number | null;
   last_result: "succeeded" | "failed" | "started" | null;
   current_health_status: CronHealthStatus;
-  history: Array<Pick<CronExecution, "started_at" | "finished_at" | "status" | "http_status" | "latency_ms" | "health_status" | "error_code">>;
+  history: Array<{ started_at: string; finished_at: string | null; status: "started" | "succeeded" | "failed"; http_status: number | null; latency_ms: number | null; health_status: CronHealthStatus | null; error_code: string | null }>;
 }> {
   try {
     const { data, error } = await createAdminClient()
@@ -127,9 +127,17 @@ export async function getCronExecutionSnapshot(): Promise<{
       last_success_at: data.find((row) => row.status === "succeeded")?.finished_at ?? null,
       last_failure_at: data.find((row) => row.status === "failed")?.finished_at ?? null,
       last_latency_ms: latest.latency_ms,
-      last_result: latest.status,
-      current_health_status: latest.health_status ?? "unknown",
-      history: data,
+      last_result: (latest.status as "started" | "succeeded" | "failed") ?? null,
+      current_health_status: (latest.health_status as CronHealthStatus) ?? "unknown",
+      history: data.map((row) => ({
+        started_at: row.started_at,
+        finished_at: row.finished_at,
+        status: row.status as "started" | "succeeded" | "failed",
+        http_status: row.http_status,
+        latency_ms: row.latency_ms,
+        health_status: (row.health_status as CronHealthStatus) ?? null,
+        error_code: row.error_code,
+      })),
     };
   } catch {
     return emptySnapshot();

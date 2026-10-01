@@ -167,9 +167,9 @@ export default function WorkspaceAnalyticsDashboard({
         <div className="space-y-6">
         <TrackUpSurface className="flex flex-col gap-4 bg-linear-to-br from-violet-500/12 via-white/[0.03] to-blue-500/8 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-violet-200/70"><BarChart3 size={14} /> {scopeType === "all" ? "Organization intelligence" : "Workspace intelligence"}</div>
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-violet-200/70"><BarChart3 size={14} /> {scopeType === "all" ? "Organization intelligence" : "Space intelligence"}</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">Analytics</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Workspace-level views, identified viewers, sessions, activity, and measured playback. Open a video to inspect its isolated viewers, sessions, events, and coverage.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Space-level views, identified viewers, sessions, activity, and measured playback. Open a video to inspect its isolated viewers, sessions, events, and coverage.</p>
         </div>
           <div className="flex flex-col gap-2 sm:flex-row">
           <label className="text-xs text-white/40">
@@ -215,7 +215,7 @@ export default function WorkspaceAnalyticsDashboard({
         <div className="rounded-3xl border border-dashed border-white/12 bg-white/[0.02] px-6 py-16 text-center">
           <Activity size={32} className="mx-auto text-white/20" />
           <h2 className="mt-4 text-base font-medium text-white">No activity in this view</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have an authenticated ClickUp viewer start playback. Change the video or date filter if you expected older activity.</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">Share a TrackUp viewer link and have a viewer start playback. Change the video or date filter if you expected older activity.</p>
         </div>
       ) : section === "sessions" ? (
         <ViewerAnalyticsPanel mode="sessions" spaceId={spaceId ?? undefined} organizationId={organizationId ?? undefined} videos={videos} sessions={filteredSessions} title="Session activity" description="A structured view of every persisted session, with real viewer identity, provider, timing, telemetry quality, event count, and a direct timeline action." />

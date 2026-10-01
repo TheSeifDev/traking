@@ -104,7 +104,6 @@ export async function validateSession(rawToken: string | undefined | null): Prom
           role,
           name,
           is_active,
-          clickup_user_id,
           password_changed_at
         )
       `)
@@ -165,7 +164,6 @@ export async function validateSession(rawToken: string | undefined | null): Prom
       role: profile.role as UserRole,
       is_active: profile.is_active,
       name: profile.name ?? null,
-      clickup_user_id: profile.clickup_user_id ?? null,
     };
 
     return {

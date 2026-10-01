@@ -17,7 +17,7 @@ const sections = [
   {
     title: "Identity and access",
     icon: ShieldCheck,
-    body: "TrackUp uses ClickUp OAuth for sign-in. The server provisions or loads the matching TrackUp profile, stores a signed HTTP-only session cookie, and revalidates the profile, active status, and role from the database on protected requests.",
+    body: "TrackUp uses sovereign server-side credentials and sessions for sign-in. The server validates the user's argon2id password hash, issues an HTTP-only signed session cookie, and validates the session, user active status, and RBAC role from the database on protected requests.",
   },
   {
     title: "Video and viewing records",
@@ -27,7 +27,7 @@ const sections = [
   {
     title: "Security boundaries",
     icon: LockKeyhole,
-    body: "Organization, Space, video, Watch Link, session, event, and analytics access is checked server-side. Service-role database access stays on the server. Raw provider access tokens, session capabilities, cookies, and opaque Watch Link tokens are not returned in analytics responses.",
+    body: "Organization, Space, video, Watch Link, session, event, and analytics access is checked server-side. Service-role database access stays on the server. Raw provider tokens, session secrets, cookies, and opaque Watch Link tokens are not returned in analytics responses.",
   },
 ];
 

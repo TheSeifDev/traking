@@ -10,7 +10,7 @@ const useCases = [
   },
   {
     title: "Project Updates",
-    description: "Deliver video updates alongside the ClickUp workflow your team already uses.",
+    description: "Deliver video updates alongside the collaborative workflows your team already uses.",
     icon: BriefcaseBusiness,
     accent: "amber",
   },

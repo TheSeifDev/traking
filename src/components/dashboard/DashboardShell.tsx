@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -14,7 +14,6 @@ import { getSpaceDisplayName, isSelectableChildSpace } from "@/src/lib/spaces/la
 interface DashboardShellProps {
   children: React.ReactNode;
   user: { name: string | null; email: string; role: UserRole };
-  workspace: { name: string } | null;
   spaces?: AccessibleSpace[];
   organizations?: AccessibleOrganization[];
   activeSpaceId?: string | null;
@@ -40,7 +39,6 @@ const ownerTeamNavItem = { label: "Team members", href: "/owner/admins", icon: U
 export default function DashboardShell({
   children,
   user,
-  workspace,
   spaces = [],
   organizations = [],
   activeSpaceId = null,
@@ -181,7 +179,7 @@ export default function DashboardShell({
     return pathname.startsWith(href);
   }
 
-  const organizationContext = selectedOrganization?.name ?? workspace?.name ?? null;
+  const organizationContext = selectedOrganization?.name ?? null;
   const spaceContext = selectedSpace ? getSpaceDisplayName(selectedSpace) : null;
   const displayedSpaceContext = requestedAllSpaces
     ? "All Spaces"
@@ -217,13 +215,6 @@ export default function DashboardShell({
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-white/40">Space</span>
               <p className="truncate text-sm font-medium text-white/65" title={displayedSpaceContext}>{displayedSpaceContext}</p>
             </div>
-
-            {organizations.length === 0 && !selectableSpaces.length && workspace && (
-              <div className="min-w-0 px-1 py-1">
-                <p className="mb-0.5 text-[10px] uppercase tracking-widest text-white/40">ClickUp connection</p>
-                <p className="truncate text-sm font-medium text-white/80">{workspace.name}</p>
-              </div>
-            )}
           </div>
 
           <nav className="flex-1 space-y-1 px-3 pt-4">

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * /api/videos
  *
  * GET  – List videos for the selected accessible Space.
@@ -117,7 +117,7 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
 
   try {
     const scope = await resolveMutationScopeForUser(request, user);
-    const video = await createVideo(scope.workspaceId, user.id, {
+    const video = await createVideo(scope.organizationId, user.id, {
       title,
       description,
       source_type,
@@ -133,11 +133,7 @@ export const POST = withDashboardAuth(async (request: NextRequest, user) => {
         is_all_spaces: scope.spaceId === null,
       },
     }, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
-      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    }
+  } catch {
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });

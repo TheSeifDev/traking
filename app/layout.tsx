@@ -11,12 +11,12 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   metadataBase: new URL("https://trakeup.vercel.app"),
   title: {
-    default: "TrackUp | Video intelligence for ClickUp teams",
+    default: "TrackUp | Sovereign video intelligence and playback analytics",
     template: "%s | TrackUp",
   },
-  description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+  description: "Private video sharing, viewer access, and honest playback analytics for teams.",
   applicationName: "TrackUp",
-  keywords: ["video tracking", "clickup", "playback analytics", "video sharing", "team collaboration", "watch links"],
+  keywords: ["video tracking", "playback analytics", "video sharing", "team collaboration", "watch links", "sovereign video intelligence"],
   authors: [{ name: "TrackUp" }],
   creator: "TrackUp",
   publisher: "TrackUp",
@@ -35,8 +35,8 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://trakeup.vercel.app",
     siteName: "TrackUp",
-    title: "TrackUp | Video intelligence for ClickUp teams",
-    description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+    title: "TrackUp | Sovereign video intelligence and playback analytics",
+    description: "Private video sharing, viewer access, and honest playback analytics for teams.",
     images: [
       {
         url: "/hero_img.webp",
@@ -48,8 +48,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TrackUp | Video intelligence for ClickUp teams",
-    description: "Private video sharing, viewer access, and honest playback analytics for ClickUp-connected teams.",
+    title: "TrackUp | Sovereign video intelligence and playback analytics",
+    description: "Private video sharing, viewer access, and honest playback analytics for teams.",
     images: ["/hero_img.webp"],
   },
   icons: {

@@ -1,4 +1,4 @@
-import { Check, Link2, Play, TrendingUp } from "lucide-react";
+import { Check, Link2, Play, TrendingUp, Video } from "lucide-react";
 import Link from "next/link";
 
 const FeaturedIntegration = () => {
@@ -18,24 +18,24 @@ const FeaturedIntegration = () => {
             <div>
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-[#ff4ca8] via-[#8d42ff] to-[#4d5cff]">
-                  <span className="text-xl font-bold text-white">↗</span>
+                  <Video size={20} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-bold">ClickUp</h3>
+                <h3 className="text-2xl font-bold">YouTube & Direct Media</h3>
                 <span className="rounded-md border border-[#783dff]/30 bg-[#642cff]/10 px-2 py-1 text-[9px] text-[#a875ff]">
                   Featured
                 </span>
               </div>
 
               <p className="mt-5 text-xs leading-6 text-white/55">
-                Supercharge your workflow with deep ClickUp integration.
+                Supercharge your workflow with deep playback analytics and telemetry.
               </p>
 
               <div className="mt-5 space-y-3">
                 {[
-                  "Link videos to ClickUp tasks",
-                  "Search and connect authorized tasks",
+                  "Capture play, pause, seek, and completion",
+                  "Verified watch time without estimation",
                   "Review provider-aware progress in TrackUp",
-                  "Save time and stay aligned",
+                  "Private scoped links for viewers",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-xs text-white/65">
                     <Check size={15} className="text-[#9662ff]" />
@@ -49,7 +49,7 @@ const FeaturedIntegration = () => {
                   href="/login"
                   className="flex h-10 items-center gap-2 rounded-lg bg-linear-to-r from-[#8b3dff] to-[#5d4cff] px-4 text-xs font-semibold shadow-[0_8px_25px_rgba(105,65,255,0.3)]"
                 >
-                  Connect with ClickUp
+                  Get Started
                 </Link>
 
                 <Link
@@ -68,30 +68,30 @@ const FeaturedIntegration = () => {
               <div className="grid items-center gap-3 md:grid-cols-[1fr_60px_1fr]">
               <div className="rounded-xl border border-white/10 bg-[#050817] p-5">
                 <div className="flex items-center gap-2 text-xs font-medium">
-                  <span className="text-[#ff66c4]">◆</span>
-                  ClickUp Task
+                  <span className="text-red-400">●</span>
+                  Video Source
                 </div>
 
                 <div className="mt-6 text-xs font-semibold">
-                  Watch: Python OOP - Session 04
+                  Python OOP Architecture - Session 04
                 </div>
 
                 <div className="mt-5 space-y-3 border-t border-white/7 pt-4">
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-white/40">Status</span>
-                    <span className="text-blue-400">● In Progress</span>
+                    <span className="text-white/40">Provider</span>
+                    <span className="text-red-400">YouTube</span>
                   </div>
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-white/40">Assignees</span>
-                    <span>👤👤👤 +2</span>
+                    <span className="text-white/40">Duration</span>
+                    <span>42m 18s</span>
                   </div>
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-white/40">Due Date</span>
-                    <span>May 26, 2024</span>
+                    <span className="text-white/40">Scope</span>
+                    <span>Internal Space</span>
                   </div>
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-white/40">Priority</span>
-                    <span>🚩 High</span>
+                    <span className="text-white/40">Telemetry</span>
+                    <span className="text-emerald-300">Measured</span>
                   </div>
                 </div>
               </div>
@@ -103,7 +103,7 @@ const FeaturedIntegration = () => {
               <div className="rounded-xl border border-white/10 bg-[#050817] p-5">
                 <div className="flex items-center gap-2 text-xs font-medium">
                   <TrendingUp size={14} className="text-[#8f5fff]" />
-                  TrackUp Progress
+                  TrackUp Analytics
                 </div>
 
                 <div className="mt-5 flex justify-center">
@@ -122,8 +122,8 @@ const FeaturedIntegration = () => {
                     <span>87%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-white/40">Last Watched</span>
-                    <span>May 18, 2024</span>
+                    <span className="text-white/40">Last Session</span>
+                    <span>Recently</span>
                   </div>
                 </div>
 

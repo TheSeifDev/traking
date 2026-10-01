@@ -17,7 +17,7 @@ const terms = [
   {
     title: "Authorized use",
     icon: ShieldCheck,
-    body: "Use TrackUp only with a ClickUp account and Organization or Space access that you are authorized to use. Owners and administrators are responsible for managing memberships, Watch Links, and the videos they share.",
+    body: "Use TrackUp only with user credentials and Organization or Space access that you are authorized to use. Owners and administrators are responsible for managing memberships, Watch Links, and the videos they share.",
   },
   {
     title: "Provider behavior",
@@ -43,7 +43,7 @@ export default function TermsPage() {
           <div className="mt-8 grid gap-4 lg:grid-cols-3">
             {terms.map(({ title, icon: Icon, body }) => <article key={title} className="rounded-3xl border border-white/9 bg-white/[0.03] p-5 sm:p-6"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><Icon size={19} /></div><h2 className="mt-6 text-lg font-semibold text-white">{title}</h2><p className="mt-3 text-sm leading-6 text-white/45">{body}</p></article>)}
           </div>
-          <section className="mt-5 rounded-3xl border border-white/9 bg-white/[0.025] p-6 sm:p-8"><h2 className="text-xl font-semibold text-white">Account and link responsibility</h2><div className="mt-4 space-y-3 text-sm leading-6 text-white/45"><p>Keep your ClickUp account and TrackUp session secure. Do not share private Watch Link tokens outside their intended audience, and revoke a link when access should end.</p><p>Do not attempt to bypass Organization, Space, role, session-capability, or provider restrictions. TrackUp preserves historical analytics while revoked or expired links fail closed for new access.</p><p>Questions, security reports, and implementation corrections can be sent through the project support route.</p></div><Link href="/contact" className="mt-6 inline-flex items-center rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-400/15">Contact support</Link></section>
+          <section className="mt-5 rounded-3xl border border-white/9 bg-white/[0.025] p-6 sm:p-8"><h2 className="text-xl font-semibold text-white">Account and link responsibility</h2><div className="mt-4 space-y-3 text-sm leading-6 text-white/45"><p>Keep your TrackUp account credentials and session secure. Do not share private Watch Link tokens outside their intended audience, and revoke a link when access should end.</p><p>Do not attempt to bypass Organization, Space, role, session-capability, or provider restrictions. TrackUp preserves historical analytics while revoked or expired links fail closed for new access.</p><p>Questions, security reports, and implementation corrections can be sent through the project support route.</p></div><Link href="/contact" className="mt-6 inline-flex items-center rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-400/15">Contact support</Link></section>
         </div>
       </section>
       <Footer />

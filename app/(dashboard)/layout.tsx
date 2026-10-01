@@ -1,9 +1,8 @@
-﻿/**
+/**
  * Dashboard route-group layout
  * DB-validated auth gate + dashboard shell wrapper.
  */
 import { guardAuth } from "@/src/lib/auth/guards";
-import { getPrimaryWorkspace } from "@/src/lib/clickup/workspace";
 import { resolveActiveSpaceForUser } from "@/src/lib/spaces/active-space";
 import DashboardShell from "@/src/components/dashboard/DashboardShell";
 
@@ -16,15 +15,11 @@ export default async function DashboardLayout({
   // such as /admin/users and /(dashboard)/owner/users/[userId]. Viewers can
   // enter the dashboard so they can view videos, analytics, and their profile.
   const user = await guardAuth();
-  const [workspace, activeSpace] = await Promise.all([
-    getPrimaryWorkspace(user.id),
-    resolveActiveSpaceForUser(user),
-  ]);
+  const activeSpace = await resolveActiveSpaceForUser(user);
 
   return (
     <DashboardShell
       user={{ name: user.name, email: user.email, role: user.role }}
-      workspace={workspace}
       spaces={activeSpace.spaces}
       organizations={activeSpace.organizations}
       activeSpaceId={activeSpace.space?.id ?? null}

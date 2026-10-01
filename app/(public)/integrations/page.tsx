@@ -11,10 +11,10 @@ import IntegrationsCTA from "@/src/components/integrations/IntegrationsCTA";
 
 export const metadata: Metadata = {
   title: "Integrations",
-  description: "Connect TrackUp to ClickUp for OAuth sign-in, workspace discovery, and task lookup. Bring YouTube, Vimeo, direct media URLs, Google Drive, and Telegram into one scoped library.",
+  description: "Bring YouTube, Vimeo, direct media URLs, Google Drive, and Telegram into one scoped library with honest playback telemetry.",
   openGraph: {
-    title: "TrackUp Integrations | ClickUp, YouTube, Vimeo, Drive, Telegram",
-    description: "Connect TrackUp to ClickUp for OAuth sign-in, workspace discovery, and task lookup. Bring YouTube, Vimeo, direct media URLs, Google Drive, and Telegram into one scoped library.",
+    title: "TrackUp Integrations | YouTube, Vimeo, Drive, Telegram, Direct Media",
+    description: "Bring YouTube, Vimeo, direct media URLs, Google Drive, and Telegram into one scoped library with honest playback telemetry.",
   },
 };
 

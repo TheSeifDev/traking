@@ -36,7 +36,7 @@ function contentSecurityPolicy(): string {
       "font-src 'self' data: https:",
       "media-src 'self' blob: https:",
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me",
-      "connect-src 'self' https://*.supabase.co https://api.clickup.com https://www.youtube.com https://*.youtube.com https://*.googlevideo.com https://*.vimeo.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me",
+      "connect-src 'self' https://*.supabase.co https://www.youtube.com https://*.youtube.com https://*.googlevideo.com https://*.vimeo.com https://player.vimeo.com https://drive.google.com https://t.me https://telegram.me",
     ].join("; ") + ";"
   );
 }
@@ -60,14 +60,6 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders(),
-      },
-    ];
-  },
-  async rewrites() {
-    return [
-      {
-        source: "/auth/clickup",
-        destination: "/api/auth/clickup",
       },
     ];
   },

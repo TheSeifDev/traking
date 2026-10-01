@@ -1,4 +1,3 @@
-import IntegrationVisual from "./IntegrationVisual";
 import LoginBenefits from "./LoginBenefits";
 import LoginCard from "./LoginCard";
 
@@ -39,12 +38,8 @@ const LoginHero = ({ returnPath = "/dashboard", initialError = null }: LoginHero
           and drop-off heatmaps into an independent, sovereign analytics platform.
         </p>
 
-        <div className="mt-6 grid items-start gap-5 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <div className="mt-6">
           <LoginBenefits />
-
-          <div className="hidden min-w-0 md:block">
-            <IntegrationVisual />
-          </div>
         </div>
       </section>
 

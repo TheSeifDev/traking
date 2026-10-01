@@ -1,131 +1,135 @@
-import { createAdminClient } from "@/utils/supabase/admin";
-import { determineInitialRole } from "./rbac";
-import type { AuthenticatedUser } from "@/src/types/auth";
+/**
+ * TrackUp Sovereign User Provisioning Engine
+ *
+ * Provides server-side user provisioning for platform owners.
+ * Enforces username/email uniqueness, password policy, and role boundaries.
+ */
 
-export interface ClickUpUserProfile {
-  id: number | string;
+import { createAdminClient } from "@/utils/supabase/admin";
+import { hashPassword, validatePasswordPolicy } from "@/src/lib/auth/password";
+import { isValidManagedRole, type AuthenticatedUser, type ManagedRole } from "@/src/types/auth";
+
+export interface CreateTrackUpUserInput {
+  username: string;
   email: string;
-  username?: string | null;
-  profilePicture?: string | null;
+  password: string;
+  role: ManagedRole;
+  name?: string | null;
 }
 
 export type ProvisioningResult =
-  | { success: true; user: AuthenticatedUser; isNewUser: boolean }
-  | { success: false; error: "inactive_account" | "invalid_identity" | "database_error" };
+  | { success: true; user: AuthenticatedUser }
+  | {
+      success: false;
+      error:
+        | "invalid_username"
+        | "invalid_email"
+        | "invalid_role"
+        | "password_policy_violation"
+        | "username_taken"
+        | "email_taken"
+        | "database_error";
+      message?: string;
+    };
 
-/**
- * Provisions or synchronizes a user profile upon successful ClickUp OAuth authentication.
- * 
- * Rules:
- * 1. For a new user, checks if the email matches TRACKUP_OWNER_EMAIL server-side.
- *    If matching -> assigned 'owner'. Otherwise -> assigned 'viewer'.
- * 2. For an existing user, preserves their existing role (admin, owner, viewer).
- *    Never overwrites or downgrades existing roles during authentication.
- * 3. If is_active is false, rejects login without granting access.
- * 4. Never exposes internal errors or secrets.
- */
-export async function provisionClickUpUser(
-  clickupUser: ClickUpUserProfile
-): Promise<ProvisioningResult> {
-  if (!clickupUser || !clickupUser.email || typeof clickupUser.email !== "string") {
-    return { success: false, error: "invalid_identity" };
+export async function createTrackUpUser(input: CreateTrackUpUserInput): Promise<ProvisioningResult> {
+  const { username, email, password, role, name } = input;
+
+  if (typeof username !== "string" || !/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) {
+    return {
+      success: false,
+      error: "invalid_username",
+      message: "Username must be 3-30 characters containing only letters, numbers, and underscores.",
+    };
+  }
+  const cleanUsername = username.trim().toLowerCase();
+
+  if (typeof email !== "string" || !email.includes("@") || email.trim().length > 255) {
+    return {
+      success: false,
+      error: "invalid_email",
+      message: "A valid email address is required.",
+    };
+  }
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!isValidManagedRole(role)) {
+    return {
+      success: false,
+      error: "invalid_role",
+      message: "Role must be 'admin' or 'viewer'.",
+    };
   }
 
-  const normalizedEmail = clickupUser.email.trim().toLowerCase();
-  const clickupUserId = String(clickupUser.id);
-  const displayName = clickupUser.username?.trim() || null;
+  const policy = validatePasswordPolicy(password, cleanUsername, cleanEmail);
+  if (!policy.valid || typeof password !== "string") {
+    return {
+      success: false,
+      error: "password_policy_violation",
+      message: policy.error || "Password does not meet policy requirements.",
+    };
+  }
+
+  const cleanName = typeof name === "string" && name.trim() ? name.trim().slice(0, 100) : null;
 
   try {
     const supabase = createAdminClient();
 
-    // 1. Query for existing profile by clickup_user_id or email
-    const { data: existingProfile, error: queryError } = await supabase
+    const { data: existingUser } = await supabase
       .from("profiles")
-      .select("*")
-      .or(`clickup_user_id.eq.${clickupUserId},email.eq.${normalizedEmail}`)
+      .select("id, username, email")
+      .or(`username.ilike.${cleanUsername},email.ilike.${cleanEmail}`)
       .maybeSingle();
 
-    if (queryError) {
-      console.error("Database error while checking user profile");
-      return { success: false, error: "database_error" };
+    if (existingUser) {
+      if (existingUser.username && existingUser.username.toLowerCase() === cleanUsername) {
+        return { success: false, error: "username_taken", message: "This username is already taken." };
+      }
+      return { success: false, error: "email_taken", message: "An account with this email already exists." };
     }
 
-    // 2. Handle Existing User
-    if (existingProfile) {
-      // Check active status
-      if (!existingProfile.is_active) {
-        return { success: false, error: "inactive_account" };
-      }
+    const passwordHash = await hashPassword(password);
+    const nowIso = new Date().toISOString();
 
-      // If clickup_user_id or name was missing/updated, keep them synced,
-      // but CRITICALLY: preserve the existing role untouched.
-      const shouldUpdateDetails =
-        !existingProfile.clickup_user_id ||
-        (displayName && existingProfile.name !== displayName);
-
-      if (shouldUpdateDetails) {
-        await supabase
-          .from("profiles")
-          .update({
-            clickup_user_id: clickupUserId,
-            name: displayName || existingProfile.name,
-          })
-          .eq("id", existingProfile.id);
-      }
-
-      const authenticatedUser: AuthenticatedUser = {
-        id: existingProfile.id,
-        email: existingProfile.email,
-        role: existingProfile.role, // Preserved untouched
-        is_active: existingProfile.is_active,
-        name: displayName || existingProfile.name,
-        clickup_user_id: clickupUserId,
-      };
-
-      return {
-        success: true,
-        user: authenticatedUser,
-        isNewUser: false,
-      };
-    }
-
-    // 3. Handle New User Provisioning
-    // Determine role server-side: 'owner' if email matches TRACKUP_OWNER_EMAIL, else 'viewer'
-    const assignedRole = determineInitialRole(normalizedEmail);
-
-    const { data: newProfile, error: insertError } = await supabase
+    const { data: created, error: insertError } = await supabase
       .from("profiles")
       .insert({
-        clickup_user_id: clickupUserId,
-        name: displayName,
-        email: normalizedEmail,
-        role: assignedRole,
+        username: cleanUsername,
+        email: cleanEmail,
+        name: cleanName,
+        password_hash: passwordHash,
+        role,
         is_active: true,
+        must_change_password: false,
+        password_changed_at: nowIso,
+        created_at: nowIso,
+        updated_at: nowIso,
       })
-      .select()
+      .select("id, username, email, name, role, is_active")
       .single();
 
-    if (insertError || !newProfile) {
-      console.error("Database error while provisioning new user profile");
-      return { success: false, error: "database_error" };
+    if (insertError || !created) {
+      return { success: false, error: "database_error", message: insertError?.message };
     }
 
     const authenticatedUser: AuthenticatedUser = {
-      id: newProfile.id,
-      email: newProfile.email,
-      role: newProfile.role,
-      is_active: newProfile.is_active,
-      name: newProfile.name,
-      clickup_user_id: newProfile.clickup_user_id,
+      id: created.id,
+      username: created.username,
+      email: created.email,
+      name: created.name,
+      role: created.role,
+      is_active: created.is_active,
     };
 
     return {
       success: true,
       user: authenticatedUser,
-      isNewUser: true,
     };
-  } catch {
-    console.error("Unexpected error during user provisioning");
-    return { success: false, error: "database_error" };
+  } catch (err) {
+    return {
+      success: false,
+      error: "database_error",
+      message: err instanceof Error ? err.message : "Unknown database error",
+    };
   }
 }

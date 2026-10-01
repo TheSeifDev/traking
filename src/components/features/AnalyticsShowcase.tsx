@@ -4,7 +4,7 @@ const navItems = [
   { label: "Dashboard", icon: Gauge },
   { label: "Videos", icon: FileVideo },
   { label: "Analytics", icon: BarChart3, active: true },
-  { label: "ClickUp", icon: Layers3 },
+  { label: "Spaces", icon: Layers3 },
   { label: "Team", icon: UsersRound },
   { label: "Settings", icon: Clock3 },
 ];

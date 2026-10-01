@@ -1,4 +1,4 @@
-﻿/**
+/**
  * /api/videos/[id]
  *
  * Space-aware private video API. The selector is only a lookup hint; every
@@ -19,7 +19,7 @@ export const GET = withDashboardAuth(async (request: NextRequest, user, context)
   try {
     const access = await resolveSpaceForUser(request, user);
     const scope = spaceDataScope(access.space);
-    if (!scope) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    if (!scope) return NextResponse.json({ error: "space_required" }, { status: 400 });
     const video = await getVideo(id, scope);
     if (!video) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ video, space: { id: access.space.id, name: access.space.name } });
@@ -55,8 +55,7 @@ export const PUT = withDashboardAuth(async (request: NextRequest, user, context)
 
   try {
     const access = await resolveSpaceAdminForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const video = await updateVideo(id, access.space.clickup_workspace_id, updateData, access.space.id);
+    const video = await updateVideo(id, access.space.organization_id, updateData, access.space.id);
     if (!video) return NextResponse.json({ error: "not_found_or_update_failed" }, { status: 404 });
     return NextResponse.json({ video });
   } catch {
@@ -69,8 +68,7 @@ export const DELETE = withDashboardAuth(async (request: NextRequest, user, conte
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
     const access = await resolveSpaceAdminForUser(request, user);
-    if (!access.space.clickup_workspace_id) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    const deleted = await deleteVideo(id, access.space.clickup_workspace_id, access.space.id);
+    const deleted = await deleteVideo(id, access.space.organization_id, access.space.id);
     if (!deleted) return NextResponse.json({ error: "not_found_or_delete_failed" }, { status: 404 });
     return NextResponse.json({ deleted: true });
   } catch {

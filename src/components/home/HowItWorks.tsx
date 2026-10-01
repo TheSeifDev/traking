@@ -1,19 +1,18 @@
-import { BarChart3, Link2, Play, type LucideIcon } from "lucide-react";
-import { ClickUpIcon } from "./ClickUpIntegration";
+import { BarChart3, Link2, LogIn, Play, type LucideIcon } from "lucide-react";
 
 type Step = {
   number: string;
   title: string;
   description: string;
-  icon: LucideIcon | "clickup";
+  icon: LucideIcon;
 };
 
 const steps: Step[] = [
   {
     number: "1",
-    title: "Login with ClickUp",
-    description: "Use your existing ClickUp account to enter your workspace.",
-    icon: "clickup",
+    title: "Sign In Securely",
+    description: "Authenticate with your TrackUp credentials to access your spaces.",
+    icon: LogIn,
   },
   {
     number: "2",
@@ -35,12 +34,6 @@ const steps: Step[] = [
   },
 ];
 
-function StepIcon({ icon }: { icon: Step["icon"] }) {
-  if (icon === "clickup") return <ClickUpIcon size={25} />;
-  const Icon = icon;
-  return <Icon size={24} strokeWidth={1.8} />;
-}
-
 export default function HowItWorks() {
   return (
     <section id="how-it-works" className="relative px-5 pb-10 pt-10 sm:px-6 sm:pb-14 sm:pt-14 lg:px-10 lg:pb-20">
@@ -57,18 +50,21 @@ export default function HowItWorks() {
 
         <div className="relative grid gap-7 md:grid-cols-4 md:gap-4">
           <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-7 hidden border-t border-dashed border-violet-400/35 md:block" />
-          {steps.map((step) => (
-            <article key={step.number} className="relative z-10 flex flex-col items-center text-center">
-              <div className="relative flex size-14 items-center justify-center rounded-full border border-violet-400/45 bg-[#0b1030] text-violet-200 shadow-[0_0_28px_rgba(105,65,255,0.2)]">
-                <StepIcon icon={step.icon} />
-                <span className="absolute -right-1 -top-3 flex size-6 items-center justify-center rounded-full border border-violet-400/35 bg-[#171052] text-[10px] font-semibold text-white">
-                  {step.number}
-                </span>
-              </div>
-              <h3 className="mt-4 text-[12px] font-semibold text-white">{step.title}</h3>
-              <p className="mt-2 max-w-44 text-[10px] leading-4 text-white/45">{step.description}</p>
-            </article>
-          ))}
+          {steps.map((step) => {
+            const Icon = step.icon;
+            return (
+              <article key={step.number} className="relative z-10 flex flex-col items-center text-center">
+                <div className="relative flex size-14 items-center justify-center rounded-full border border-violet-400/45 bg-[#0b1030] text-violet-200 shadow-[0_0_28px_rgba(105,65,255,0.2)]">
+                  <Icon size={24} strokeWidth={1.8} />
+                  <span className="absolute -right-1 -top-3 flex size-6 items-center justify-center rounded-full border border-violet-400/35 bg-[#171052] text-[10px] font-semibold text-white">
+                    {step.number}
+                  </span>
+                </div>
+                <h3 className="mt-4 text-[12px] font-semibold text-white">{step.title}</h3>
+                <p className="mt-2 max-w-44 text-[10px] leading-4 text-white/45">{step.description}</p>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

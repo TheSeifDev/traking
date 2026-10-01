@@ -109,7 +109,6 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
       role: profile.role,
       is_active: profile.is_active,
       name: profile.name,
-      clickup_user_id: profile.clickup_user_id,
     };
   } catch {
     return null;

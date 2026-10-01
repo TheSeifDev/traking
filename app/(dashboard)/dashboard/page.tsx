@@ -1,4 +1,4 @@
-﻿import { Link2, Space as SpaceIcon, Video as VideoIcon } from "lucide-react";
+import { Link2, Space as SpaceIcon, Video as VideoIcon } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { guardAuth } from "@/src/lib/auth/guards";
@@ -82,7 +82,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 }
 
 function SetupState() {
-  return <div className="flex min-h-full items-center justify-center bg-[#08081f] p-5 sm:p-8"><section className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl shadow-black/20 sm:p-10"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-300"><VideoIcon size={26} /></div><p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/70">Space setup</p><h1 className="mt-3 text-2xl font-semibold text-white">Connect a Space and ClickUp workspace</h1><p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/50">TrackUp scopes videos, links, viewers, and analytics to a Space membership. Create or open a Space before adding resources.</p><Link href="/spaces" className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"><Link2 size={16} />Open Spaces</Link></section></div>;
+  return <div className="flex min-h-full items-center justify-center bg-[#08081f] p-5 sm:p-8"><section className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl shadow-black/20 sm:p-10"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-300"><VideoIcon size={26} /></div><p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/70">Space setup</p><h1 className="mt-3 text-2xl font-semibold text-white">Select or create a Space</h1><p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/50">TrackUp scopes videos, links, viewers, and analytics to a Space membership. Create or open a Space before adding resources.</p><Link href="/spaces" className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"><Link2 size={16} />Open Spaces</Link></section></div>;
 }
 
 function MultipleSpacesState() {

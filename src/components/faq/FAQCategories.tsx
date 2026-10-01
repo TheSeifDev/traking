@@ -1,12 +1,12 @@
 "use client";
 
-import { BarChart3, CreditCard, Grid2X2, Play, ShieldCheck, Sparkles } from "lucide-react";
+import { BarChart3, CreditCard, Grid2X2, Play, ShieldCheck, UsersRound } from "lucide-react";
 
 const categories = [
   { label: "All Questions", icon: Grid2X2 },
   { label: "Getting Started", icon: Play },
   { label: "Tracking", icon: BarChart3 },
-  { label: "ClickUp Integration", icon: Sparkles },
+  { label: "Team & Spaces", icon: UsersRound },
   { label: "Security & Privacy", icon: ShieldCheck },
   { label: "Billing", icon: CreditCard },
 ];

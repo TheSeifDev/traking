@@ -93,7 +93,7 @@ export default async function OrganizationAnalyticsPage({ params }: { params: Pr
         <header className="border-b border-white/8 pb-7">
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-300/70">Organization analytics</p>
           <h1 className="mt-3 text-3xl font-semibold text-white">{access.organization.name}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Organization-level totals across the Spaces visible to this account. ClickUp-unlinked Spaces are not presented as measured analytics.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">Organization-level totals across the Spaces visible to this account.</p>
         </header>
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label="Views" value={analytics.total_views} icon={Eye} />
@@ -147,7 +147,7 @@ export default async function OrganizationAnalyticsPage({ params }: { params: Pr
             {spaces.map((space) => (
               <Link key={space.id} href={`/analytics?space_id=${encodeURIComponent(space.id)}`} className="rounded-2xl border border-white/8 bg-black/10 p-4 transition hover:border-violet-300/30">
                 <p className="font-medium text-white">{space.name}</p>
-                <p className="mt-1 text-xs text-white/40">{space.clickup_workspace_id ? "Analytics available when persisted" : "ClickUp link optional; provider analytics not measured"}</p>
+                <p className="mt-1 text-xs text-white/40">Analytics available when telemetry is recorded</p>
               </Link>
             ))}
           </div>

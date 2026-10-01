@@ -7,10 +7,10 @@ import Footer from "@/src/components/home/Footer";
 
 export const metadata: Metadata = {
   title: "FAQ",
-  description: "Common questions about TrackUp's provider-aware tracking, ClickUp integration, scoped analytics, organization and Space structure, and security boundaries.",
+  description: "Common questions about TrackUp's provider-aware tracking, sovereign authentication, scoped analytics, organization and Space structure, and security boundaries.",
   openGraph: {
     title: "TrackUp FAQ | Provider-aware tracking questions answered",
-    description: "Common questions about TrackUp's provider-aware tracking, ClickUp integration, scoped analytics, organization and Space structure, and security boundaries.",
+    description: "Common questions about TrackUp's provider-aware tracking, sovereign authentication, scoped analytics, organization and Space structure, and security boundaries.",
   },
 };
 

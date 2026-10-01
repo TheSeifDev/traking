@@ -21,17 +21,8 @@ export function isValidSourceType(v: unknown): v is VideoSourceType {
   return typeof v === "string" && (VIDEO_SOURCE_TYPES as readonly string[]).includes(v);
 }
 
-export interface Workspace {
-  id: string;
-  clickup_team_id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Video {
   id: string;
-  workspace_id: string | null;
   organization_id?: string | null;
   space_id?: string | null;
   created_by: string | null;
@@ -43,7 +34,6 @@ export interface Video {
   created_at: string;
   updated_at: string;
   // Joined fields (optional – only present when explicitly fetched)
-  clickup_tasks?: VideoClickUpTask[];
   watch_links?: WatchLink[];
   view_count?: number;
   unique_viewer_count?: number | null;
@@ -51,14 +41,6 @@ export interface Video {
   avg_watch_time_seconds?: number | null;
   playback_metrics_available?: boolean;
   avg_completion?: number | null;
-}
-
-export interface VideoClickUpTask {
-  id: string;
-  video_id: string;
-  clickup_task_id: string;
-  clickup_task_name: string | null;
-  created_at: string;
 }
 
 export interface WatchLink {

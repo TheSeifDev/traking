@@ -64,7 +64,6 @@ export type ControlRoomData = {
     provider_errors: number;
     cron_execution_status: "observed" | "not_observed";
     database_health: "healthy" | "degraded" | "unknown";
-    clickup_sync_health: "healthy" | "degraded" | "unknown";
   };
   comparison: {
     previous_sessions: number | null;
@@ -77,10 +76,6 @@ export type ControlRoomData = {
     name: string;
     slug: string;
     status: "active" | "archived";
-    clickup_workspace_id: string | null;
-    clickup_sync_status: "never" | "running" | "success" | "partial" | "failed";
-    clickup_last_synced_at: string | null;
-    clickup_sync_error: string | null;
     created_at: string;
     member_count: number;
     active_member_count: number;
@@ -101,11 +96,6 @@ export type ControlRoomData = {
     organization_id: string;
     organization_name: string;
     status: "active" | "archived";
-    clickup_workspace_id: string | null;
-    clickup_space_id: string | null;
-    clickup_sync_status: "never" | "running" | "success" | "partial" | "failed";
-    clickup_last_synced_at: string | null;
-    clickup_sync_error: string | null;
     created_at: string;
     member_count: number;
     active_member_count: number;
@@ -122,7 +112,6 @@ export type ControlRoomData = {
     id: string;
     name: string | null;
     email: string;
-    clickup_user_id: string | null;
     role: ProfileRow["role"];
     is_active: boolean;
     created_at: string;
@@ -250,10 +239,10 @@ export async function getControlRoomData(input: { range?: string | null; query?:
   const supabase = createAdminClient();
 
   const [organizationsResult, spacesResult, profilesResult, videosResult, linksResult, sessionsResult, previousSessionsResult, eventsResult, logsResult, organizationMembershipsResult, spaceMembershipsResult, cronSnapshot] = await Promise.all([
-    supabase.from("organizations").select("id, name, slug, clickup_workspace_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_ORGANIZATIONS),
-    supabase.from("spaces").select("id, organization_id, name, slug, clickup_workspace_id, clickup_space_id, clickup_sync_status, clickup_last_synced_at, clickup_sync_error, created_by, settings, archived_at, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_SPACES),
-    supabase.from("profiles").select("id, clickup_user_id, name, email, role, is_active, created_at, last_seen_at").order("created_at", { ascending: true }).limit(MAX_USERS),
-    supabase.from("videos").select("id, workspace_id, space_id, created_by, title, description, source_type, source_url, duration, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_VIDEOS),
+    supabase.from("organizations").select("id, name, slug, created_by, settings, archived_at, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_ORGANIZATIONS),
+    supabase.from("spaces").select("id, organization_id, name, slug, created_by, settings, archived_at, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_SPACES),
+    supabase.from("profiles").select("id, name, email, role, is_active, created_at, last_seen_at").order("created_at", { ascending: true }).limit(MAX_USERS),
+    supabase.from("videos").select("id, organization_id, space_id, created_by, title, description, source_type, source_url, duration, created_at, updated_at").order("created_at", { ascending: true }).limit(MAX_VIDEOS),
     supabase.from("watch_links").select("id, video_id, created_by, expires_at, revoked_at, created_at").order("created_at", { ascending: false }).limit(MAX_LINKS),
     supabase.from("watch_sessions").select("id, watch_link_id, viewer_profile_id, started_at, last_seen_at, ended_at, watch_time_seconds, completion_percentage").gte("started_at", startIso).lt("started_at", endIso).order("started_at", { ascending: false }).limit(MAX_SESSIONS),
     previousStartIso ? supabase.from("watch_sessions").select("id, watch_link_id, viewer_profile_id, started_at, last_seen_at, ended_at, watch_time_seconds, completion_percentage").gte("started_at", previousStartIso).lt("started_at", startIso).order("started_at", { ascending: false }).limit(MAX_SESSIONS) : Promise.resolve({ data: [], error: null }),
@@ -358,8 +347,8 @@ export async function getControlRoomData(input: { range?: string | null; query?:
     const userSpaces = new Set(spaceMemberships.filter((membership) => membership.profile_id === profile.id && membership.status === "active").map((membership) => membership.space_id));
     const measuredUserSessions = userSessions.filter(isMeasuredSession);
     const measuredCompletions = measuredUserSessions.map((session) => session.completion_percentage).filter((value): value is number => typeof value === "number");
-    return { id: profile.id, name: profile.name, email: profile.email, clickup_user_id: profile.clickup_user_id, role: profile.role, is_active: profile.is_active, created_at: profile.created_at, last_seen_at: profile.last_seen_at, organization_count: userOrgs.size, space_count: userSpaces.size, sessions: userSessions.length, videos_watched: userVideos.size, watch_time_seconds: measuredUserSessions.length > 0 ? Math.round(measuredUserSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: measuredCompletions.length > 0 ? Math.round(measuredCompletions.reduce((sum, value) => sum + value, 0) / measuredCompletions.length) : null, last_watched_at: userSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
-  }).filter((user) => !queryText || [user.name, user.email, user.clickup_user_id].some((value) => value?.toLocaleLowerCase().includes(queryText)));
+    return { id: profile.id, name: profile.name, email: profile.email, role: profile.role, is_active: profile.is_active, created_at: profile.created_at, last_seen_at: profile.last_seen_at, organization_count: userOrgs.size, space_count: userSpaces.size, sessions: userSessions.length, videos_watched: userVideos.size, watch_time_seconds: measuredUserSessions.length > 0 ? Math.round(measuredUserSessions.reduce((sum, session) => sum + (session.watch_time_seconds ?? 0), 0)) : null, average_completion_percentage: measuredCompletions.length > 0 ? Math.round(measuredCompletions.reduce((sum, value) => sum + value, 0) / measuredCompletions.length) : null, last_watched_at: userSessions.slice().sort((left, right) => right.last_seen_at.localeCompare(left.last_seen_at))[0]?.last_seen_at ?? null };
+  }).filter((user) => !queryText || [user.name, user.email].some((value) => value?.toLocaleLowerCase().includes(queryText)));
   const videoViews = scopedVideos.map((video) => {
     const space = video.space_id ? spaceById.get(video.space_id) : null;
     const org = space ? organizationById.get(space.organization_id) : null;
@@ -377,8 +366,8 @@ export async function getControlRoomData(input: { range?: string | null; query?:
   }).filter((log) => !queryText || [log.action, log.organization_name, log.space_name, log.resource_label, log.session_id].some((value) => value?.toLocaleLowerCase().includes(queryText)));
   const scopedOrgMemberships = orgMemberships.filter((membership) => scopedOrganizationIds.has(membership.organization_id));
   const scopedSpaceMemberships = spaceMemberships.filter((membership) => scopedSpaceIds.has(membership.space_id));
-  const scopedOrganizations = organizations.filter((organization) => scopedOrganizationIds.has(organization.id) && (!organizationFilterActive || organization.id === visibleOrg?.id)).map((organization) => { const stats = orgStats.get(organization.id); return { id: organization.id, name: organization.name, slug: organization.slug, status: organization.archived_at ? "archived" as const : "active" as const, clickup_workspace_id: organization.clickup_workspace_id, clickup_sync_status: organization.clickup_sync_status, clickup_last_synced_at: organization.clickup_last_synced_at, clickup_sync_error: organization.clickup_sync_error, created_at: organization.created_at, member_count: stats?.member_count ?? 0, active_member_count: stats?.active_member_count ?? 0, admin_count: stats?.admin_count ?? 0, space_count: stats?.space_count ?? 0, active_space_count: stats?.active_space_count ?? 0, video_count: stats?.video_count ?? 0, active_watch_links: stats?.active_watch_links ?? 0, sessions: stats?.sessions ?? 0, measured_sessions: stats?.measured_sessions ?? 0, views: stats?.views ?? 0, watch_time_seconds: stats?.measured ? Math.round(stats.watch) : null, last_activity_at: stats?.last ?? null }; });
-  const scopedSpaces = scopedSpaceRows.filter((space) => !queryText || [space.name, space.slug, organizationById.get(space.organization_id)?.name].some((value) => value?.toLocaleLowerCase().includes(queryText))).map((space) => { const stats = spaceStats.get(space.id); const organization = organizationById.get(space.organization_id); return { id: space.id, name: space.name, slug: space.slug, organization_id: space.organization_id, organization_name: organization?.name ?? "Unknown Organization", status: space.archived_at ? "archived" as const : "active" as const, clickup_workspace_id: space.clickup_workspace_id, clickup_space_id: space.clickup_space_id, clickup_sync_status: space.clickup_sync_status, clickup_last_synced_at: space.clickup_last_synced_at, clickup_sync_error: space.clickup_sync_error, created_at: space.created_at, member_count: stats?.member_count ?? 0, active_member_count: stats?.active_member_count ?? 0, admin_count: stats?.admin_count ?? 0, video_count: stats?.video_count ?? 0, active_watch_links: stats?.active_watch_links ?? 0, sessions: stats?.sessions ?? 0, unique_viewers: stats?.viewers.size ?? 0, watch_time_seconds: stats?.measured ? Math.round(stats.watch) : null, average_completion_percentage: stats && stats.completions.length > 0 ? Math.round(stats.completions.reduce((sum, value) => sum + value, 0) / stats.completions.length) : null, latest_activity_at: stats?.last ?? null }; });
+  const scopedOrganizations = organizations.filter((organization) => scopedOrganizationIds.has(organization.id) && (!organizationFilterActive || organization.id === visibleOrg?.id)).map((organization) => { const stats = orgStats.get(organization.id); return { id: organization.id, name: organization.name, slug: organization.slug, status: organization.archived_at ? "archived" as const : "active" as const, created_at: organization.created_at, member_count: stats?.member_count ?? 0, active_member_count: stats?.active_member_count ?? 0, admin_count: stats?.admin_count ?? 0, space_count: stats?.space_count ?? 0, active_space_count: stats?.active_space_count ?? 0, video_count: stats?.video_count ?? 0, active_watch_links: stats?.active_watch_links ?? 0, sessions: stats?.sessions ?? 0, measured_sessions: stats?.measured_sessions ?? 0, views: stats?.views ?? 0, watch_time_seconds: stats?.measured ? Math.round(stats.watch) : null, last_activity_at: stats?.last ?? null }; });
+  const scopedSpaces = scopedSpaceRows.filter((space) => !queryText || [space.name, space.slug, organizationById.get(space.organization_id)?.name].some((value) => value?.toLocaleLowerCase().includes(queryText))).map((space) => { const stats = spaceStats.get(space.id); const organization = organizationById.get(space.organization_id); return { id: space.id, name: space.name, slug: space.slug, organization_id: space.organization_id, organization_name: organization?.name ?? "Unknown Organization", status: space.archived_at ? "archived" as const : "active" as const, created_at: space.created_at, member_count: stats?.member_count ?? 0, active_member_count: stats?.active_member_count ?? 0, admin_count: stats?.admin_count ?? 0, video_count: stats?.video_count ?? 0, active_watch_links: stats?.active_watch_links ?? 0, sessions: stats?.sessions ?? 0, unique_viewers: stats?.viewers.size ?? 0, watch_time_seconds: stats?.measured ? Math.round(stats.watch) : null, average_completion_percentage: stats && stats.completions.length > 0 ? Math.round(stats.completions.reduce((sum, value) => sum + value, 0) / stats.completions.length) : null, latest_activity_at: stats?.last ?? null }; });
   const scopedUsers = users.filter((user) => {
     if (!organizationFilterActive && !spaceFilterActive) return true;
     return scopedOrgMemberships.some((membership) => membership.profile_id === user.id && membership.status === "active")
@@ -394,8 +383,6 @@ export async function getControlRoomData(input: { range?: string | null; query?:
   const scopedTrackingEvents = trackingEvents.filter((event) => scopedSessionIds.has(event.session_id));
   const previousViews = scopedPreviousSessions.length;
   const percentageDelta = (current: number, previous: number): number | null => previous === 0 ? (current === 0 ? 0 : null) : Math.round(((current - previous) / previous) * 100);
-  const clickupStatuses = scopedOrganizations.map((organization) => organization.clickup_sync_status);
-  const clickupSyncHealth: "healthy" | "degraded" | "unknown" = clickupStatuses.some((status) => status === "failed" || status === "partial") ? "degraded" : clickupStatuses.some((status) => status === "success") ? "healthy" : "unknown";
   const measuredWatchTimes = measuredSessions.map((session) => session.watch_time_seconds ?? 0);
   const averageWatchTime = measuredWatchTimes.length > 0 ? Math.round(measuredWatchTimes.reduce((sum, value) => sum + value, 0) / measuredWatchTimes.length) : null;
   const jobs = { name: CRON_JOB_NAME, schedule: CRON_SCHEDULE, configured: true, ...cronSnapshot };
@@ -431,7 +418,6 @@ export async function getControlRoomData(input: { range?: string | null; query?:
       provider_errors: providerErrors,
       cron_execution_status: jobs.execution_status,
       database_health: cronSnapshot.current_health_status,
-      clickup_sync_health: clickupSyncHealth,
     },
     comparison: { previous_sessions: previousStartIso ? previousViews : null, previous_views: previousStartIso ? previousViews : null, sessions_delta_percentage: previousStartIso ? percentageDelta(scopedSessions.length, previousViews) : null, views_delta_percentage: previousStartIso ? percentageDelta(scopedSessions.length, previousViews) : null },
     organizations: scopedOrganizations,

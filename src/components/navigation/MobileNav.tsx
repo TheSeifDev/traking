@@ -62,7 +62,6 @@ const MobileNav = () => {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-
           {/* Menu */}
           <button
             type="button"
@@ -141,7 +140,7 @@ const MobileNav = () => {
               ${open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}
             `}
           >
-            Continue with ClickUp
+            Sign In
           </Link>
         </div>
       </div>

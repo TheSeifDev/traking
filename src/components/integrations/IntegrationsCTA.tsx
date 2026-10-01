@@ -7,7 +7,7 @@ const IntegrationsCTA = () => {
         <div>
           <h2 className="text-base font-semibold">Ready to connect your tools?</h2>
           <p className="mt-2 text-xs text-white/50">
-            Connect an authorized ClickUp workspace and keep provider-aware video
+            Connect your video providers and keep provider-aware video
             activity inside TrackUp.
           </p>
         </div>
@@ -16,7 +16,7 @@ const IntegrationsCTA = () => {
           href="/login"
           className="flex h-11 shrink-0 items-center gap-2 rounded-lg bg-linear-to-r from-[#8b3dff] to-[#5d4cff] px-6 text-xs font-semibold shadow-[0_8px_25px_rgba(105,65,255,0.3)] transition hover:-translate-y-px"
         >
-          Continue with ClickUp
+          Sign In to TrackUp
         </Link>
       </div>
     </section>

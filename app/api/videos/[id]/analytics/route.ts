@@ -1,4 +1,4 @@
-﻿/**
+/**
  * /api/videos/[id]/analytics
  * GET - Fetch aggregated analytics for a video
  */
@@ -16,7 +16,7 @@ export const GET = withDashboardAuth(async (request: NextRequest, user, context)
   try {
     const access = await resolveSpaceAdminForUser(request, user);
     const scope = spaceDataScope(access.space);
-    if (!scope) return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
+    if (!scope) return NextResponse.json({ error: "space_required" }, { status: 400 });
     const analytics = await getVideoAnalytics(id, scope);
     if (!analytics) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ analytics, space: { id: access.space.id, name: access.space.name } });

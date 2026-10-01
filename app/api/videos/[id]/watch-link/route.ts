@@ -1,4 +1,4 @@
-﻿/**
+/**
  * /api/videos/[id]/watch-link
  * POST - Generate a watch link for a video in the selected Space
  * DELETE - Revoke a watch link for a video in the selected Space
@@ -15,7 +15,7 @@ export const POST = withDashboardAuth(async (request: NextRequest, user, context
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
   try {
     const scope = await resolveMutationScopeForUser(request, user);
-    const link = await generateWatchLink(id, scope.workspaceId, user.id, scope.spaceId ?? undefined);
+    const link = await generateWatchLink(id, scope.organizationId, user.id, scope.spaceId ?? undefined);
     if (!link) return NextResponse.json({ error: "generation_failed" }, { status: 500 });
     return NextResponse.json({
       watch_link: link,
@@ -25,11 +25,7 @@ export const POST = withDashboardAuth(async (request: NextRequest, user, context
         is_all_spaces: scope.spaceId === null,
       },
     }, { status: link.reused ? 200 : 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
-      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    }
+  } catch {
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });
@@ -48,14 +44,10 @@ export const DELETE = withDashboardAuth(async (request: NextRequest, user, conte
   if (typeof linkId !== "string" || !linkId.trim()) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   try {
     const scope = await resolveMutationScopeForUser(request, user);
-    const revoked = await revokeWatchLink(linkId.trim(), id, scope.workspaceId, scope.spaceId ?? undefined);
+    const revoked = await revokeWatchLink(linkId.trim(), id, scope.organizationId, scope.spaceId ?? undefined);
     if (!revoked) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ revoked: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message === "Space not connected to ClickUp" || message === "Organization not connected to ClickUp") {
-      return NextResponse.json({ error: "space_not_connected" }, { status: 422 });
-    }
+  } catch {
     return NextResponse.json({ error: "forbidden_or_space_required" }, { status: 403 });
   }
 });

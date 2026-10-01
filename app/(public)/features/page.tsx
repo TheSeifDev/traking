@@ -8,10 +8,10 @@ import AnalyticsShowcase from "@/src/components/features/AnalyticsShowcase";
 
 export const metadata: Metadata = {
   title: "Features",
-  description: "Provider-aware video tracking, ClickUp-connected access, scoped analytics, watch-link management, and team permissions for ClickUp teams.",
+  description: "Provider-aware video tracking, sovereign team access, scoped analytics, watch-link management, and team permissions for organizations.",
   openGraph: {
-    title: "TrackUp Features | Provider-aware video tracking for ClickUp teams",
-    description: "Provider-aware video tracking, ClickUp-connected access, scoped analytics, watch-link management, and team permissions for ClickUp teams.",
+    title: "TrackUp Features | Sovereign video tracking and analytics",
+    description: "Provider-aware video tracking, sovereign team access, scoped analytics, watch-link management, and team permissions for organizations.",
   },
 };
 
@@ -25,7 +25,7 @@ export default function FeaturesPage() {
         <div className="relative mx-auto max-w-4xl text-center">
           <span className="inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-200">Features</span>
           <h1 className="mt-6 text-4xl font-bold leading-[1.05] tracking-[-0.055em] text-white sm:text-6xl lg:text-7xl">Everything you need to <span className="bg-linear-to-r from-[#b83cff] via-[#8065ff] to-[#4ca8ff] bg-clip-text text-transparent">track, understand,</span> and <span className="bg-linear-to-r from-[#8065ff] to-[#4ca8ff] bg-clip-text text-transparent">improve.</span></h1>
-          <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">TrackUp combines controlled video sharing, ClickUp-connected access, provider-aware playback evidence, and scoped analytics so teams can learn from what their data actually shows.</p>
+          <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">TrackUp combines controlled video sharing, sovereign team access, provider-aware playback evidence, and scoped analytics so teams can learn from what their data actually shows.</p>
         </div>
       </section>
 

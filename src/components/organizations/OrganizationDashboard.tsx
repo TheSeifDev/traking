@@ -25,7 +25,7 @@ export default function OrganizationDashboard({ organization, spaces, membership
         <section className="grid gap-4 sm:grid-cols-3">
           <Summary label="Spaces" value={selectableSpaces.length} icon={LayoutDashboard} />
           <Summary label="Access" value={isPlatformOwner ? "Owner" : membership?.role === "admin" ? "Admin" : "Member"} icon={UsersRound} />
-          <Summary label="ClickUp" value={organization.clickup_workspace_id ? "Linked" : "Optional"} icon={Building2} />
+          <Summary label="Status" value="Active" icon={Building2} />
         </section>
         <section>
           <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Operational spaces</p><h2 className="mt-2 text-xl font-semibold text-white">Spaces in this organization</h2></div>{canManage && <Link href={`/organizations/${organization.id}/spaces`} className="text-xs font-medium text-violet-300 hover:text-violet-200">Create or manage</Link>}</div>
